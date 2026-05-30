@@ -1,0 +1,14 @@
+﻿<Application
+    x:Class="AdminConsole.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Intentionally NO StartupUri.
+        Intentionally NO MaterialDesign resources here.
+        All resources are loaded in App.xaml.cs OnStartup to guarantee
+        correct load order before any window is created.
+    -->
+    <Application.Resources>
+        <ResourceDictionary />
+    </Application.Resources>
+</Application>

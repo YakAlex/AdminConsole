@@ -1,0 +1,285 @@
+﻿<Window
+    x:Class="AdminConsole.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    xmlns:viewModels="clr-namespace:AdminConsole.ViewModels"
+    xmlns:views="clr-namespace:AdminConsole.Views"
+    mc:Ignorable="d"
+    Title="Admin Console"
+    Height="820"
+    Width="1280"
+    MinHeight="600"
+    MinWidth="900"
+    WindowStartupLocation="CenterScreen"
+    TextElement.FontFamily="{materialDesign:MaterialDesignFont}"
+    TextElement.FontSize="13"
+    FontFamily="{materialDesign:MaterialDesignFont}"
+    d:DataContext="{d:DesignInstance viewModels:MainViewModel, IsDesignTimeCreatable=False}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="56" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="28" />
+        </Grid.RowDefinitions>
+
+        <Grid.Background>
+            <SolidColorBrush Color="#FF263238" />
+        </Grid.Background>
+
+        <!-- ═══════════════════════════════════════════════
+             ROW 0 — Header
+        ═══════════════════════════════════════════════ -->
+        <Border
+            Grid.Row="0"
+            Background="#FF37474F"
+            Padding="16,0">
+            <DockPanel VerticalAlignment="Center">
+                <StackPanel
+                    DockPanel.Dock="Left"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+                    <materialDesign:PackIcon
+                        Kind="Monitor"
+                        Width="26" Height="26"
+                        Foreground="White"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Text="Admin Console"
+                        Foreground="White"
+                        FontSize="18"
+                        FontWeight="Medium"
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock
+                    DockPanel.Dock="Right"
+                    Text="{Binding CurrentPageTitle}"
+                    Foreground="#FF80CBC4"
+                    FontSize="13"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right" />
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════
+             ROW 1 — Sidebar + Content
+        ═══════════════════════════════════════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="160" />
+                <ColumnDefinition Width="1" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Sidebar ── -->
+            <Border
+                Grid.Column="0"
+                Background="#FF2C3E44">
+                <StackPanel Margin="0,12,0,0">
+                    <StackPanel.Resources>
+                        <Style x:Key="SideNavButton" TargetType="Button">
+                            <Setter Property="Background"               Value="Transparent" />
+                            <Setter Property="BorderThickness"          Value="0" />
+                            <Setter Property="Foreground"               Value="#FFECEFF1" />
+                            <Setter Property="FontSize"                 Value="13" />
+                            <Setter Property="HorizontalContentAlignment" Value="Left" />
+                            <Setter Property="Padding"                  Value="16,10" />
+                            <Setter Property="Margin"                   Value="6,2" />
+                            <Setter Property="Cursor"                   Value="Hand" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border
+                                            x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="6"
+                                            Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter
+                                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="#55FFFFFF" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </StackPanel.Resources>
+
+                    <Button Style="{StaticResource SideNavButton}"
+                            Command="{Binding NavigateToCommand}"
+                            CommandParameter="0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="AccessPoint" Width="18" Height="18"
+                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                            <TextBlock Text="Ping Dashboard" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource SideNavButton}"
+                            Command="{Binding NavigateToCommand}"
+                            CommandParameter="1">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Cpu64Bit" Width="18" Height="18"
+                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                            <TextBlock Text="Resources" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource SideNavButton}"
+                            Command="{Binding NavigateToCommand}"
+                            CommandParameter="2">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="RemoteDesktop" Width="18" Height="18"
+                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                            <TextBlock Text="RDP Sessions" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource SideNavButton}"
+                            Command="{Binding NavigateToCommand}"
+                            CommandParameter="3">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Bell" Width="18" Height="18"
+                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                            <TextBlock Text="Zabbix Alerts" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource SideNavButton}"
+                            Command="{Binding NavigateToCommand}"
+                            CommandParameter="4">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18"
+                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                            <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                </StackPanel>
+            </Border>
+
+            <!-- ── Column divider ── -->
+            <Border Grid.Column="1" Background="#FF37474F" />
+
+            <!-- ── Content area ──
+                 A single ContentControl whose Content is swapped by DataTriggers.
+                 DataTriggers on a ContentControl.Style CAN set the Content property.
+                 StackPanel does NOT have Content — that was the MC4005 error.
+            ── -->
+            <ContentControl
+                Grid.Column="2"
+                Margin="24">
+
+                <ContentControl.Style>
+                    <Style TargetType="ContentControl">
+
+                        <!-- Default: show Ping Dashboard (tab 0) -->
+                        <Setter Property="Content">
+                            <Setter.Value>
+                                <views:PingDashboardView
+                                    DataContext="{Binding}" />
+                            </Setter.Value>
+                        </Setter>
+
+                        <Style.Triggers>
+
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
+                                <Setter Property="Content">
+                                    <Setter.Value>
+                                        <views:PingDashboardView
+                                            DataContext="{Binding PingDashboard}" />
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
+                                <Setter Property="Content">
+                                    <Setter.Value>
+                                        <views:ResourceMonitorView
+                                            DataContext="{Binding ResourceMonitor}" />
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
+                                <Setter Property="Content">
+                                    <Setter.Value>
+                                        <views:RdpSessionView
+                                            DataContext="{Binding RdpSessions}" />
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
+                                <Setter Property="Content">
+                                    <Setter.Value>
+                                        <views:ZabbixView
+                                            DataContext="{Binding Zabbix}" />
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+
+                            <DataTrigger Binding="{Binding SelectedTabIndex}" Value="4">
+                                <Setter Property="Content">
+                                    <Setter.Value>
+                                        <views:LogsView
+                                            DataContext="{Binding Logs}" />
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+
+                        </Style.Triggers>
+                    </Style>
+                </ContentControl.Style>
+
+            </ContentControl>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════
+             ROW 2 — Status Bar
+        ═══════════════════════════════════════════════ -->
+        <Border
+            Grid.Row="2"
+            Background="#FF1C282C"
+            Padding="12,0">
+            <DockPanel VerticalAlignment="Center">
+                <StackPanel
+                    DockPanel.Dock="Left"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+                    <materialDesign:PackIcon
+                        Kind="InformationOutline"
+                        Width="13" Height="13"
+                        Foreground="#FF80CBC4"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Text="{Binding StatusBarText}"
+                        Foreground="#FFECEFF1"
+                        FontSize="11"
+                        Margin="6,0,0,0"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock
+                    DockPanel.Dock="Right"
+                    Text="Admin Console v1.0"
+                    Foreground="#44FFFFFF"
+                    FontSize="11"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right" />
+            </DockPanel>
+        </Border>
+
+    </Grid>
+</Window>

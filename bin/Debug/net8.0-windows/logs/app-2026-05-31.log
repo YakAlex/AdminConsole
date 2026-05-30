@@ -1,0 +1,35 @@
+﻿[2026-05-31 02:34:13] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:34:13] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:34:13] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:34:13] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:36:55] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:36:55] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 02:36:55] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:36:55] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:36:55] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:39:09] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:39:09] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:39:09] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:39:09] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:40:34] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:40:34] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:40:34] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:40:34] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:44:24] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:44:24] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:44:24] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:44:24] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:44:49] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:44:49] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:44:49] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:44:49] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:46:19] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:46:19] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 02:46:19] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:46:19] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:46:19] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 02:46:31] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 02:46:31] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 02:46:31] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 02:46:31] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 02:46:31] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
