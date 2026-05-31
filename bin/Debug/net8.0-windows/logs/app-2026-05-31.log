@@ -33,3 +33,648 @@
 [2026-05-31 02:46:31] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
 [2026-05-31 02:46:31] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
 [2026-05-31 02:46:31] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:07:14] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:07:14] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:07:14] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:07:14] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:24:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:24:47] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:24:47] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:24:47] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:25:04] [Info   ] [RemoteMgmt] Launched RDP session to DC-02 (192.168.0.136).
+[2026-05-31 14:25:09] [Info   ] [RemoteMgmt] Launched RDP session to DC-01 (192.168.1.10).
+[2026-05-31 14:25:14] [Info   ] [RemoteMgmt] Opened continuous ping window for DC-01 (192.168.1.10).
+[2026-05-31 14:25:19] [Info   ] [RemoteMgmt] Opened continuous ping window for DC-02 (192.168.0.136).
+[2026-05-31 14:29:33] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:29:33] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:29:33] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:29:33] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:29:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:29:47] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:29:47] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:29:47] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:36:20] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:36:20] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:36:20] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:36:20] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:36:20] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:42:07] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:42:07] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:42:07] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:42:07] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:42:07] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:42:30] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:42:30] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:42:30] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 14:42:30] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 14:42:30] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:42:30] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:42:30] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:48:55] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:48:55] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:48:55] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 14:48:55] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:48:55] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:48:55] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:49:06] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:49:06] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:49:06] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:49:06] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:49:06] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:50:02] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:50:02] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:50:02] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:50:02] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:50:02] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:52:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:52:47] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:52:47] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 14:52:47] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:52:47] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:52:47] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:54:58] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:54:58] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:54:58] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:54:58] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:54:58] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:57:12] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:57:12] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:57:13] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:57:13] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:57:13] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 14:57:43] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\Projects\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 14:57:43] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 14:57:43] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 14:57:43] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 14:57:43] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 14:57:43] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 14:57:43] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 18:18:22] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 18:18:22] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 18:18:22] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 18:18:22] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 18:18:22] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 18:18:49] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 18:18:49] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 18:18:49] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 18:18:49] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 18:18:49] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 18:18:49] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 18:18:49] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 18:21:42] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 18:21:42] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 18:21:42] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 18:21:42] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 18:21:42] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 18:22:53] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 18:22:53] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 18:22:53] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 18:22:53] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 18:22:53] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:40:06] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 19:40:06] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 19:40:06] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 19:40:06] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 19:40:06] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 19:40:06] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:42:29] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 19:42:29] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 19:42:29] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 19:42:29] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 19:42:29] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 19:42:29] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:49:14] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 19:49:14] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 19:49:14] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 19:49:14] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 19:49:14] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 19:49:14] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:49:14] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 19:49:28] [Info   ] [RemoteMgmt] Opened continuous ping window for DC-01 (192.168.1.10).
+[2026-05-31 19:49:34] [Info   ] [RemoteMgmt] Opened continuous ping window for TS-01 (192.168.1.20).
+[2026-05-31 19:49:35] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 19:49:35] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 19:49:39] [Info   ] [RemoteMgmt] Opened continuous ping window for DC-01 (192.168.1.10).
+[2026-05-31 19:52:45] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 19:52:45] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 19:52:45] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 19:52:45] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 19:52:45] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 19:52:45] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:53:32] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 19:53:32] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 19:53:32] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 19:53:32] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 19:53:32] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 19:53:32] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 19:53:32] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 19:53:32] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 19:53:32] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 19:54:02] [Info   ] [RemoteMgmt] Launched RDP session to PC (192.168.0.136).
+[2026-05-31 19:54:06] [Warning] [RemoteMgmt] RESTART command sent to PC (192.168.0.136).
+[2026-05-31 20:06:33] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:06:33] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:06:33] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 20:06:54] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:06:54] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:07:12] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.0.136).
+[2026-05-31 20:10:17] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:10:17] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:10:17] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 20:10:17] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:10:17] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:10:17] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:11:49] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:11:49] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:11:49] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 20:11:49] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:11:49] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:11:49] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:11:49] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:11:53] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.244.123).
+[2026-05-31 20:11:56] [Info   ] [RemoteMgmt] Launched RDP session to PC (192.168.244.123).
+[2026-05-31 20:12:10] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:12:10] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:13:05] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:13:05] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:13:05] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 20:13:05] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:13:05] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:13:05] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:15:00] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:15:00] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:15:00] [Warning] [ZabbixPoller] Zabbix not configured. Set ZabbixApiToken or ZabbixUser/ZabbixPassword.
+[2026-05-31 20:15:01] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:15:01] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:15:01] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:15:01] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:15:06] [Info   ] [RemoteMgmt] Launched RDP session to PC (192.168.244.123).
+[2026-05-31 20:15:21] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:15:21] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:18:22] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:18:22] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:18:22] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:18:22] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:18:22] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:18:22] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:28:25] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:28:25] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:28:25] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:28:26] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:28:26] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:28:26] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:28:26] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:28:46] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:28:46] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:28:50] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.244.123).
+[2026-05-31 20:29:42] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:29:42] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:29:42] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:29:42] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:29:42] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:29:42] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:29:42] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:30:03] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:30:03] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:32:43] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:32:43] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:32:43] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:32:43] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:32:43] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:32:43] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:33:04] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:33:04] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:33:49] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:33:49] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:33:49] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:33:49] [Error  ] [ZabbixPoller] Zabbix poll failed: '<' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.
+[2026-05-31 20:33:49] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:33:49] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:33:49] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:34:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:34:47] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:34:47] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:34:47] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:34:47] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:34:47] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:34:47] [Error  ] [ZabbixPoller] Zabbix poll failed: '<' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.
+[2026-05-31 20:36:33] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:36:33] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:36:33] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:36:33] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:36:33] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:36:33] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:36:54] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:36:54] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:36:54] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:36:54] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:36:54] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:36:54] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:36:54] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:36:54] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:36:54] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:39:15] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:39:15] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:39:15] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:39:15] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:39:15] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:39:15] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:39:15] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:42:00] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:42:00] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:42:00] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:42:00] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:42:00] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:42:00] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:43:44] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:43:44] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:43:44] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:43:44] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:43:44] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:43:44] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:44:05] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:44:05] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:46:13] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:46:13] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:46:13] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:46:13] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:46:13] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:46:13] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:46:34] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:46:34] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:47:15] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:47:15] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:47:15] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:47:15] [Error  ] [ZabbixPoller] Zabbix poll failed: An element of type 'String' cannot be converted to a 'System.Int32'.
+[2026-05-31 20:47:15] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:47:15] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:47:15] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:47:15] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:47:36] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:47:36] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:48:15] [Error  ] [ZabbixPoller] Zabbix poll failed: An element of type 'String' cannot be converted to a 'System.Int32'.
+[2026-05-31 20:49:14] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:49:14] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:49:14] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:49:14] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:49:14] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:49:14] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:49:35] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:49:35] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:49:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:49:47] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:49:47] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:49:47] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:49:47] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:49:47] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:49:47] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:49:47] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 20:49:47] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:50:24] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:50:24] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:50:24] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:50:24] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 20:50:24] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 20:50:24] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 20:51:08] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:51:08] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:51:08] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:51:08] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:51:08] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:51:24] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:51:24] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:51:24] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:51:39] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:51:39] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:51:39] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:51:45] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:51:45] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:53:31] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:53:31] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:53:31] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:53:57] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:53:57] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:53:57] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:53:58] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:53:58] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:55:22] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:55:22] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:55:22] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:55:44] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:55:44] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:55:44] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 20:55:44] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:55:44] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 20:59:46] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 20:59:46] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 20:59:46] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:00:11] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:00:11] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:00:11] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:00:11] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:00:11] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:01:11] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:01:11] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:01:11] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:01:38] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:01:38] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:01:38] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:01:38] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:01:38] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:03:17] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:03:17] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:03:17] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:03:38] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:03:38] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:03:42] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.0.136).
+[2026-05-31 21:03:46] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.244.123).
+[2026-05-31 21:06:33] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:06:33] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:06:33] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:06:48] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:06:48] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:06:49] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:06:54] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:06:54] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:11:15] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:11:15] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:11:15] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:14:06] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:14:06] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:14:06] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:15:06] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:15:07] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:15:07] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:15:28] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:15:28] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:21:00] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:21:00] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:21:00] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:21:00] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 21:21:00] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 21:21:00] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:21:21] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:21:21] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:23:31] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:23:31] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:23:31] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:23:32] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 21:23:32] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 21:23:32] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 21:23:32] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:23:46] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:23:46] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:23:46] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:23:46] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:23:46] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:23:46] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 21:23:46] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 21:23:46] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:39:12] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:39:12] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:39:12] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:39:12] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 21:39:12] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 21:39:12] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:52:07] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:52:07] [Info   ] [RdpMonitor] RDP monitor started — polling 2 terminal server(s).
+[2026-05-31 21:52:07] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:52:07] [Error  ] [PingMonitor] PC (192.168.244.123) went OFFLINE.
+[2026-05-31 21:52:07] [Error  ] [PingMonitor] TS-01 (192.168.1.20) went OFFLINE.
+[2026-05-31 21:52:07] [Error  ] [PingMonitor] TS-02 (192.168.1.21) went OFFLINE.
+[2026-05-31 21:52:07] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:52:28] [Warning] [RdpMonitor] quser on TS-02 (192.168.1.21) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:52:28] [Warning] [RdpMonitor] quser on TS-01 (192.168.1.20) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:52:28] [Error  ] [ZabbixPoller] Zabbix poll failed: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.244.69:80)
+[2026-05-31 21:53:49] [Error  ] [ZabbixPoller] Zabbix poll failed: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.244.69:80)
+[2026-05-31 21:54:57] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 21:54:57] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 21:54:57] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 21:54:57] [Error  ] [PingMonitor] TS-01 (192.168.244.73) went OFFLINE.
+[2026-05-31 21:54:57] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 21:54:57] [Error  ] [PingMonitor] Admin-PC (192.168.244.123) went OFFLINE.
+[2026-05-31 21:54:57] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 21:55:18] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:55:18] [Error  ] [ZabbixPoller] Zabbix poll failed: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.244.69:80)
+[2026-05-31 21:55:28] [Success] [PingMonitor] TS-01 (192.168.244.73) is back ONLINE. Latency: 4 ms.
+[2026-05-31 21:55:28] [Success] [PingMonitor] Admin-PC (192.168.244.123) is back ONLINE. Latency: 4 ms.
+[2026-05-31 21:57:18] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 21:59:18] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:01:18] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:02:10] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:02:10] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:02:10] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:02:10] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:02:10] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 22:02:10] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 22:10:13] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:10:13] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:10:13] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:10:13] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 22:10:13] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 22:10:13] [Warning] [RdpMonitor] quser on TS-01 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:10:43] [Info   ] [RemoteMgmt] Opened continuous ping window for PC (192.168.0.136).
+[2026-05-31 22:15:33] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:15:33] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:15:33] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:15:33] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:21:55] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:21:55] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:21:55] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:21:55] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:22:40] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:22:40] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:22:40] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:22:40] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:23:00] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:23:00] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:23:00] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:23:00] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:25:02] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:25:02] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:25:02] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:25:02] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:28:13] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:28:13] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:28:13] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:28:13] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:28:55] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:28:55] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:28:55] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:28:55] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:30:56] [Warning] [RdpMonitor] quser on Tsvr3 (192.168.244.73) stderr: Error 0x000006BA enumerating sessionnames
+Error [1722]:The RPC server is unavailable.
+[2026-05-31 22:31:06] [Info   ] [RemoteMgmt] Launched RDP session to Admin-PC (192.168.244.123).
+[2026-05-31 22:34:11] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:34:11] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:34:11] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:34:20] [Info   ] [RemoteMgmt] Launched RDP session to Tsvr3 (192.168.244.73).
+[2026-05-31 22:36:11] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:36:11] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:36:11] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:36:25] [Info   ] [RemoteMgmt] Launched RDP session to Tsvr3 (192.168.244.73).
+[2026-05-31 22:36:45] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:36:45] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:36:45] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:38:23] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:38:23] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:38:23] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:38:47] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:38:47] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:38:47] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:39:35] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:39:35] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 22:39:35] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:42:02] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:42:02] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 22:42:02] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:42:02] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | ExitOk | stdout_len=192 | stderr_len=0
+[2026-05-31 22:42:02] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 22:42:02] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | parsed 0 session(s)
+[2026-05-31 22:47:06] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:47:06] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 22:47:06] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:47:06] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 22:47:06] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | ExitOk | stdout_len=192 | stderr_len=0
+[2026-05-31 22:47:06] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 22:47:06] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | parsed 0 session(s)
+[2026-05-31 22:47:53] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:47:53] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 22:47:53] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:47:53] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 22:47:53] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 22:47:53] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 22:47:53] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 22:47:53] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 22:50:03] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:50:03] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 22:50:03] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:50:04] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 22:50:04] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 22:50:04] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 22:50:04] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | parsed 0 session(s)
+[2026-05-31 22:50:04] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 22:50:04] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 22:50:39] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 22:50:39] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 22:50:39] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 22:50:40] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 22:50:40] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 22:50:40] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 22:50:40] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | parsed 0 session(s)
+[2026-05-31 22:50:40] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-05-31 22:50:40] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 23:00:25] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 23:00:25] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 23:00:25] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 23:00:25] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 23:00:25] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 23:00:25] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 23:00:25] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 23:00:25] [Warning] [RdpMonitor] [DIAG] 192.168.244.73 | Access denied у stdout — перевір права акаунту на сервері
+[2026-05-31 23:02:16] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 23:02:17] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 23:02:17] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 23:02:17] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 23:02:17] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 23:02:17] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 23:02:17] [Warning] [RdpMonitor] [DIAG] 192.168.244.73 | Access denied у stdout — перевір права акаунту на сервері
+[2026-05-31 23:02:17] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 23:04:04] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 23:04:04] [Info   ] [RdpMonitor] RDP monitor started — polling 1 terminal server(s).
+[2026-05-31 23:04:04] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 23:04:05] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 23:05:01] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 23:05:01] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 23:05:01] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 23:05:02] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 23:05:02] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 23:05:02] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 23:05:02] [Warning] [RdpMonitor] [DIAG] 192.168.244.73 | Access denied у stdout — перевір права акаунту на сервері
+[2026-05-31 23:05:02] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-05-31 23:13:09] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-05-31 23:13:09] [Info   ] [RdpMonitor] RDP monitor started — 1 server(s).
+[2026-05-31 23:13:09] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-05-31 23:13:09] [Info   ] [RdpMonitor] [DIAG] 192.168.244.73 | stdout_len=192 | stderr_len=616
+[2026-05-31 23:13:09] [Warning] [RdpMonitor] [DIAG] STDERR: #< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+[2026-05-31 23:13:09] [Info   ] [RdpMonitor] [DIAG] line[0]: »[192.168.244.73] Connecting to remote server 192.168.244.73 failed with the following error message : Access is denied. For more information, see the about_Remote_Troubleshooting Help topic.«
+[2026-05-31 23:13:09] [Warning] [RdpMonitor] [DIAG] 192.168.244.73 | Access denied у stdout — перевір права акаунту на сервері
+[2026-05-31 23:13:09] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.

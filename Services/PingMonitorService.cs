@@ -22,7 +22,7 @@ public sealed class PingMonitorService : BackgroundService
 
     private const int PingTimeoutMs = 2000;
     private const string LogSource  = "PingMonitor";
-
+    private bool _firstRun = true;
     public PingMonitorService(
         IMessenger messenger,
         ILogger<PingMonitorService> logger,
@@ -49,12 +49,22 @@ public sealed class PingMonitorService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            await PingAllServersAsync(stoppingToken);
+            // Delay BEFORE ping — except on the very first iteration.
+            // This way results appear immediately on startup,
+            // then repeat every PingIntervalSeconds.
+            if (_firstRun)
+            {
+                _firstRun = false;
+            }
+            else
+            {
+                await Task.Delay(
+                        TimeSpan.FromSeconds(_settings.PingIntervalSeconds),
+                        stoppingToken)
+                    .ConfigureAwait(false);
+            }
 
-            await Task.Delay(
-                TimeSpan.FromSeconds(_settings.PingIntervalSeconds),
-                stoppingToken)
-                .ConfigureAwait(false);
+            await PingAllServersAsync(stoppingToken);
         }
 
         _logger.LogInformation("PingMonitorService stopped.");

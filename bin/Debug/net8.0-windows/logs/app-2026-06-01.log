@@ -1,0 +1,41 @@
+﻿[2026-06-01 01:30:03] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:30:03] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:30:03] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:30:34] [Info   ] [ZabbixPoller] Zabbix API токен збережено в Credential Manager.
+[2026-06-01 01:30:34] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:31:14] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:31:14] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:31:14] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:31:14] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:31:15] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:31:39] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:31:39] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:31:39] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:31:39] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:31:40] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:37:11] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:37:11] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:37:11] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:37:11] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:37:11] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:44:00] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:44:00] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:44:00] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:44:00] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:44:00] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:45:29] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:45:29] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:45:29] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:45:29] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:45:29] [Error  ] [PingMonitor] DC-01 (192.168.1.10) went OFFLINE.
+[2026-06-01 01:45:29] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:48:31] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:48:31] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:48:31] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:48:31] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:48:31] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.
+[2026-06-01 01:49:12] [Info   ] [FileLogger] FileLoggerService started. Log directory: D:\AdminConsole\AdminConsole\bin\Debug\net8.0-windows\logs
+[2026-06-01 01:49:12] [Info   ] [RdpMonitor] RDP monitor запущено — 1 сервер(ів).
+[2026-06-01 01:49:12] [Info   ] [ZabbixPoller] Zabbix poller started (API token auth). Polling every 60s.
+[2026-06-01 01:49:12] [Warning] [RdpMonitor] Введення RDP credentials скасовано. Перезапустіть додаток щоб спробувати знову.
+[2026-06-01 01:49:12] [Error  ] [PingMonitor] FILE-01 (192.168.1.30) went OFFLINE.

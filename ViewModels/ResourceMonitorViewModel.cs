@@ -3,47 +3,50 @@ using AdminConsole.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using System.Collections.ObjectModel;
-using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace AdminConsole.ViewModels;
 
-/// <summary>
-/// Drives the Resource Monitor view.
-/// Receives ResourceSnapshotUpdatedMessage and EventLogUpdatedMessage
-/// from their respective background services.
-/// All ObservableCollection mutations are dispatched to the UI thread.
-/// </summary>
 public sealed partial class ResourceMonitorViewModel
     : ObservableObject,
       IRecipient<ResourceSnapshotUpdatedMessage>,
       IRecipient<EventLogUpdatedMessage>
 {
     // ── CPU / RAM bindings ───────────────────────────────────────────────────
-
     [ObservableProperty] private double _cpuPercent;
     [ObservableProperty] private double _ramPercent;
     [ObservableProperty] private double _ramUsedGb;
     [ObservableProperty] private double _ramTotalGb;
-    [ObservableProperty] private string _cpuLabel  = "— %";
-    [ObservableProperty] private string _ramLabel  = "— / — GB";
+    [ObservableProperty] private string _cpuLabel    = "— %";
+    [ObservableProperty] private string _ramLabel    = "— / — GB";
     [ObservableProperty] private string _lastUpdated = "—";
 
-    // ── CPU colour (green → amber → red by threshold) ────────────────────────
-    [ObservableProperty] private string _cpuBarColor = "#FF4CAF50";
-    [ObservableProperty] private string _ramBarColor = "#FF4CAF50";
+    // Pre-computed frozen brushes — no converter needed in XAML,
+    // no StringToColorConverter crash risk.
+    [ObservableProperty] private SolidColorBrush _cpuBarBrush = GreenBrush;
+    [ObservableProperty] private SolidColorBrush _ramBarBrush = GreenBrush;
 
     // ── Event log bindings ───────────────────────────────────────────────────
-
     public ObservableCollection<EventLogEntryViewModel> EventEntries { get; } = [];
 
     [ObservableProperty] private EventLogEntryViewModel? _selectedEntry;
     [ObservableProperty] private string _selectedEntryFullMessage = string.Empty;
     [ObservableProperty] private string _eventLogStatus = "Waiting for first fetch…";
 
-    // -------------------------------------------------------------------------
+    // ── Static frozen brushes ────────────────────────────────────────────────
+    private static readonly SolidColorBrush GreenBrush =
+        Freeze(new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)));
+    private static readonly SolidColorBrush AmberBrush =
+        Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07)));
+    private static readonly SolidColorBrush RedBrush =
+        Freeze(new SolidColorBrush(Color.FromRgb(0xF4, 0x43, 0x36)));
+
+    private readonly Dispatcher _dispatcher;
 
     public ResourceMonitorViewModel(IMessenger messenger)
     {
+        _dispatcher = Dispatcher.CurrentDispatcher;
         messenger.RegisterAll(this);
     }
 
@@ -52,7 +55,7 @@ public sealed partial class ResourceMonitorViewModel
     public void Receive(ResourceSnapshotUpdatedMessage message)
     {
         var s = message.Value;
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        _dispatcher.InvokeAsync(() =>
         {
             CpuPercent   = s.CpuPercent;
             RamPercent   = s.RamPercent;
@@ -61,8 +64,8 @@ public sealed partial class ResourceMonitorViewModel
             CpuLabel     = $"{s.CpuPercent:F1} %";
             RamLabel     = $"{s.RamUsedGb:F1} GB  /  {s.RamTotalGb:F1} GB";
             LastUpdated  = s.Timestamp.ToLocalTime().ToString("HH:mm:ss");
-            CpuBarColor  = PickColor(s.CpuPercent);
-            RamBarColor  = PickColor(s.RamPercent);
+            CpuBarBrush  = PickBrush(s.CpuPercent);
+            RamBarBrush  = PickBrush(s.RamPercent);
         });
     }
 
@@ -71,7 +74,7 @@ public sealed partial class ResourceMonitorViewModel
     public void Receive(EventLogUpdatedMessage message)
     {
         var entries = message.Value;
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        _dispatcher.InvokeAsync(() =>
         {
             EventEntries.Clear();
             foreach (var e in entries)
@@ -79,21 +82,22 @@ public sealed partial class ResourceMonitorViewModel
 
             EventLogStatus = EventEntries.Count == 0
                 ? "No Error/Critical events found."
-                : $"{EventEntries.Count} recent error(s) — last fetched {DateTime.Now:HH:mm:ss}";
+                : $"{EventEntries.Count} recent error(s) — " +
+                  $"last fetched {DateTime.Now:HH:mm:ss}";
         });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     partial void OnSelectedEntryChanged(EventLogEntryViewModel? value)
-    {
-        SelectedEntryFullMessage = value?.FullMessage ?? string.Empty;
-    }
+        => SelectedEntryFullMessage = value?.FullMessage ?? string.Empty;
 
-    private static string PickColor(double percent) => percent switch
+    private static SolidColorBrush PickBrush(double percent) => percent switch
     {
-        >= 90 => "#FFF44336",   // Red
-        >= 70 => "#FFFFC107",   // Amber
-        _     => "#FF4CAF50"    // Green
+        >= 90 => RedBrush,
+        >= 70 => AmberBrush,
+        _     => GreenBrush
     };
+
+    private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 }

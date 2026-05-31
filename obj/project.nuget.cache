@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "aWXSq77ijp0=",
+  "dgSpecHash": "MGfMcDMXAhk=",
   "success": true,
-  "projectFilePath": "D:\\Projects\\AdminConsole\\AdminConsole\\AdminConsole.csproj",
+  "projectFilePath": "D:\\AdminConsole\\AdminConsole\\AdminConsole.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\yakim\\.nuget\\packages\\communitytoolkit.mvvm\\8.3.2\\communitytoolkit.mvvm.8.3.2.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\materialdesigncolors\\3.1.0\\materialdesigncolors.3.1.0.nupkg.sha512",
@@ -36,9 +36,9 @@
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.extensions.options.configurationextensions\\8.0.0\\microsoft.extensions.options.configurationextensions.8.0.0.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.extensions.primitives\\8.0.0\\microsoft.extensions.primitives.8.0.0.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.xaml.behaviors.wpf\\1.1.39\\microsoft.xaml.behaviors.wpf.1.1.39.nupkg.sha512",
-    "C:\\Users\\yakim\\.nuget\\packages\\system.codedom\\10.0.8\\system.codedom.10.0.8.nupkg.sha512",
+    "C:\\Users\\yakim\\.nuget\\packages\\system.codedom\\8.0.0\\system.codedom.8.0.0.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\system.diagnostics.eventlog\\8.0.1\\system.diagnostics.eventlog.8.0.1.nupkg.sha512",
-    "C:\\Users\\yakim\\.nuget\\packages\\system.management\\10.0.8\\system.management.10.0.8.nupkg.sha512",
+    "C:\\Users\\yakim\\.nuget\\packages\\system.management\\8.0.0\\system.management.8.0.0.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.27\\microsoft.netcore.app.ref.8.0.27.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.27\\microsoft.windowsdesktop.app.ref.8.0.27.nupkg.sha512",
     "C:\\Users\\yakim\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.27\\microsoft.aspnetcore.app.ref.8.0.27.nupkg.sha512",

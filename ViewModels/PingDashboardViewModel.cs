@@ -56,7 +56,7 @@ public sealed partial class PingDashboardViewModel
     public void Receive(PingStatusChangedMessage message)
     {
         var result = message.Value;
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
             var row = Servers.FirstOrDefault(s => s.IP == result.IP);
             if (row is null) return;

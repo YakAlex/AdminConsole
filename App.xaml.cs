@@ -1,7 +1,6 @@
-﻿using AdminConsole.Core.Models;
+﻿using AdminConsole.Configuration;
+using AdminConsole.Core.Models;
 using AdminConsole.Services;
-using AdminConsole.Services;
-using AdminConsole.Configuration;
 using AdminConsole.ViewModels;
 using AdminConsole.Views;
 using CommunityToolkit.Mvvm.Messaging;
@@ -19,16 +18,14 @@ public partial class App : Application
 
     public App()
     {
-        // Load MaterialDesign theme dictionaries in code before any
-        // window is constructed. This is the most reliable approach
-        // across all MD5 versions — it bypasses any XAML path issues.
         LoadMaterialDesignResources();
 
         _host = Host.CreateDefaultBuilder()
-            .ConfigureAppConfiguration((context, config) =>
+            .ConfigureAppConfiguration((_, config) =>
             {
                 config.SetBasePath(Directory.GetCurrentDirectory());
-                config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                config.AddJsonFile("appsettings.json",
+                    optional: false, reloadOnChange: true);
             })
             .ConfigureServices((context, services) =>
             {
@@ -40,20 +37,20 @@ public partial class App : Application
             .Build();
     }
 
+    // ── Resource loading ─────────────────────────────────────────────────────
+
     private static void LoadMaterialDesignResources()
     {
-        var mergedDicts = Application.Current.Resources.MergedDictionaries;
+        var dicts = Application.Current.Resources.MergedDictionaries;
 
-        // 1. BundledTheme — sets Dark base, BlueGrey primary, Cyan secondary
-        mergedDicts.Add(new MaterialDesignThemes.Wpf.BundledTheme
+        dicts.Add(new MaterialDesignThemes.Wpf.BundledTheme
         {
-            BaseTheme = MaterialDesignThemes.Wpf.BaseTheme.Dark,
+            BaseTheme    = MaterialDesignThemes.Wpf.BaseTheme.Dark,
             PrimaryColor = MaterialDesignColors.PrimaryColor.BlueGrey,
             SecondaryColor = MaterialDesignColors.SecondaryColor.Cyan
         });
 
-        // 2. Core MD3 defaults (controls, typography, etc.)
-        mergedDicts.Add(new ResourceDictionary
+        dicts.Add(new ResourceDictionary
         {
             Source = new Uri(
                 "pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign3.Defaults.xaml",
@@ -61,7 +58,10 @@ public partial class App : Application
         });
     }
 
-    private static void RegisterConfiguration(IConfiguration config, IServiceCollection services)
+    // ── DI registration ──────────────────────────────────────────────────────
+
+    private static void RegisterConfiguration(
+        IConfiguration config, IServiceCollection services)
     {
         services.Configure<MonitoringSettings>(
             config.GetSection(MonitoringSettings.SectionName));
@@ -72,21 +72,25 @@ public partial class App : Application
     private static void RegisterInfrastructure(IServiceCollection services)
     {
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
-        services.AddHttpClient("Zabbix");
 
-        // Phase 2
+        services.AddHttpClient<ZabbixApiClient>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
         services.AddHostedService<PingMonitorService>();
-
-        // Phase 3
         services.AddHostedService<ResourceMonitorService>();
         services.AddHostedService<EventLogService>();
-
-        // Phase 4
         services.AddHostedService<FileLoggerService>();
+        services.AddHostedService<RdpMonitorService>();
+        services.AddHostedService<ZabbixPollerService>();
 
-        // Phase 5
         services.AddSingleton<RemoteManagementService>();
-        services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<CredentialStore>();          // ← новий
+
+        services.AddSingleton<OverlayDialogService>();
+        services.AddSingleton<IDialogService>(sp =>
+            sp.GetRequiredService<OverlayDialogService>());
     }
 
     private static void RegisterViewModels(IServiceCollection services)
@@ -101,24 +105,26 @@ public partial class App : Application
 
     private static void RegisterViews(IServiceCollection services)
     {
+        // MainWindow реалізує ICredentialPrompt — реєструємо обидва
         services.AddSingleton<MainWindow>();
+        services.AddSingleton<ICredentialPrompt>(sp =>
+            sp.GetRequiredService<MainWindow>());
     }
+
+    // ── Host lifecycle ───────────────────────────────────────────────────────
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        await _host.StartAsync();
-
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+        await _host.StartAsync();
     }
 
     protected override async void OnExit(ExitEventArgs e)
     {
         using (_host)
-        {
             await _host.StopAsync(TimeSpan.FromSeconds(5));
-        }
         base.OnExit(e);
     }
 }

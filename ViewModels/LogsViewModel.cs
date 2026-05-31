@@ -46,7 +46,7 @@ public sealed partial class LogsViewModel
     {
         var vm = new LogEntryViewModel(message.Value);
 
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
             // Cap the collection so the UI list never grows without bound.
             while (LogEntries.Count >= MaxEntries)

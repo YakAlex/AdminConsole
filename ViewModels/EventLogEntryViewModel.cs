@@ -21,7 +21,9 @@ public sealed class EventLogEntryViewModel
         Severity      = entry.Severity;
         SeverityLabel = entry.Severity.ToString().ToUpperInvariant();
         Source        = entry.Source;
-        ShortMessage  = entry.Message;
+        ShortMessage  = entry.Message.Length > 120
+            ? string.Concat(entry.Message.AsSpan(0, 120), "…")
+            : entry.Message;
         FullMessage   = entry.Message;
         EventId       = entry.EventId;
         Time          = entry.TimeGenerated.ToLocalTime().ToString("MM-dd HH:mm:ss");
