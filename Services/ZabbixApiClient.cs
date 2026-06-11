@@ -57,80 +57,97 @@ public sealed class ZabbixApiClient
     ///       OR a session token obtained from LoginAsync.
     /// </summary>
     public async Task<List<ZabbixProblem>> GetActiveProblemsAsync(
-        string  url,
-        string  auth,
-        bool    useApiToken,
-        int[]   severities,
-        CancellationToken ct = default)
+    string  url,
+    string  auth,
+    bool    useApiToken,
+    int[]   severities,
+    CancellationToken ct = default)
+{
+    if (useApiToken)
     {
-        if (useApiToken)
-        {
-            // Zabbix 6.0+ requires the API token in the Authorization header.
-            _http.DefaultRequestHeaders.Remove("Authorization");
-            _http.DefaultRequestHeaders.Add("Authorization", $"Bearer {auth}");
-        }
-        else
-        {
-            // Session token auth — token goes in the JSON body via "auth" field.
-            // No Authorization header needed.
-            _http.DefaultRequestHeaders.Remove("Authorization");
-        }
-
-        var parameters = new JsonObject
-        {
-            ["output"]      = new JsonArray("eventid", "name", "severity", "clock", "hosts"),
-            ["severities"]  = new JsonArray(severities.Select(s => JsonValue.Create(s)).ToArray()),
-            ["suppressed"]  = false,
-            ["recent"]      = false,
-            ["selectHosts"] = new JsonArray("host", "name"),
-            //["sortfield"]   = new JsonArray("clock"),
-            ["sortorder"]   = "DESC",
-            ["limit"]       = 200
-        };
-
-        // For API token auth, pass the token in the auth field of the JSON body.
-        // For session token auth, same mechanism.
-        var request = BuildRequest("problem.get", parameters, auth);
-
-        var response = await PostAsync(url, request, ct).ConfigureAwait(false);
-        if (response is null) return [];
-
-        var resultArray = response["result"]?.AsArray();
-        if (resultArray is null) return [];
-
-        var problems = new List<ZabbixProblem>(resultArray.Count);
-
-        foreach (var node in resultArray)
-        {
-            if (node is null) continue;
-
-            var eventId     = node["eventid"]?.GetValue<string>() ?? "0";
-            var name        = node["name"]?.GetValue<string>()    ?? "(no description)";
-            var severityStr = node["severity"]?.GetValue<string>() ?? "0";
-            int.TryParse(severityStr, out int severityInt);
-            var clockStr    = node["clock"]?.GetValue<string>()   ?? "0";
-
-            // Resolve hostname from nested hosts array.
-            var hostsArray  = node["hosts"]?.AsArray();
-            var hostName    = hostsArray?.FirstOrDefault()?["name"]?.GetValue<string>()
-                           ?? hostsArray?.FirstOrDefault()?["host"]?.GetValue<string>()
-                           ?? "Unknown";
-
-            var severity    = (ZabbixSeverity)Math.Clamp(severityInt, 0, 5);
-            var startTime   = DateTimeOffset.FromUnixTimeSeconds(long.Parse(clockStr));
-            var age         = FormatAge(DateTimeOffset.UtcNow - startTime);
-
-            problems.Add(new ZabbixProblem(
-                EventId:     eventId,
-                HostName:    hostName,
-                Description: name,
-                Severity:    severity,
-                StartTime:   startTime,
-                AgeDisplay:  age));
-        }
-
-        return problems;
+        _http.DefaultRequestHeaders.Remove("Authorization");
+        _http.DefaultRequestHeaders.Add("Authorization", $"Bearer {auth}");
     }
+    else
+    {
+        _http.DefaultRequestHeaders.Remove("Authorization");
+    }
+
+    var parameters = new JsonObject
+    {
+        ["output"]      = new JsonArray("eventid", "name", "severity", "clock", "hosts"),
+        ["severities"]  = new JsonArray(severities.Select(s => JsonValue.Create(s)).ToArray()),
+        ["suppressed"]  = false,
+        ["recent"]      = false,
+        ["selectHosts"] = new JsonArray("host", "name"),
+        ["sortorder"]   = "DESC",
+        ["limit"]       = 200
+    };
+
+    var request = BuildRequest("problem.get", parameters, auth);
+    var response = await PostAsync(url, request, ct).ConfigureAwait(false);
+    if (response is null) return [];
+
+    // ── Перевіряємо чи Zabbix повернув error у тілі відповіді ────────────────
+    // Zabbix повертає HTTP 200 навіть при помилках авторизації,
+    // але поле "error" присутнє, а "result" відсутнє.
+    var errorNode = response["error"];
+    if (errorNode is not null)
+    {
+        int    code = errorNode["code"]?.GetValue<int>() ?? 0;
+        string data = errorNode["data"]?.GetValue<string>() ?? string.Empty;
+
+        // Коди що означають невалідний токен / немає доступу:
+        // -32602 = Invalid params / No permissions
+        // -32500 = Application error (зазвичай auth)
+        bool isAuthError = code is -32602 or -32500
+            || data.Contains("No permissions", StringComparison.OrdinalIgnoreCase)
+            || data.Contains("re-login", StringComparison.OrdinalIgnoreCase)
+            || data.Contains("Not authorised", StringComparison.OrdinalIgnoreCase);
+
+        if (isAuthError)
+            throw new ZabbixPollerService.ZabbixAuthException(
+                $"Zabbix відхилив токен (code={code}): {data}");
+
+        throw new InvalidOperationException(
+            $"Zabbix API error (code={code}): {data}");
+    }
+
+    var resultArray = response["result"]?.AsArray();
+    if (resultArray is null) return [];
+
+    var problems = new List<ZabbixProblem>(resultArray.Count);
+
+    foreach (var node in resultArray)
+    {
+        if (node is null) continue;
+
+        var eventId     = node["eventid"]?.GetValue<string>() ?? "0";
+        var name        = node["name"]?.GetValue<string>()    ?? "(no description)";
+        var severityStr = node["severity"]?.GetValue<string>() ?? "0";
+        int.TryParse(severityStr, out int severityInt);
+        var clockStr    = node["clock"]?.GetValue<string>()   ?? "0";
+
+        var hostsArray  = node["hosts"]?.AsArray();
+        var hostName    = hostsArray?.FirstOrDefault()?["name"]?.GetValue<string>()
+                       ?? hostsArray?.FirstOrDefault()?["host"]?.GetValue<string>()
+                       ?? "Unknown";
+
+        var severity  = (ZabbixSeverity)Math.Clamp(severityInt, 0, 5);
+        var startTime = DateTimeOffset.FromUnixTimeSeconds(long.Parse(clockStr));
+        var age       = FormatAge(DateTimeOffset.UtcNow - startTime);
+
+        problems.Add(new ZabbixProblem(
+            EventId:     eventId,
+            HostName:    hostName,
+            Description: name,
+            Severity:    severity,
+            StartTime:   startTime,
+            AgeDisplay:  age));
+    }
+
+    return problems;
+}
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

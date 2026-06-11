@@ -78,7 +78,7 @@
         <!-- ROW 1 — Sidebar + Content -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="160" />
+                <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="1" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>

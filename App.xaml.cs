@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.IO;
+using System.Text;
 using System.Windows;
 
 namespace AdminConsole;
@@ -18,6 +19,8 @@ public partial class App : Application
 
     public App()
     {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        
         LoadMaterialDesignResources();
 
         _host = Host.CreateDefaultBuilder()
@@ -121,10 +124,13 @@ public partial class App : Application
         await _host.StartAsync();
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
         using (_host)
-            await _host.StopAsync(TimeSpan.FromSeconds(5));
+        {
+            // Блокуємо головний потік максимум на 3 секунди, щоб сервіси встигли завершитись
+            Task.Run(() => _host.StopAsync(TimeSpan.FromSeconds(3))).Wait();
+        }
         base.OnExit(e);
     }
 }

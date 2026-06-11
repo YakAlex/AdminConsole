@@ -1,1 +1,11 @@
-﻿appsettings.json
+﻿# Секретні конфігурації
+appsettings.json
+
+# Папки зі скомпільованим кодом
+bin/
+obj/
+
+# Налаштування середовища розробки (Rider / Visual Studio)
+.idea/
+.vs/
+*.user

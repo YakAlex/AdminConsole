@@ -51,8 +51,7 @@
 
                 <!-- Connection status pill -->
                 <Border DockPanel.Dock="Right"
-                        CornerRadius="12" Padding="12,4"
-                        Opacity="0.85">
+                        CornerRadius="12" Padding="12,4">
                     <Border.Background>
                         <SolidColorBrush
                             Color="{Binding StatusColor,
