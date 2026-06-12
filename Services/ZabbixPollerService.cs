@@ -199,10 +199,10 @@ public sealed class ZabbixPollerService : BackgroundService
                 reason: ex.Message,
                 ct: CancellationToken.None).ConfigureAwait(false);
 
-            if (obtained)
+            if (!obtained)
             {
-                // Перевіряємо новий токен одразу
-                await PollAsync(CancellationToken.None).ConfigureAwait(false);
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    "Новий токен не отримано — opитування призупинено до перезапуску."));
             }
         }
 

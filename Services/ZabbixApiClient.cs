@@ -166,25 +166,21 @@ public sealed class ZabbixApiClient
         CancellationToken ct,
         string? bearerToken = null)
     {
-        try
+        using var msg = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            using var msg = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = JsonContent.Create(body)
-            };
-            if (bearerToken is not null)
-                msg.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+            Content = JsonContent.Create(body)
+        };
+        if (bearerToken is not null)
+            msg.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
+        
+        var response = await _http.SendAsync(msg, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
 
-            var response = await _http.SendAsync(msg, ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content
-                .ReadAsStringAsync(ct)
-                .ConfigureAwait(false);
-            return JsonNode.Parse(json);
-        }
-        catch (OperationCanceledException) { return null; }
+        var json = await response.Content
+            .ReadAsStringAsync(ct)
+            .ConfigureAwait(false);
+        return JsonNode.Parse(json);
     }
 
     private static string FormatAge(TimeSpan age)

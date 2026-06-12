@@ -304,48 +304,58 @@ public sealed class RdpMonitorService : BackgroundService
     private static async Task<(string Output, string Error, int ExitCode)> RunQuserAsync(
         string hostname, CancellationToken ct)
     {
-        return await Task.Run(() =>
+        Encoding consoleEncoding;
+        try
         {
-            Encoding consoleEncoding;
-            try
-            {
-                int oemPage = System.Globalization.CultureInfo
-                    .CurrentCulture.TextInfo.OEMCodePage;
-                consoleEncoding = Encoding.GetEncoding(oemPage);
-            }
-            catch
-            {
-                consoleEncoding = new UTF8Encoding(false);
-            }
+            int oemPage = System.Globalization.CultureInfo
+                .CurrentCulture.TextInfo.OEMCodePage;
+            consoleEncoding = Encoding.GetEncoding(oemPage);
+        }
+        catch
+        {
+            consoleEncoding = new UTF8Encoding(false);
+        }
 
-            using var p = new Process
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeoutMs);
+
+        using var p = new Process
+        {
+            StartInfo = new ProcessStartInfo
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName               = "quser.exe",
-                    Arguments              = $"/server:{hostname}",
-                    UseShellExecute        = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError  = true,
-                    CreateNoWindow         = true,
-                    StandardOutputEncoding = consoleEncoding,
-                    StandardErrorEncoding  = consoleEncoding
-                }
-            };
+                FileName               = "quser.exe",
+                Arguments              = $"/server:{hostname}",
+                UseShellExecute        = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                CreateNoWindow         = true,
+                StandardOutputEncoding = consoleEncoding,
+                StandardErrorEncoding  = consoleEncoding
+            },
+            EnableRaisingEvents = true
+        };
 
-            p.Start();
-            string output = p.StandardOutput.ReadToEnd();
-            string error  = p.StandardError.ReadToEnd();
-            bool   exited = p.WaitForExit(TimeoutMs);
+        p.Start();
 
-            if (!exited)
-            {
-                try { p.Kill(); } catch { }
-                return (output, "Timeout: сервер не відповів за 30 секунд", -1);
-            }
+        // Читаємо stdout/stderr асинхронно, щоб не блокувати thread-pool
+        var outputTask = p.StandardOutput.ReadToEndAsync(cts.Token);
+        var errorTask  = p.StandardError.ReadToEndAsync(cts.Token);
 
+        try
+        {
+            await p.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+            string output = await outputTask.ConfigureAwait(false);
+            string error  = await errorTask.ConfigureAwait(false);
             return (output, error, p.ExitCode);
-        }, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Спрацював наш таймаут, а не зовнішня зупинка сервісу
+            try { p.Kill(entireProcessTree: true); } catch { /* ігноруємо */ }
+            string partial = "";
+            try { partial = await outputTask.ConfigureAwait(false); } catch { }
+            return (partial, "Timeout: сервер не відповів за 30 секунд", -1);
+        }
     }
 
     // ── Парсер виводу quser ──────────────────────────────────────────────────

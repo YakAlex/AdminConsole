@@ -153,13 +153,15 @@ public sealed class RemoteManagementService
         using var searcher = new ManagementObjectSearcher(scope, query);
         using var results  = searcher.Get();
 
-        foreach (ManagementObject os in results)
+        foreach (ManagementObject os in results.Cast<ManagementObject>())
         {
-            // Flags: 1 = shutdown, 2 = reboot
-            var inParams = os.GetMethodParameters("Win32Shutdown");
-            inParams["Flags"]           = isReboot ? 2 : 1;
-            inParams["Reserved"]        = 0;
-            os.InvokeMethod("Win32Shutdown", inParams, null);
+            using (os)
+            using (var inParams = os.GetMethodParameters("Win32Shutdown"))
+            {
+                inParams["Flags"]    = isReboot ? 2 : 1;
+                inParams["Reserved"] = 0;
+                os.InvokeMethod("Win32Shutdown", inParams, null);
+            }
         }
     }
 }

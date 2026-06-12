@@ -124,18 +124,13 @@ public sealed class CredentialStore
         string target, string username, string password,
         uint persist = CRED_PERSIST_ENTERPRISE)
     {
-        // Пароль кодуємо як Unicode bytes — саме так Windows зберігає credentials
         byte[] blob = Encoding.Unicode.GetBytes(password);
-
-        // Виділяємо некероване сховище для blob
         IntPtr blobPtr = Marshal.AllocCoTaskMem(blob.Length);
         try
         {
             Marshal.Copy(blob, 0, blobPtr, blob.Length);
+            Array.Clear(blob, 0, blob.Length); // ← затираємо одразу після Copy
 
-            // Для Write використовуємо окрему структуру де рядки — звичайні string,
-            // бо тут ми ПЕРЕДАЄМО дані до Win32, а не читаємо з нативної пам'яті.
-            // При передачі Marshal автоматично конвертує string → LPWSTR коректно.
             var cred = new CREDENTIAL_WRITE
             {
                 Flags              = 0,
@@ -163,7 +158,14 @@ public sealed class CredentialStore
         }
         finally
         {
-            Marshal.FreeCoTaskMem(blobPtr);
+            // Затираємо некероване сховище перед звільненням
+            if (blobPtr != IntPtr.Zero)
+            {
+                // Записуємо нулі поверх blob у некерованій пам'яті
+                var zeros = new byte[blob.Length];
+                Marshal.Copy(zeros, 0, blobPtr, zeros.Length);
+                Marshal.FreeCoTaskMem(blobPtr);
+            }
         }
     }
 

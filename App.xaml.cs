@@ -133,12 +133,11 @@ public partial class App : Application
         await _host.StartAsync();
     }
 
-    protected override void OnExit(ExitEventArgs e)
+    protected override async void OnExit(ExitEventArgs e)
     {
         using (_host)
         {
-            // Блокуємо головний потік максимум на 3 секунди, щоб сервіси встигли завершитись
-            Task.Run(() => _host.StopAsync(TimeSpan.FromSeconds(3))).Wait();
+            await _host.StopAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
         }
         base.OnExit(e);
     }
