@@ -108,10 +108,13 @@ public partial class App : Application
 
     private static void RegisterViews(IServiceCollection services)
     {
-        // MainWindow реалізує ICredentialPrompt — реєструємо обидва
+        // MainWindow — ICredentialPrompt (через CredentialPromptCoordinator).
+        // Hosted services резолвлять ICredentialPrompt при StartAsync();
+        // вікно має бути створене і показане ДО _host.StartAsync() (див. OnStartup).
         services.AddSingleton<MainWindow>();
+        services.AddSingleton<CredentialPromptCoordinator>();
         services.AddSingleton<ICredentialPrompt>(sp =>
-            sp.GetRequiredService<MainWindow>());
+            sp.GetRequiredService<CredentialPromptCoordinator>());
     }
 
     // ── Host lifecycle ───────────────────────────────────────────────────────
@@ -119,6 +122,12 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // КРИТИЧНИЙ ПОРЯДОК: Show() перед StartAsync().
+        // StartAsync() запускає RdpMonitorService / ZabbixPollerService, які
+        // викликають ICredentialPrompt → Dispatcher.InvokeAsync → ShowDialog().
+        // Якщо StartAsync() поставити раніше Show() — діалоги підуть на вікно,
+        // яке ще не на екрані, або до OverlayDialogService.Attach().
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
         await _host.StartAsync();

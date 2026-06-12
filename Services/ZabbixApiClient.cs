@@ -63,16 +63,6 @@ public sealed class ZabbixApiClient
     int[]   severities,
     CancellationToken ct = default)
 {
-    if (useApiToken)
-    {
-        _http.DefaultRequestHeaders.Remove("Authorization");
-        _http.DefaultRequestHeaders.Add("Authorization", $"Bearer {auth}");
-    }
-    else
-    {
-        _http.DefaultRequestHeaders.Remove("Authorization");
-    }
-
     var parameters = new JsonObject
     {
         ["output"]      = new JsonArray("eventid", "name", "severity", "clock", "hosts"),
@@ -85,7 +75,7 @@ public sealed class ZabbixApiClient
     };
 
     var request = BuildRequest("problem.get", parameters, auth);
-    var response = await PostAsync(url, request, ct).ConfigureAwait(false);
+    var response = await PostAsync(url, request, ct, useApiToken ? auth : null).ConfigureAwait(false);
     if (response is null) return [];
 
     // ── Перевіряємо чи Zabbix повернув error у тілі відповіді ────────────────
@@ -173,25 +163,28 @@ public sealed class ZabbixApiClient
     private async Task<JsonNode?> PostAsync(
         string url,
         JsonObject body,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? bearerToken = null)
     {
         try
         {
-            var content  = JsonContent.Create(body);
-            var response = await _http
-                .PostAsync(url, content, ct)
-                .ConfigureAwait(false);
+            using var msg = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(body)
+            };
+            if (bearerToken is not null)
+                msg.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
 
+            var response = await _http.SendAsync(msg, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content
                 .ReadAsStringAsync(ct)
                 .ConfigureAwait(false);
-            //Console.WriteLine($"\n=== ZABBIX RAW RESPONSE ===\n{json}\n===========================\n");
             return JsonNode.Parse(json);
         }
         catch (OperationCanceledException) { return null; }
-        catch { throw; }
     }
 
     private static string FormatAge(TimeSpan age)

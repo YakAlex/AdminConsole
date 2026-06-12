@@ -37,7 +37,7 @@
                                              VerticalAlignment="Center" />
                     <TextBlock Text="RDP Session Monitor"
                                Foreground="White" FontSize="16" FontWeight="Medium"
-                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                               Margin="10,0,10,0" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"

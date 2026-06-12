@@ -62,6 +62,15 @@ public sealed class CredentialStore
 
     public void MarkRdpCancelled() => UserCancelledRdpPrompt = true;
 
+    /// <summary>
+    /// Тимчасові credentials для quser /server:HOSTNAME (аналог cmdkey /add, через CredWrite).
+    /// TargetName = hostname — має збігатись з аргументом quser /server:.
+    /// </summary>
+    public bool StoreQuserSession(string hostname, string username, string password) =>
+        WriteToVault(hostname, username, password, CRED_PERSIST_SESSION);
+
+    public void ClearQuserSession(string hostname) => DeleteFromVault(hostname);
+
     // ── Zabbix ───────────────────────────────────────────────────────────────
 
     public bool HasZabbixCredentials =>
@@ -111,7 +120,9 @@ public sealed class CredentialStore
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────
 
-    private static void WriteToVault(string target, string username, string password)
+    private static bool WriteToVault(
+        string target, string username, string password,
+        uint persist = CRED_PERSIST_ENTERPRISE)
     {
         // Пароль кодуємо як Unicode bytes — саме так Windows зберігає credentials
         byte[] blob = Encoding.Unicode.GetBytes(password);
@@ -133,21 +144,22 @@ public sealed class CredentialStore
                 Comment            = null,
                 CredentialBlobSize = (uint)blob.Length,
                 CredentialBlob     = blobPtr,
-                Persist            = CRED_PERSIST_ENTERPRISE,
+                Persist            = persist,
                 AttributeCount     = 0,
                 Attributes         = IntPtr.Zero,
                 TargetAlias        = null,
                 UserName           = username
             };
 
-            bool ok = CredWrite(ref cred, 0);
-            if (!ok)
+            if (!CredWrite(ref cred, 0))
             {
                 int err = Marshal.GetLastWin32Error();
                 System.Diagnostics.Debug.WriteLine(
                     $"[CredentialStore] CredWrite FAILED target='{target}' " +
                     $"win32err={err} (0x{err:X8})");
+                return false;
             }
+            return true;
         }
         finally
         {
@@ -212,7 +224,8 @@ public sealed class CredentialStore
 
     // ── Константи ────────────────────────────────────────────────────────────
 
-    private const uint CRED_TYPE_GENERIC     = 1;
+    private const uint CRED_TYPE_GENERIC       = 1;
+    private const uint CRED_PERSIST_SESSION    = 2;
     private const uint CRED_PERSIST_ENTERPRISE = 3;
 
     // ── Структура для ЗАПИСУ (string поля — CLR маршалить автоматично) ────────

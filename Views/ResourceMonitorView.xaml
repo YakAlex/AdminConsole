@@ -296,7 +296,7 @@
                     </TextBlock.Style>
                 </TextBlock>
                 <TextBlock Text="{Binding SelectedEntryFullMessage}"
-                           Foreground="#FFECEFF1" FontSize="11"
+                           Foreground="#FFECEFF1" FontSize="12"
                            TextWrapping="Wrap" MaxHeight="72"
                            VerticalAlignment="Top">
                     <TextBlock.Style>

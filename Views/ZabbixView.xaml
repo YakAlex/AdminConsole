@@ -46,7 +46,7 @@
                                              VerticalAlignment="Center" />
                     <TextBlock Text="Zabbix Active Alerts"
                                Foreground="White" FontSize="16" FontWeight="Medium"
-                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                               Margin="10,0,10,0" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <!-- Connection status pill -->
@@ -313,7 +313,7 @@
                         </Style>
                     </StackPanel.Style>
 
-                    <TextBlock Foreground="#FF80CBC4" FontSize="10"
+                    <TextBlock Foreground="#FF80CBC4" FontSize="12"
                                FontFamily="Consolas, Courier New">
                         <Run Text="{Binding SelectedProblem.HostName, Mode=OneWay}"
                              FontWeight="SemiBold" />

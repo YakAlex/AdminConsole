@@ -18,8 +18,8 @@ namespace AdminConsole.Services;
 /// quser /server:TSVR3 — працює через Named Pipes / NetBIOS.
 /// quser /server:192.168.x.x — не працює (RPC over TCP, зазвичай заблоковано).
 ///
-/// Авторизація через cmdkey — реєструємо credentials перед запитом,
-/// прибираємо після. cmdkey працює з Named Pipes транспортом.
+/// Авторизація через CredWrite (Credential Manager) — реєструємо credentials
+/// перед quser, прибираємо після. Працює з Named Pipes транспортом WS2008R2.
 /// </summary>
 public sealed class RdpMonitorService : BackgroundService
 {
@@ -158,11 +158,26 @@ public sealed class RdpMonitorService : BackgroundService
 
     // ── Опитування одного сервера ────────────────────────────────────────────
 
+    private const int MaxCredentialRetries = 3;
+
     private async Task PollServerAsync(ServerEntry server, CancellationToken ct)
     {
-        // КЛЮЧОВИЙ МОМЕНТ: для quser використовуємо доменне ім'я (server.Name),
-        // НЕ IP адресу. quser /server:TSVR3 використовує Named Pipes,
-        // quser /server:192.168.x.x — RPC over TCP (зазвичай заблоковано).
+        for (int attempt = 0; attempt < MaxCredentialRetries; attempt++)
+        {
+            var retry = await PollServerOnceAsync(server, ct).ConfigureAwait(false);
+            if (retry is null)
+                return;
+
+            bool gotNew = await RequestFreshRdpCredentialsAsync(retry, ct)
+                .ConfigureAwait(false);
+            if (!gotNew)
+                return;
+        }
+    }
+
+    /// <returns>null — завершено; non-null — причина повторного запиту credentials.</returns>
+    private async Task<string?> PollServerOnceAsync(ServerEntry server, CancellationToken ct)
+    {
         string hostname = server.Name;
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -172,23 +187,19 @@ public sealed class RdpMonitorService : BackgroundService
         {
             var (user, pass) = _credentials.GetRdp();
 
-            // ── Крок 1: реєструємо credentials через cmdkey ──────────────────
-            // cmdkey /add:HOSTNAME — прив'язує credentials до конкретного hostname.
-            // Це дозволяє quser автентифікуватись без явного введення пароля.
-            // Важливо: ім'я в cmdkey має збігатись з ім'ям в quser /server:
-            var (ckOut, ckErr, ckCode) = await RunCmdAsync(
-                $@"cmdkey /add:{hostname} /user:""{user}"" /pass:""{pass}""",
-                ct).ConfigureAwait(false);
+            if (!_credentials.StoreQuserSession(hostname, user, pass))
+            {
+                _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                    $"{hostname}: не вдалося зареєструвати credentials у Credential Manager."));
+                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
+                    server.Name, server.IP, Sessions: [],
+                    ErrorMessage: "Помилка реєстрації credentials")));
+                return null;
+            }
 
-            _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                $"[DIAG] cmdkey /add:{hostname} → exit={ckCode} " +
-                $"| '{(ckOut + ckErr).Trim().Replace('\n', ' ')}'"));
+            var (output, error, exitCode) = await RunQuserAsync(hostname, ct)
+                .ConfigureAwait(false);
 
-            // ── Крок 2: запускаємо quser /server:HOSTNAME ────────────────────
-            var (output, error, exitCode) = await RunCmdAsync(
-                $"quser /server:{hostname}", ct).ConfigureAwait(false);
-
-            // Логуємо сирий вивід для діагностики
             _messenger.Send(AppLogEntryMessage.Info(LogSource,
                 $"[DIAG] quser /server:{hostname} → exit={exitCode} " +
                 $"| out={output.Length}b | err={error.Length}b"));
@@ -204,64 +215,32 @@ public sealed class RdpMonitorService : BackgroundService
 
             string allText = (output + error).ToLowerInvariant();
 
-            // ── Обробка помилки невірних credentials ─────────────────────────
             if (allText.Contains("logon failure") ||
                 allText.Contains("1326")          ||
                 allText.Contains("неверн")        ||
                 allText.Contains("невірн"))
             {
                 _credentials.ClearRdp();
-
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Невірний логін або пароль — оновіть credentials")));
-
-                // ЗМІНЕНО: Отримуємо результат діалогу
-                bool gotNewCredentials = await RequestFreshRdpCredentialsAsync(
-                    reason: "невірний пароль або пароль змінено",
-                    ct: CancellationToken.None);
-
-                // ЗМІНЕНО: Якщо пароль введено, одразу робимо повторний запит
-                if (gotNewCredentials)
-                {
-                    await PollServerAsync(server, ct); 
-                }
-                return;
+                return "невірний пароль або пароль змінено";
             }
 
-            // ── Access Denied — може бути невірний пароль АБО недостатньо прав ───────
-            // Windows Server 2008 R2 повертає "Access Denied" при невірному паролі
-            // через cmdkey (не "Logon Failure" як можна було б очікувати).
-            // Тому при Access Denied — завжди очищаємо credentials і питаємо нові.
-            // Якщо проблема дійсно у правах (а не в паролі) — юзер побачить ту ж
-            // помилку після повторного вводу і зрозуміє що справа не в паролі.
             if (allText.Contains("access is denied") ||
                 allText.Contains("access denied"))
             {
                 _credentials.ClearRdp();
-
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"{hostname}: Access Denied. " +
                     $"Можлива причина: пароль змінено або акаунт не має прав. " +
                     $"Запитуємо нові credentials…"));
-
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Access Denied — оновіть пароль або перевір права")));
-
-                bool gotNewCredentials = await RequestFreshRdpCredentialsAsync(
-                    reason: "Access Denied (можливо пароль змінено)",
-                    ct: CancellationToken.None);
-
-                // ЗМІНЕНО: Якщо пароль введено, одразу робимо повторний запит
-                if (gotNewCredentials)
-                {
-                    await PollServerAsync(server, ct);
-                }
-                return;
+                return "Access Denied (можливо пароль змінено)";
             }
 
-            // ── RPC недоступний (на випадок якщо хтось передасть IP) ──────────
             if (allText.Contains("rpc server is unavailable") ||
                 allText.Contains("1722")                      ||
                 allText.Contains("0x000006ba"))
@@ -272,10 +251,9 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "RPC недоступний — перевір ім'я сервера")));
-                return;
+                return null;
             }
 
-            // ── Сервер відповів але сесій немає ──────────────────────────────
             if (string.IsNullOrWhiteSpace(output) || exitCode == 1)
             {
                 bool noUsers = allText.Contains("no user") ||
@@ -291,10 +269,9 @@ public sealed class RdpMonitorService : BackgroundService
                     server.Name, server.IP,
                     Sessions: [],
                     ErrorMessage: noUsers ? null : $"Порожня відповідь (exit {exitCode})")));
-                return;
+                return null;
             }
 
-            // ── Парсимо результат ─────────────────────────────────────────────
             var sessions = ParseQuserOutput(output, server.Name, server.IP);
 
             _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -304,8 +281,9 @@ public sealed class RdpMonitorService : BackgroundService
                 server.Name, server.IP,
                 Sessions: sessions,
                 ErrorMessage: null)));
+            return null;
         }
-        catch (OperationCanceledException) { /* завершення додатку */ }
+        catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "RdpMonitorService: помилка при опитуванні {Server}", hostname);
@@ -313,31 +291,21 @@ public sealed class RdpMonitorService : BackgroundService
                 $"{hostname}: {ex.GetType().Name}: {ex.Message}"));
             _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                 server.Name, server.IP, Sessions: [], ErrorMessage: ex.Message)));
+            return null;
         }
         finally
         {
-            // ── Крок 3: завжди прибираємо cmdkey запис після опитування ───────
-            // Це запобігає накопиченню записів у Credential Manager
-            // і забезпечує чистий стан для наступного циклу.
-            try
-            {
-                await RunCmdAsync(
-                    $"cmdkey /delete:{hostname}",
-                    CancellationToken.None).ConfigureAwait(false);
-            }
-            catch { /* ігноруємо помилки cleanup */ }
+            _credentials.ClearQuserSession(hostname);
         }
     }
 
-    // ── Запуск команди ───────────────────────────────────────────────────────
+    // ── quser ────────────────────────────────────────────────────────────────
 
-    private static async Task<(string Output, string Error, int ExitCode)> RunCmdAsync(
-        string command, CancellationToken ct)
+    private static async Task<(string Output, string Error, int ExitCode)> RunQuserAsync(
+        string hostname, CancellationToken ct)
     {
         return await Task.Run(() =>
         {
-            // Визначаємо OEM кодування консолі (866 для кирилиці на WS2008R2).
-            // Encoding.RegisterProvider викликається в App() конструкторі.
             Encoding consoleEncoding;
             try
             {
@@ -354,8 +322,8 @@ public sealed class RdpMonitorService : BackgroundService
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName               = "cmd.exe",
-                    Arguments              = $"/c {command}",
+                    FileName               = "quser.exe",
+                    Arguments              = $"/server:{hostname}",
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
