@@ -3,6 +3,7 @@ using AdminConsole.Core.Models;
 using CommunityToolkit.Mvvm.Messaging;
 using System.Diagnostics;
 using System.Management;
+using System.IO;
 
 namespace AdminConsole.Services;
 
@@ -163,5 +164,50 @@ public sealed class RemoteManagementService
                 os.InvokeMethod("Win32Shutdown", inParams, null);
             }
         }
+    }
+    
+    /// <summary>
+    /// Відкриває SSH сесію через PuTTY якщо встановлений,
+    /// або через вбудований Windows SSH клієнт як fallback.
+    /// </summary>
+    public void OpenSsh(string ip, string name)
+    {
+        // Спочатку пробуємо PuTTY
+        var puttyPaths = new[]
+        {
+            @"C:\Program Files\PuTTY\putty.exe",
+            @"C:\Program Files (x86)\PuTTY\putty.exe",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                @"Programs\PuTTY\putty.exe")
+        };
+
+        string? putty = puttyPaths.FirstOrDefault(File.Exists);
+
+        if (putty is not null)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                $"Launched PuTTY SSH to {name} ({ip})."));
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName  = putty,
+                Arguments = $"-ssh {ip}",
+                UseShellExecute = false
+            });
+            return;
+        }
+
+        // Fallback — вбудований Windows SSH через cmd
+        _messenger.Send(AppLogEntryMessage.Info(LogSource,
+            $"PuTTY not found. Launching Windows SSH to {name} ({ip})."));
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName        = "cmd.exe",
+            Arguments       = $"/k ssh {ip}",
+            UseShellExecute = true,
+            CreateNoWindow  = false
+        });
     }
 }

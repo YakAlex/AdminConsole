@@ -39,7 +39,7 @@ public sealed partial class PingDashboardViewModel
         foreach (var entry in serversOptions.Value)
         {
             Servers.Add(new PingResultViewModel(
-                entry.Name, entry.IP, entry.Group,
+                entry.Name, entry.IP, entry.Group, entry.Type,
                 _remoteMgmt, _dialog));
         }
 

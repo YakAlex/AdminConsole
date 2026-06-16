@@ -17,6 +17,13 @@ public sealed partial class PingResultViewModel : ObservableObject
     public string Name  { get; }
     public string IP    { get; }
     public string Group { get; }
+    
+    public ServerType Type  { get; }
+    
+    // ── Computed visibility helpers (використовуються у XAML DataTrigger) ────
+    public bool IsWindows => Type == ServerType.Windows;
+    public bool IsLinux   => Type == ServerType.Linux;
+    public bool IsDevice  => Type is ServerType.Network;
 
     // ── Live state ────────────────────────────────────────────────────────────
     [ObservableProperty] private PingStatus _status = PingStatus.Unknown;
@@ -24,6 +31,7 @@ public sealed partial class PingResultViewModel : ObservableObject
     [ObservableProperty] private string     _lastChecked    = "—";
     [ObservableProperty] private string     _latencyDisplay = "—";
     [ObservableProperty] private bool       _isActionBusy;
+    [ObservableProperty] private string     _statusSince = "—";
 
     // ── Injected services ─────────────────────────────────────────────────────
     private readonly RemoteManagementService _remoteMgmt;
@@ -33,12 +41,14 @@ public sealed partial class PingResultViewModel : ObservableObject
         string name,
         string ip,
         string group,
+        ServerType type,
         RemoteManagementService remoteMgmt,
         IDialogService dialog)
     {
         Name        = name;
         IP          = ip;
         Group       = group;
+        Type       = type;
         _remoteMgmt = remoteMgmt;
         _dialog     = dialog;
     }
@@ -47,6 +57,10 @@ public sealed partial class PingResultViewModel : ObservableObject
 
     public void ApplyResult(PingResult result)
     {
+        // Оновлюємо StatusSince тільки при зміні стану
+        if (result.Status != Status)
+            StatusSince = result.Status is PingStatus.Online or PingStatus.Offline ? result.LastChecked.ToLocalTime().ToString("dd.MM.yyyy — HH:mm") : "—";
+        
         Status         = result.Status;
         LatencyMs      = result.LatencyMs;
         LastChecked    = result.LastChecked.ToLocalTime().ToString("HH:mm:ss");
@@ -68,6 +82,10 @@ public sealed partial class PingResultViewModel : ObservableObject
         try   { await _remoteMgmt.OpenRdpAsync(IP, Name); }
         finally { IsActionBusy = false; }
     }
+    
+    [RelayCommand]
+    private void OpenSsh()
+        => _remoteMgmt.OpenSsh(IP, Name);
 
     [RelayCommand]
     private async Task RemoteRestart()

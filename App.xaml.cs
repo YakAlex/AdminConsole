@@ -130,15 +130,14 @@ public partial class App : Application
         // яке ще не на екрані, або до OverlayDialogService.Attach().
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+        mainWindow.InitTray();
         await _host.StartAsync();
     }
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        using (_host)
-        {
-            await _host.StopAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
-        }
+        _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+        _host.Dispose();
         base.OnExit(e);
     }
 }

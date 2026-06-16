@@ -1,11 +1,15 @@
 ﻿using AdminConsole.Services;
 using AdminConsole.ViewModels;
 using System.Windows;
+using Hardcodet.Wpf.TaskbarNotification;
 
 namespace AdminConsole.Views;
 
 public partial class MainWindow : Window, ICredentialPrompt
 {
+    
+    private TaskbarIcon? _trayIcon;
+    private bool _hideToTrayOnClose = false;
     public MainWindow(MainViewModel viewModel, IDialogService dialogService)
     {
         DataContext = viewModel;
@@ -95,5 +99,75 @@ public partial class MainWindow : Window, ICredentialPrompt
 
         DialogConfirmButton.Click += OnConfirm;
         DialogCancelButton.Click  += OnCancel;
+    }
+    
+    // ── Tray Icon ─────────────────────────────────────────────────────────────
+
+    // ── Tray Icon ─────────────────────────────────────────────────────────────
+
+    public void InitTray()
+    {
+        _trayIcon = (TaskbarIcon)System.Windows.Application.Current
+            .Resources["TrayIcon"];
+
+        // WPF ContextMenu — не WinForms ContextMenuStrip
+        var contextMenu = new System.Windows.Controls.ContextMenu();
+
+        var openItem = new System.Windows.Controls.MenuItem
+            { Header = "Відкрити Admin Console" };
+        openItem.Click += (_, _) => RestoreWindow();
+        contextMenu.Items.Add(openItem);
+
+        contextMenu.Items.Add(new System.Windows.Controls.Separator());
+
+        var exitItem = new System.Windows.Controls.MenuItem { Header = "Вийти" };
+        exitItem.Click += (_, _) =>
+        {
+            _isExiting = true;
+            _trayIcon?.Dispose();
+            System.Windows.Application.Current.Shutdown();
+        };
+        contextMenu.Items.Add(exitItem);
+
+        _trayIcon.ContextMenu        = contextMenu;
+        _trayIcon.TrayMouseDoubleClick += (_, _) => RestoreWindow();
+    }
+
+    public void UpdateTrayTooltip(string text)
+    {
+        if (_trayIcon is not null)
+            _trayIcon.ToolTipText = text;
+    }
+
+    private void RestoreWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void Window_StateChanged(object sender, EventArgs e)
+    {
+        //Нічого не виконується
+    }
+
+    private bool _isExiting = false;
+
+    private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // При виході через трей — не перехоплюємо
+        if (_isExiting) return;
+
+        e.Cancel    = true;
+        WindowState = WindowState.Normal;
+        Hide();
+
+        if (_trayIcon is { IsDisposed: false })
+        {
+            _trayIcon.ShowBalloonTip(
+                "Admin Console",
+                "Програма згорнута у трей. Двічі клікни для відкриття.",
+                BalloonIcon.Info);
+        }
     }
 }
