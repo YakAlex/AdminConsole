@@ -8,7 +8,7 @@
     xmlns:viewModels="clr-namespace:AdminConsole.ViewModels"
     xmlns:views="clr-namespace:AdminConsole.Views"
     mc:Ignorable="d"
-    Icon="/Resources/icon.ico"
+    Icon="pack://application:,,,/Resources/icon.ico"
     Title="Admin Console"
     Height="820" Width="1280"
     MinHeight="600" MinWidth="900"

@@ -122,22 +122,39 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-
-        // КРИТИЧНИЙ ПОРЯДОК: Show() перед StartAsync().
-        // StartAsync() запускає RdpMonitorService / ZabbixPollerService, які
-        // викликають ICredentialPrompt → Dispatcher.InvokeAsync → ShowDialog().
-        // Якщо StartAsync() поставити раніше Show() — діалоги підуть на вікно,
-        // яке ще не на екрані, або до OverlayDialogService.Attach().
-        var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
-        mainWindow.InitTray();
-        await _host.StartAsync();
+        try
+        {
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            mainWindow.Show();
+            mainWindow.InitTray();
+            await _host.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Критична помилка при запуску:\n\n{ex.Message}\n\n" +
+                "Перевірте файл appsettings.json та спробуйте знову.",
+                "Admin Console — Помилка запуску",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
-        _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
-        _host.Dispose();
+        try
+        {
+            _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] StopAsync error: {ex.Message}");
+        }
+        finally
+        {
+            _host.Dispose();
+        }
         base.OnExit(e);
     }
 }

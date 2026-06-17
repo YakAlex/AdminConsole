@@ -468,7 +468,7 @@
                                         Foreground="#FFF44336" />
                                 </Button>
 
-                                <!-- Іконка роутера/мережевого пристрою (тільки Network) -->
+                                <!-- Іконка мережевого пристрою -->
                                 <materialDesign:PackIcon
                                     Kind="RouterWireless"
                                     Width="16" Height="16"

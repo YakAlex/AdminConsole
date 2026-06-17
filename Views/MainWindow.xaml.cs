@@ -9,12 +9,10 @@ public partial class MainWindow : Window, ICredentialPrompt
 {
     
     private TaskbarIcon? _trayIcon;
-    private bool _hideToTrayOnClose = false;
     public MainWindow(MainViewModel viewModel, IDialogService dialogService)
     {
         DataContext = viewModel;
         InitializeComponent();
-
         if (dialogService is OverlayDialogService overlay)
             overlay.Attach(this);
     }
@@ -103,14 +101,22 @@ public partial class MainWindow : Window, ICredentialPrompt
     
     // ── Tray Icon ─────────────────────────────────────────────────────────────
 
-    // ── Tray Icon ─────────────────────────────────────────────────────────────
-
     public void InitTray()
     {
-        _trayIcon = (TaskbarIcon)System.Windows.Application.Current
-            .Resources["TrayIcon"];
+        // Створюємо TaskbarIcon програмно — явно, без крихкого рядкового ключа
+        // з Application.Resources. Якщо іконка не знайдена — отримаємо чітке
+        // FileNotFoundException замість InvalidCastException без повідомлення.
+        var iconUri = new Uri(
+            "pack://application:,,,/Resources/icon.ico",
+            UriKind.Absolute);
 
-        // WPF ContextMenu — не WinForms ContextMenuStrip
+        _trayIcon = new TaskbarIcon
+        {
+            IconSource  = new System.Windows.Media.Imaging.BitmapImage(iconUri),
+            ToolTipText = "Admin Console",
+            Visibility  = Visibility.Visible
+        };
+
         var contextMenu = new System.Windows.Controls.ContextMenu();
 
         var openItem = new System.Windows.Controls.MenuItem
@@ -129,7 +135,7 @@ public partial class MainWindow : Window, ICredentialPrompt
         };
         contextMenu.Items.Add(exitItem);
 
-        _trayIcon.ContextMenu        = contextMenu;
+        _trayIcon.ContextMenu           = contextMenu;
         _trayIcon.TrayMouseDoubleClick += (_, _) => RestoreWindow();
     }
 

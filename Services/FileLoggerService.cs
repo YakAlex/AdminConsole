@@ -120,6 +120,7 @@ public sealed class FileLoggerService
                 AutoFlush = false
             };
 
+            // Основний batch — обмежуємо щоб не тримати файл відкритим нескінченно
             int written = 0;
             while (_queue.TryDequeue(out var entry) && written < FlushBatchSize)
             {
@@ -127,11 +128,16 @@ public sealed class FileLoggerService
                 written++;
             }
 
+            // Дренуємо залишок у тому ж відкритому writer'і.
+            // Це важливо при burst-навантаженні та при StopAsync,
+            // коли в черзі може бути більше ніж FlushBatchSize записів.
+            while (_queue.TryDequeue(out var extra))
+                writer.WriteLine(extra.Formatted);
+
             writer.Flush();
         }
         catch (Exception ex)
         {
-            // Never crash the host over a logging failure.
             _logger.LogError(ex, "FileLoggerService: failed to write to log file.");
         }
     }

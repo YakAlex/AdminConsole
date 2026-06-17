@@ -1,29 +1,48 @@
 ﻿using AdminConsole.ViewModels;
+using System.Collections.Specialized;
 using System.Windows.Controls;
 
 namespace AdminConsole.Views;
 
 public partial class LogsView : UserControl
 {
+    // Зберігаємо посилання на обробник щоб відписатись у Unloaded
+    private NotifyCollectionChangedEventHandler? _collectionHandler;
+    private LogsViewModel? _subscribedVm;
+
     public LogsView()
     {
         InitializeComponent();
 
-        // Wire the DataGrid's ScrollIntoView for auto-scroll.
-        // We do this in code-behind because it requires a reference to
-        // the named DataGrid control — this is purely a UI behaviour,
-        // zero business logic, so it is acceptable in code-behind.
         Loaded += (_, _) =>
         {
-            if (DataContext is LogsViewModel vm)
+            if (DataContext is not LogsViewModel vm) return;
+
+            // Якщо вже підписані на цей самий VM — не підписуємось повторно
+            if (ReferenceEquals(_subscribedVm, vm)) return;
+
+            // Відписуємось від попереднього VM якщо є
+            if (_subscribedVm is not null && _collectionHandler is not null)
+                _subscribedVm.LogEntries.CollectionChanged -= _collectionHandler;
+
+            _subscribedVm = vm;
+            _collectionHandler = (_, _) =>
             {
-                vm.LogEntries.CollectionChanged += (_, _) =>
-                {
-                    if (vm.AutoScroll && LogGrid.Items.Count > 0)
-                    {
-                        LogGrid.ScrollIntoView(LogGrid.Items[^1]);
-                    }
-                };
+                if (vm.AutoScroll && LogGrid.Items.Count > 0)
+                    LogGrid.ScrollIntoView(LogGrid.Items[^1]);
+            };
+
+            vm.LogEntries.CollectionChanged += _collectionHandler;
+        };
+
+        Unloaded += (_, _) =>
+        {
+            // Відписуємось при видаленні з visual tree
+            if (_subscribedVm is not null && _collectionHandler is not null)
+            {
+                _subscribedVm.LogEntries.CollectionChanged -= _collectionHandler;
+                _collectionHandler = null;
+                _subscribedVm      = null;
             }
         };
     }

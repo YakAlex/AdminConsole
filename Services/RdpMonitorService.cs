@@ -84,6 +84,23 @@ public sealed class RdpMonitorService : BackgroundService
             return;
         }
 
+        // Fail-fast валідація: quser потребує доменне ім'я, не IP.
+        // IP-адреса як ім'я сервера → RPC over TCP → зазвичай заблоковано.
+        foreach (var server in _terminalServers)
+        {
+            if (System.Net.IPAddress.TryParse(server.Name, out _))
+            {
+                _logger.LogWarning(
+                    "RdpMonitorService: сервер '{Name}' має IP-адресу замість доменного імені. " +
+                    "quser /server:IP не працює через RPC — використовуй NetBIOS/DNS ім'я.",
+                    server.Name);
+
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"Конфігурація: '{server.Name}' — це IP, а не ім'я. " +
+                    $"quser може не працювати. Виправ Name у appsettings.json."));
+            }
+        }
+
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
             $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
             $"Використовуємо доменні імена для quser."));
@@ -180,9 +197,6 @@ public sealed class RdpMonitorService : BackgroundService
     {
         string hostname = server.Name;
 
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"[DIAG] Опитування {hostname} (IP: {server.IP})"));
-
         try
         {
             var (user, pass) = _credentials.GetRdp();
@@ -199,19 +213,6 @@ public sealed class RdpMonitorService : BackgroundService
 
             var (output, error, exitCode) = await RunQuserAsync(hostname, ct)
                 .ConfigureAwait(false);
-
-            _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                $"[DIAG] quser /server:{hostname} → exit={exitCode} " +
-                $"| out={output.Length}b | err={error.Length}b"));
-
-            var rawLines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < Math.Min(rawLines.Length, 10); i++)
-                _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                    $"[DIAG] line[{i}]: »{rawLines[i].TrimEnd()}«"));
-
-            if (!string.IsNullOrWhiteSpace(error))
-                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"[DIAG] stderr: '{error.Trim()}'"));
 
             string allText = (output + error).ToLowerInvariant();
 
@@ -232,9 +233,7 @@ public sealed class RdpMonitorService : BackgroundService
             {
                 _credentials.ClearRdp();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"{hostname}: Access Denied. " +
-                    $"Можлива причина: пароль змінено або акаунт не має прав. " +
-                    $"Запитуємо нові credentials…"));
+                    $"{hostname}: Access Denied — можливо пароль змінено. Запитуємо нові credentials…"));
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Access Denied — оновіть пароль або перевір права")));
@@ -256,14 +255,9 @@ public sealed class RdpMonitorService : BackgroundService
 
             if (string.IsNullOrWhiteSpace(output) || exitCode == 1)
             {
-                bool noUsers = allText.Contains("no user") ||
+                bool noUsers = allText.Contains("no user")            ||
                                allText.Contains("нет пользователей") ||
                                string.IsNullOrWhiteSpace(output);
-
-                _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                    noUsers
-                        ? $"{hostname}: немає активних сесій."
-                        : $"{hostname}: порожня відповідь (exit={exitCode})."));
 
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP,
@@ -273,10 +267,8 @@ public sealed class RdpMonitorService : BackgroundService
             }
 
             var sessions = ParseQuserOutput(output, server.Name, server.IP);
-
             _messenger.Send(AppLogEntryMessage.Info(LogSource,
                 $"{hostname}: знайдено {sessions.Count} сесій."));
-
             _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                 server.Name, server.IP,
                 Sessions: sessions,

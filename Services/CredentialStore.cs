@@ -124,6 +124,14 @@ public sealed class CredentialStore
         string target, string username, string password,
         uint persist = CRED_PERSIST_ENTERPRISE)
     {
+        // Порожній пароль — відхиляємо до виклику Win32 API
+        if (string.IsNullOrEmpty(password))
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CredentialStore] WriteToVault: порожній пароль для '{target}' — пропускаємо.");
+            return false;
+        }
+        
         byte[] blob = Encoding.Unicode.GetBytes(password);
         IntPtr blobPtr = Marshal.AllocCoTaskMem(blob.Length);
         try
@@ -238,7 +246,7 @@ public sealed class CredentialStore
         public uint    Type;
         public string? TargetName;
         public string? Comment;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+        public long LastWritten;
         public uint    CredentialBlobSize;
         public IntPtr  CredentialBlob;
         public uint    Persist;

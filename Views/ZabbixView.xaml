@@ -48,32 +48,28 @@
                                Foreground="White" FontSize="16" FontWeight="Medium"
                                Margin="10,0,10,0" VerticalAlignment="Center" />
                 </StackPanel>
-
-                <!-- Connection status pill -->
+                
+                <!-- Connection status pill — прозорий фон щоб текст не зливався з фоном -->
                 <Border DockPanel.Dock="Right"
                         CornerRadius="12" Padding="12,4">
                     <Border.Background>
                         <SolidColorBrush
                             Color="{Binding StatusColor,
-                                    Converter={x:Static converters:StringToColorConverter.Instance}}" />
+                    Converter={x:Static converters:StringToColorConverter.Instance}}"
+                            Opacity="0.15" />
                     </Border.Background>
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="8" Height="8" VerticalAlignment="Center">
                             <Ellipse.Fill>
                                 <SolidColorBrush
                                     Color="{Binding StatusColor,
-                                            Converter={x:Static converters:StringToColorConverter.Instance}}" />
+                            Converter={x:Static converters:StringToColorConverter.Instance}}" />
                             </Ellipse.Fill>
                         </Ellipse>
                         <TextBlock Text="{Binding ConnectionStatus, Mode=OneWay}"
+                                   Foreground="White"
                                    FontSize="12" FontWeight="Medium"
-                                   Margin="6,0,0,0" VerticalAlignment="Center">
-                            <TextBlock.Foreground>
-                                <SolidColorBrush
-                                    Color="{Binding StatusColor,
-                                            Converter={x:Static converters:StringToColorConverter.Instance}}" />
-                            </TextBlock.Foreground>
-                        </TextBlock>
+                                   Margin="6,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
 
