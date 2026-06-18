@@ -73,36 +73,7 @@
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
                 
-                <!-- Кнопка Settings — праворуч у header -->
-                <Button DockPanel.Dock="Right"
-                        Command="{Binding OpenSettingsCommand}"
-                        Width="36" Height="36"
-                        Cursor="Hand"
-                        ToolTip="Налаштування"
-                        Background="Transparent"
-                        BorderThickness="0">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="Bd" Background="Transparent"
-                                    CornerRadius="18"
-                                    Width="36" Height="36">
-                                <materialDesign:PackIcon Kind="Cog"
-                                                         Width="20" Height="20"
-                                                         Foreground="#FF80CBC4"
-                                                         VerticalAlignment="Center"
-                                                         HorizontalAlignment="Center" />
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#55FFFFFF" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
+                
                 
                 <TextBlock DockPanel.Dock="Right"
                            Text="{Binding CurrentPageTitle}"
@@ -121,8 +92,10 @@
 
             <!-- Sidebar -->
             <Border Grid.Column="0" Background="#FF2C3E44">
-                <StackPanel Margin="0,12,0,0">
-                    <StackPanel.Resources>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" /> <RowDefinition Height="Auto" /> </Grid.RowDefinitions>
+                    <Grid.Resources>
                         <Style x:Key="SideNavButton" TargetType="Button">
                             <Setter Property="Background"                 Value="Transparent" />
                             <Setter Property="BorderThickness"            Value="0" />
@@ -157,54 +130,56 @@
                                 </Setter.Value>
                             </Setter>
                         </Style>
-                    </StackPanel.Resources>
+                    </Grid.Resources>
 
-                    <Button Style="{StaticResource SideNavButton}"
-                            Command="{Binding NavigateToCommand}" CommandParameter="0">
+                    <StackPanel Grid.Row="0" Margin="0,12,0,0">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="0">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="AccessPoint" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Ping Dashboard" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="1">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Cpu64Bit" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Resources" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="2">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="RemoteDesktop" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="RDP Sessions" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="3">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Bell" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Zabbix Alerts" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="4">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <Button Grid.Row="1"
+                            Style="{StaticResource SideNavButton}"
+                            Command="{Binding OpenSettingsCommand}"
+                            Margin="6,2,6,12">
                         <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="AccessPoint" Width="18" Height="18"
+                            <materialDesign:PackIcon Kind="Cog" Width="18" Height="18"
                                                      Foreground="#FF80CBC4" VerticalAlignment="Center" />
-                            <TextBlock Text="Ping Dashboard" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Settings" Margin="10,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-
-                    <Button Style="{StaticResource SideNavButton}"
-                            Command="{Binding NavigateToCommand}" CommandParameter="1">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Cpu64Bit" Width="18" Height="18"
-                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
-                            <TextBlock Text="Resources" Margin="10,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button Style="{StaticResource SideNavButton}"
-                            Command="{Binding NavigateToCommand}" CommandParameter="2">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="RemoteDesktop" Width="18" Height="18"
-                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
-                            <TextBlock Text="RDP Sessions" Margin="10,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button Style="{StaticResource SideNavButton}"
-                            Command="{Binding NavigateToCommand}" CommandParameter="3">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Bell" Width="18" Height="18"
-                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
-                            <TextBlock Text="Zabbix Alerts" Margin="10,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <Button Style="{StaticResource SideNavButton}"
-                            Command="{Binding NavigateToCommand}" CommandParameter="4">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18"
-                                                     Foreground="#FF80CBC4" VerticalAlignment="Center" />
-                            <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Column divider -->
@@ -429,7 +404,7 @@
                                        VerticalAlignment="Center"
                                        Foreground="White"
                                        FontSize="14" />
-
+ 
                             <ToggleButton Grid.Column="1"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding CloseToTray, Mode=TwoWay}"
