@@ -12,7 +12,7 @@ using System.Windows.Data;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class PingDashboardViewModel
-    : ObservableObject, IRecipient<PingStatusChangedMessage>
+    : ObservableObject, IRecipient<PingBatchResultMessage>
 {
     public ObservableCollection<PingResultViewModel> Servers { get; } = [];
     public CollectionViewSource GroupedServers { get; } = new();
@@ -53,14 +53,18 @@ public sealed partial class PingDashboardViewModel
         UpdateSummary();
     }
 
-    public void Receive(PingStatusChangedMessage message)
+    public void Receive(PingBatchResultMessage message)
     {
-        var result = message.Value;
+        var results = message.Value.Results;
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            var row = Servers.FirstOrDefault(s => s.IP == result.IP);
-            if (row is null) return;
-            row.ApplyResult(result);
+            // Один прохід по всіх результатах — один Dispatcher call,
+            // одне перемальовування UI після всіх оновлень
+            foreach (var result in results)
+            {
+                var row = Servers.FirstOrDefault(s => s.IP == result.IP);
+                row?.ApplyResult(result);
+            }
             UpdateSummary();
         });
     }

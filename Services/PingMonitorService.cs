@@ -24,6 +24,7 @@ public sealed class PingMonitorService : BackgroundService
     private const string LogSource  = "PingMonitor";
     private bool _firstRun = true;
     private readonly SemaphoreSlim _pingThrottle = new(10);
+    private System.Collections.Concurrent.ConcurrentBag<PingResult> _cycleBag = new();
     public PingMonitorService(
         IMessenger messenger,
         ILogger<PingMonitorService> logger,
@@ -74,20 +75,36 @@ public sealed class PingMonitorService : BackgroundService
 
     private void PublishInitialCheckingState()
     {
+        var initialResults = new List<PingResult>(_servers.Count);
+
         foreach (var server in _servers)
         {
             _previousStatus[server.IP] = PingStatus.Unknown;
-
-            _messenger.Send(new PingStatusChangedMessage(new PingResult(
+            initialResults.Add(new PingResult(
                 server.Name, server.IP, server.Group,
-                PingStatus.Checking, null, DateTimeOffset.Now)));
+                PingStatus.Checking, null, DateTimeOffset.Now));
         }
+
+        _messenger.Send(new PingBatchResultMessage(new PingBatchPayload(
+            Results:          initialResults,
+            CycleCompletedAt: DateTimeOffset.Now)));
     }
 
     private async Task PingAllServersAsync(CancellationToken ct)
     {
+        _cycleBag = new System.Collections.Concurrent.ConcurrentBag<PingResult>();
+        
         var tasks = _servers.Select(s => PingSingleServerAsync(s, ct));
         await Task.WhenAll(tasks).ConfigureAwait(false);
+        
+        if (ct.IsCancellationRequested) return;
+
+        // Одне зведене повідомлення замість N окремих
+        var payload = new PingBatchPayload(
+            Results:          _cycleBag.ToArray(),
+            CycleCompletedAt: DateTimeOffset.Now);
+
+        _messenger.Send(new PingBatchResultMessage(payload));
     }
 
     private async Task PingSingleServerAsync(ServerEntry server, CancellationToken ct)
@@ -137,9 +154,9 @@ public sealed class PingMonitorService : BackgroundService
 
             _previousStatus[server.IP] = status;
 
-            _messenger.Send(new PingStatusChangedMessage(new PingResult(
+            _cycleBag.Add(new PingResult(
                 server.Name, server.IP, server.Group,
-                status, latencyMs, DateTimeOffset.Now)));
+                status, latencyMs, DateTimeOffset.Now));
         }
         finally
         {
