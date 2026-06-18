@@ -43,6 +43,7 @@
         <DataTemplate DataType="{x:Type viewModels:LogsViewModel}">
             <views:LogsView />
         </DataTemplate>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Window.Resources>
 
     <!--
@@ -71,6 +72,38 @@
                                FontSize="18" FontWeight="Medium"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
+                
+                <!-- Кнопка Settings — праворуч у header -->
+                <Button DockPanel.Dock="Right"
+                        Command="{Binding OpenSettingsCommand}"
+                        Width="36" Height="36"
+                        Cursor="Hand"
+                        ToolTip="Налаштування"
+                        Background="Transparent"
+                        BorderThickness="0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="Transparent"
+                                    CornerRadius="18"
+                                    Width="36" Height="36">
+                                <materialDesign:PackIcon Kind="Cog"
+                                                         Width="20" Height="20"
+                                                         Foreground="#FF80CBC4"
+                                                         VerticalAlignment="Center"
+                                                         HorizontalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#55FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                
                 <TextBlock DockPanel.Dock="Right"
                            Text="{Binding CurrentPageTitle}"
                            Foreground="#FF80CBC4" FontSize="13"
@@ -305,6 +338,109 @@
                         </Button>
 
                     </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <!--
+            Settings Overlay — з'являється поверх всього при IsSettingsOpen = true.
+            Той самий підхід що DialogOverlay — Grid шар з ZIndex.
+            Закривається кнопкою або кліком на темний фон.
+        -->
+        <Grid Grid.Row="0" Grid.RowSpan="3"
+              Panel.ZIndex="99"
+              Visibility="{Binding IsSettingsOpen,
+                           Converter={StaticResource BooleanToVisibilityConverter}}">
+
+            <!-- Темний фон — клік закриває overlay -->
+            <Rectangle Fill="#BB000000"
+                       Cursor="Arrow">
+                <Rectangle.InputBindings>
+                    <MouseBinding MouseAction="LeftClick"
+                                  Command="{Binding CloseSettingsCommand}" />
+                </Rectangle.InputBindings>
+            </Rectangle>
+
+            <!-- Панель налаштувань -->
+            <Border Width="360"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#FF2C3E44"
+                    CornerRadius="8"
+                    Padding="28,24">
+                <StackPanel>
+
+                    <!-- Заголовок -->
+                    <DockPanel Margin="0,0,0,20">
+                        <materialDesign:PackIcon Kind="Cog"
+                                                 Width="24" Height="24"
+                                                 Foreground="#FF80CBC4"
+                                                 VerticalAlignment="Center" />
+                        <TextBlock Text="Налаштування"
+                                   Foreground="White"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center" />
+                        <!-- Кнопка закрити -->
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding CloseSettingsCommand}"
+                                HorizontalAlignment="Right"
+                                Width="28" Height="28"
+                                Cursor="Hand"
+                                Background="Transparent"
+                                BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="14">
+                                        <materialDesign:PackIcon Kind="Close"
+                                                                 Width="16" Height="16"
+                                                                 Foreground="#FF80CBC4"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </DockPanel>
+
+                    <Separator Background="#33FFFFFF" Margin="0,0,0,20" />
+
+                    <!-- Секція: Поведінка при закритті -->
+                    <TextBlock Text="ПОВЕДІНКА ПРИ ЗАКРИТТІ"
+                               Foreground="#FF80CBC4"
+                               FontSize="14" FontWeight="Medium"
+                               Margin="0,0,0,12" />
+
+                    <Border Background="#22FFFFFF"
+                            CornerRadius="6"
+                            Padding="16,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" 
+                                       Text="Згортати у трей при закритті"
+                                       VerticalAlignment="Center"
+                                       Foreground="White"
+                                       FontSize="14" />
+
+                            <ToggleButton Grid.Column="1"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding CloseToTray, Mode=TwoWay}"
+                                          Style="{StaticResource MaterialDesignSwitchToggleButton}">
+                                <ToggleButton.LayoutTransform>
+                                    <ScaleTransform ScaleX="0.8" ScaleY="0.8" />
+                                </ToggleButton.LayoutTransform>
+                            </ToggleButton>
+                        </Grid>
+                    </Border>
+
                 </StackPanel>
             </Border>
         </Grid>

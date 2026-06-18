@@ -89,8 +89,8 @@ public partial class App : Application
         services.AddHostedService<ZabbixPollerService>();
 
         services.AddSingleton<RemoteManagementService>();
-        services.AddSingleton<CredentialStore>();          // ← новий
-
+        services.AddSingleton<CredentialStore>();         
+        services.AddSingleton<UserSettingsService>();
         services.AddSingleton<OverlayDialogService>();
         services.AddSingleton<IDialogService>(sp =>
             sp.GetRequiredService<OverlayDialogService>());

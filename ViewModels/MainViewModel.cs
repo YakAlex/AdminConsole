@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using AdminConsole.Services;
 
 namespace AdminConsole.ViewModels;
 
@@ -12,10 +13,9 @@ public sealed partial class MainViewModel : ObservableObject
     public ZabbixViewModel          Zabbix          { get; }
     public LogsViewModel            Logs            { get; }
 
+    private readonly UserSettingsService _userSettings;
+
     // ── Navigation ────────────────────────────────────────────────────────────
-    // CurrentView holds the active child ViewModel.
-    // MainWindow.xaml maps each type to its View via typed DataTemplates —
-    // no Visibility toggling, no RelativeSource, no inline UserControl instances.
     [ObservableProperty]
     private object _currentView = null!;
 
@@ -25,20 +25,41 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _statusBarText = "Ready";
 
+    // ── Settings overlay ──────────────────────────────────────────────────────
+    [ObservableProperty]
+    private bool _isSettingsOpen = false;
+
+    /// <summary>
+    /// Прив'язується до CheckBox у Settings overlay.
+    /// При зміні — одразу зберігає на диск.
+    /// </summary>
+    public bool CloseToTray
+    {
+        get => _userSettings.Current.CloseToTray;
+        set
+        {
+            if (_userSettings.Current.CloseToTray == value) return;
+            _userSettings.Current.CloseToTray = value;
+            _userSettings.Save();
+            OnPropertyChanged();
+        }
+    }
+
     public MainViewModel(
         PingDashboardViewModel   pingDashboard,
         ResourceMonitorViewModel resourceMonitor,
         RdpSessionViewModel      rdpSessions,
         ZabbixViewModel          zabbix,
-        LogsViewModel            logs)
+        LogsViewModel            logs,
+        UserSettingsService      userSettings)
     {
         PingDashboard   = pingDashboard;
         ResourceMonitor = resourceMonitor;
         RdpSessions     = rdpSessions;
         Zabbix          = zabbix;
         Logs            = logs;
+        _userSettings   = userSettings;
 
-        // Default view on startup.
         _currentView = pingDashboard;
     }
 
@@ -57,6 +78,12 @@ public sealed partial class MainViewModel : ObservableObject
             _ => (PingDashboard,           "Admin Console")
         };
     }
+
+    [RelayCommand]
+    private void OpenSettings() => IsSettingsOpen = true;
+
+    [RelayCommand]
+    private void CloseSettings() => IsSettingsOpen = false;
 
     public void SetStatusBarText(string text)
     {

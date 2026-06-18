@@ -7,10 +7,11 @@ namespace AdminConsole.Views;
 
 public partial class MainWindow : Window, ICredentialPrompt
 {
-    
+    private readonly MainViewModel _viewModel;
     private TaskbarIcon? _trayIcon;
     public MainWindow(MainViewModel viewModel, IDialogService dialogService)
-    {
+    {   
+        _viewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
         if (dialogService is OverlayDialogService overlay)
@@ -161,19 +162,22 @@ public partial class MainWindow : Window, ICredentialPrompt
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // При виході через трей — не перехоплюємо
+        // Якщо закриття ініційовано з меню трею або Shutdown() — не перехоплюємо
         if (_isExiting) return;
 
-        e.Cancel    = true;
-        WindowState = WindowState.Normal;
-        Hide();
+        // Читаємо налаштування через ViewModel — єдине джерело правди
+        var closeToTray = (_viewModel?.CloseToTray) ?? true;
 
-        if (_trayIcon is { IsDisposed: false })
+        if (closeToTray)
         {
-            _trayIcon.ShowBalloonTip(
+            // Скасовуємо закриття і ховаємо у трей
+            e.Cancel = true;
+            Hide();
+            _trayIcon?.ShowBalloonTip(
                 "Admin Console",
-                "Програма згорнута у трей. Двічі клікни для відкриття.",
+                "Програма згорнута у трей. Для виходу — меню трею → Вийти.",
                 BalloonIcon.Info);
         }
+        // else — e.Cancel = false (дефолт), WPF закриє вікно і OnExit відпрацює штатно
     }
 }

@@ -10,3 +10,17 @@ public sealed class MonitoringSettings
     public int    RdpPollIntervalSeconds           { get; init; } = 120;
     public int    LocalResourcePollIntervalSeconds { get; init; } = 3;
 }
+
+/// <summary>
+/// Користувацькі налаштування програми.
+/// Зберігаються у %LocalAppData%\AdminConsole\user_settings.json
+/// Не входять до appsettings.json — змінюються під час роботи програми.
+/// </summary>
+public sealed class UserSettings
+{
+    /// <summary>
+    /// true  — натискання хрестика ховає програму у трей.
+    /// false — натискання хрестика закриває програму повністю.
+    /// </summary>
+    public bool CloseToTray { get; set; } = true;
+}
