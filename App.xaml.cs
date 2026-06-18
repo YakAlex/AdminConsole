@@ -19,25 +19,38 @@ public partial class App : Application
 
     public App()
     {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        
-        LoadMaterialDesignResources();
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        _host = Host.CreateDefaultBuilder()
-            .ConfigureAppConfiguration((_, config) =>
-            {
-                config.SetBasePath(Directory.GetCurrentDirectory());
-                config.AddJsonFile("appsettings.json",
-                    optional: false, reloadOnChange: true);
-            })
-            .ConfigureServices((context, services) =>
-            {
-                RegisterConfiguration(context.Configuration, services);
-                RegisterInfrastructure(services);
-                RegisterViewModels(services);
-                RegisterViews(services);
-            })
-            .Build();
+            LoadMaterialDesignResources();
+
+            _host = Host.CreateDefaultBuilder()
+                .ConfigureAppConfiguration((_, config) =>
+                {
+                    config.SetBasePath(AppContext.BaseDirectory);
+                    config.AddJsonFile("appsettings.json",
+                        optional: false, reloadOnChange: true);
+                })
+                .ConfigureServices((context, services) =>
+                {
+                    RegisterConfiguration(context.Configuration, services);
+                    RegisterInfrastructure(services);
+                    RegisterViewModels(services);
+                    RegisterViews(services);
+                })
+                .Build();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Критична помилка ініціалізації додатку:\n\n{ex.Message}\n\n" +
+                "Перевірте наявність та коректність файлу appsettings.json.",
+                "Admin Console — Помилка запуску",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Environment.Exit(1);
+        }
     }
 
     // ── Resource loading ─────────────────────────────────────────────────────

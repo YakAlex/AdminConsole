@@ -20,8 +20,7 @@ public sealed partial class MainViewModel : ObservableObject
     private object _currentView = null!;
 
     [ObservableProperty]
-    private string _currentPageTitle = "Ping Dashboard";
-
+    private string _currentPageTitle = string.Empty;
     [ObservableProperty]
     private string _statusBarText = "Ready";
 
@@ -60,7 +59,10 @@ public sealed partial class MainViewModel : ObservableObject
         Logs            = logs;
         _userSettings   = userSettings;
 
-        _currentView = pingDashboard;
+        // Ініціалізуємо через NavigateTo щоб CurrentPageTitle
+        // завжди був синхронізований з CurrentView,
+        // навіть якщо порядок вкладок зміниться у майбутньому.
+        NavigateTo("0");
     }
 
     [RelayCommand]

@@ -19,7 +19,7 @@ public sealed partial class LogsViewModel
     : ObservableObject, IRecipient<AppLogEntryMessage>
 {
     private const int MaxEntries = 500;
-
+    private const int CleanupThreshold = 550;
     // ── Observable state ─────────────────────────────────────────────────────
 
     public ObservableCollection<LogEntryViewModel> LogEntries { get; } = [];
@@ -48,11 +48,21 @@ public sealed partial class LogsViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Cap the collection so the UI list never grows without bound.
-            while (LogEntries.Count >= MaxEntries)
-                LogEntries.RemoveAt(0);
+            // Нові записи зверху — адміністратор бачить останні події
+            // без скролу. Insert(0) = O(n) по пам'яті, але так само
+            // як Add + RemoveAt(0), тільки в правильному порядку.
+            LogEntries.Insert(0, vm);
 
-            LogEntries.Add(vm);
+            // Пакетне видалення зі КІНЦЯ — O(1) на відміну від RemoveAt(0).
+            // Кожен RemoveAt(Count-1) не зсуває масив.
+            // Спрацьовує раз на ~50 нових записів завдяки порогу.
+            if (LogEntries.Count > CleanupThreshold)
+            {
+                int toRemove = LogEntries.Count - MaxEntries;
+                for (int i = 0; i < toRemove; i++)
+                    LogEntries.RemoveAt(LogEntries.Count - 1);
+            }
+
             StatusText = $"{LogEntries.Count} entries — last: {vm.TimeShort}";
         });
     }
@@ -71,7 +81,7 @@ public sealed partial class LogsViewModel
     {
         try
         {
-            string fullPath = System.IO.Path.GetFullPath("logs");
+            string fullPath = System.IO.Path.Combine(AppContext.BaseDirectory, "logs");
             System.IO.Directory.CreateDirectory(fullPath);
             System.Diagnostics.Process.Start("explorer.exe", fullPath);
         }

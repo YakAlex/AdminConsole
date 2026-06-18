@@ -30,8 +30,8 @@ public sealed class FileLoggerService
     private readonly ConcurrentQueue<AppLogEntry> _queue = new();
     private readonly SemaphoreSlim                _signal = new(0);
 
-    private const string LogDirectory   = "logs";
-    private const int    FlushBatchSize = 50;
+    private static readonly string LogDirectory =
+        Path.Combine(AppContext.BaseDirectory, "logs");    private const int    FlushBatchSize = 50;
     private const string LogSource      = "FileLogger";
 
     public FileLoggerService(
@@ -146,7 +146,6 @@ public sealed class FileLoggerService
     {
         try
         {
-            Directory.CreateDirectory(LogDirectory);
             File.AppendAllText(
                 CurrentLogFilePath(),
                 entry.Formatted + Environment.NewLine,

@@ -195,9 +195,11 @@ public sealed class ZabbixPollerService : BackgroundService
                 FetchedAt: DateTimeOffset.Now)));
 
             // Одразу показуємо діалог — не чекаємо наступного циклу
+            using var dialogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            dialogCts.CancelAfter(TimeSpan.FromMinutes(5)); // таймаут діалогу — на випадок якщо юзер пішов
             bool obtained = await RequestFreshZabbixTokenAsync(
                 reason: ex.Message,
-                ct: CancellationToken.None).ConfigureAwait(false);
+                ct: dialogCts.Token).ConfigureAwait(false);
 
             if (!obtained)
             {

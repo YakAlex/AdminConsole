@@ -166,6 +166,8 @@
         ═══════════════════════════════════════ -->
         <DataGrid
             x:Name="LogGrid"
+            VirtualizingPanel.IsVirtualizing="True"
+            VirtualizingPanel.VirtualizationMode="Recycling"
             Grid.Row="1"
             ItemsSource="{Binding LogEntries}"
             SelectedItem="{Binding SelectedEntry}"

@@ -23,6 +23,7 @@ public sealed class PingMonitorService : BackgroundService
     private const int PingTimeoutMs = 2000;
     private const string LogSource  = "PingMonitor";
     private bool _firstRun = true;
+    private readonly SemaphoreSlim _pingThrottle = new(10);
     public PingMonitorService(
         IMessenger messenger,
         ILogger<PingMonitorService> logger,
@@ -91,50 +92,58 @@ public sealed class PingMonitorService : BackgroundService
 
     private async Task PingSingleServerAsync(ServerEntry server, CancellationToken ct)
     {
-        PingStatus status;
-        long?      latencyMs = null;
-
+        await _pingThrottle.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var ping  = new Ping();
-            var reply = await ping
-                .SendPingAsync(server.IP, PingTimeoutMs)
-                .WaitAsync(ct)
-                .ConfigureAwait(false);
+            PingStatus status;
+            long?      latencyMs = null;
 
-            if (reply.Status == IPStatus.Success)
+            try
             {
-                status    = PingStatus.Online;
-                latencyMs = reply.RoundtripTime;
+                using var ping = new Ping();
+                var reply = await ping
+                    .SendPingAsync(server.IP, PingTimeoutMs)
+                    .WaitAsync(ct)
+                    .ConfigureAwait(false);
+
+                if (reply.Status == IPStatus.Success)
+                {
+                    status    = PingStatus.Online;
+                    latencyMs = reply.RoundtripTime;
+                }
+                else
+                {
+                    status = PingStatus.Offline;
+                }
             }
-            else
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
             {
                 status = PingStatus.Offline;
+                _logger.LogWarning(ex, "Ping to {Name} ({IP}) threw an exception.",
+                    server.Name, server.IP);
             }
+
+            // Only log state transitions — not every ping result.
+            if (_previousStatus.TryGetValue(server.IP, out var prev) && prev != status)
+            {
+                if (status == PingStatus.Online)
+                    _messenger.Send(AppLogEntryMessage.Success(LogSource,
+                        $"{server.Name} ({server.IP}) is back ONLINE. Latency: {latencyMs} ms."));
+                else
+                    _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                        $"{server.Name} ({server.IP}) went OFFLINE."));
+            }
+
+            _previousStatus[server.IP] = status;
+
+            _messenger.Send(new PingStatusChangedMessage(new PingResult(
+                server.Name, server.IP, server.Group,
+                status, latencyMs, DateTimeOffset.Now)));
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
+        finally
         {
-            status = PingStatus.Offline;
-            _logger.LogWarning(ex, "Ping to {Name} ({IP}) threw an exception.",
-                server.Name, server.IP);
+            _pingThrottle.Release();
         }
-
-        // Only log state transitions — not every ping result.
-        if (_previousStatus.TryGetValue(server.IP, out var prev) && prev != status)
-        {
-            if (status == PingStatus.Online)
-                _messenger.Send(AppLogEntryMessage.Success(LogSource,
-                    $"{server.Name} ({server.IP}) is back ONLINE. Latency: {latencyMs} ms."));
-            else
-                _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                    $"{server.Name} ({server.IP}) went OFFLINE."));
-        }
-
-        _previousStatus[server.IP] = status;
-
-        _messenger.Send(new PingStatusChangedMessage(new PingResult(
-            server.Name, server.IP, server.Group,
-            status, latencyMs, DateTimeOffset.Now)));
     }
 }

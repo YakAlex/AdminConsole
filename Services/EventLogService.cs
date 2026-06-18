@@ -5,20 +5,21 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
-// Alias the conflicting BCL type so our AdminConsole.Core.Models.EventLogEntry
-// is the unqualified name throughout this file.
-using WinEventLog = System.Diagnostics.EventLog;
+using WinEventLog   = System.Diagnostics.EventLog;
 using WinEventEntry = System.Diagnostics.EventLogEntry;
-using WinEventType = System.Diagnostics.EventLogEntryType;
+using WinEventType  = System.Diagnostics.EventLogEntryType;
 
 namespace AdminConsole.Services;
 
 /// <summary>
-/// Reads the last N Error/Critical entries from the Windows System and
-/// Application event logs on a fixed interval and publishes
-/// EventLogUpdatedMessage.
+/// Читає Error/Critical записи з Windows Event Log (System + Application)
+/// і публікує EventLogUpdatedMessage.
 ///
-/// Runs on a background thread — zero UI thread involvement.
+/// Оптимізація: зберігає _lastRead timestamp між ітераціями.
+/// Перший запуск — читає останні FetchCount помилок за весь час.
+/// Наступні запуски — сканує лише записи новіші за _lastRead,
+/// зупиняючись одразу як тільки зустрів старий запис (early exit).
+/// Повідомлення не надсилається якщо нових записів немає.
 /// </summary>
 public sealed class EventLogService : BackgroundService
 {
@@ -27,6 +28,15 @@ public sealed class EventLogService : BackgroundService
 
     private const int FetchCount          = 20;
     private const int PollIntervalSeconds = 30;
+
+    // Максимальна кількість записів для сканування при першому запуску.
+    // Після першого запуску — не використовується (early exit по timestamp).
+    private const int InitialMaxScan = 2000;
+
+    // Зберігає час останнього прочитаного запису.
+    // null = перший запуск, читаємо InitialMaxScan записів назад.
+    // non-null = інкрементальний режим, читаємо лише нове.
+    private DateTimeOffset? _lastRead = null;
 
     public EventLogService(
         IMessenger messenger,
@@ -46,7 +56,6 @@ public sealed class EventLogService : BackgroundService
 
         _logger.LogInformation("EventLogService started.");
 
-        // Fetch immediately on startup, then repeat on interval.
         await FetchAndPublishAsync();
 
         while (!stoppingToken.IsCancellationRequested)
@@ -62,13 +71,37 @@ public sealed class EventLogService : BackgroundService
         _logger.LogInformation("EventLogService stopped.");
     }
 
-    // -------------------------------------------------------------------------
+    // ── Fetch ─────────────────────────────────────────────────────────────────
 
     private async Task FetchAndPublishAsync()
     {
         try
         {
-            var entries = await Task.Run(ReadRecentErrors).ConfigureAwait(false);
+            // Знімаємо час ДО читання — щоб не пропустити записи
+            // що з'явились поки ми читали.
+            var readStart = DateTimeOffset.Now;
+            var since     = _lastRead;
+
+            var entries = await Task
+                .Run(() => ReadErrors(since))
+                .ConfigureAwait(false);
+
+            // Оновлюємо курсор лише якщо читання пройшло успішно
+            _lastRead = readStart;
+
+            // Не надсилаємо повідомлення якщо нічого нового немає.
+            // Виключення: перший запуск (since == null) — завжди надсилаємо
+            // щоб UI отримав початковий стан.
+            if (since is not null && entries.Count == 0)
+            {
+                _logger.LogDebug("EventLogService: no new errors since {LastRead}.", since);
+                return;
+            }
+
+            _logger.LogDebug(
+                "EventLogService: found {Count} new error(s) since {Since}.",
+                entries.Count, since);
+
             _messenger.Send(new EventLogUpdatedMessage(entries));
         }
         catch (Exception ex)
@@ -77,7 +110,15 @@ public sealed class EventLogService : BackgroundService
         }
     }
 
-    private static List<EventLogEntry> ReadRecentErrors()
+    // ── Читання записів ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// since == null  → початковий режим: сканує InitialMaxScan записів,
+    ///                  повертає останні FetchCount помилок.
+    /// since != null  → інкрементальний режим: сканує від кінця до since,
+    ///                  зупиняється при першому записі старшому за since (early exit).
+    /// </summary>
+    private static List<EventLogEntry> ReadErrors(DateTimeOffset? since)
     {
         var results = new List<EventLogEntry>();
 
@@ -86,29 +127,51 @@ public sealed class EventLogService : BackgroundService
             try
             {
                 using var log = new WinEventLog(logName, ".");
+                int count = log.Entries.Count;
+                if (count == 0) continue;
 
-                int maxScan = Math.Min(log.Entries.Count, 2000);
-
-                for (int i = log.Entries.Count - 1;
-                     i >= log.Entries.Count - maxScan;
-                     i--)
+                if (since is null)
                 {
-                    if (results.Count >= FetchCount * 2) break;
+                    // ── Перший запуск: скануємо назад до InitialMaxScan ──────
+                    int maxScan = Math.Min(count, InitialMaxScan);
 
-                    WinEventEntry e = log.Entries[i];
+                    for (int i = count - 1; i >= count - maxScan; i--)
+                    {
+                        if (results.Count >= FetchCount * 2) break;
 
-                    if (e.EntryType is not (WinEventType.Error
-                                        or WinEventType.FailureAudit))
-                        continue;
+                        WinEventEntry e = log.Entries[i];
 
-                    // EventLogEntry here refers to AdminConsole.Core.Models.EventLogEntry
-                    // because the BCL type is aliased to WinEventEntry above.
-                    results.Add(new EventLogEntry(
-                        Severity:      MapSeverity(e.EntryType),
-                        Source:        e.Source,
-                        Message:       TrimMessage(e.Message),
-                        EventId:       e.InstanceId.ToString(),
-                        TimeGenerated: new DateTimeOffset(e.TimeGenerated)));
+                        if (e.EntryType is not (WinEventType.Error
+                                            or WinEventType.FailureAudit))
+                            continue;
+
+                        results.Add(Map(e));
+                    }
+                }
+                else
+                {
+                    // ── Інкрементальний режим: early exit по timestamp ───────
+                    // Скануємо від найновішого до найстарішого.
+                    // Як тільки зустріли запис старший або рівний since — стоп.
+                    for (int i = count - 1; i >= 0; i--)
+                    {
+                        WinEventEntry e = log.Entries[i];
+
+                        var generated = new DateTimeOffset(e.TimeGenerated);
+
+                        // Early exit — цей і всі наступні записи вже читались
+                        if (generated <= since.Value) break;
+
+                        if (e.EntryType is not (WinEventType.Error
+                                            or WinEventType.FailureAudit))
+                            continue;
+
+                        results.Add(Map(e));
+
+                        // Захисний ліміт: якщо за 30 сек з'явилось
+                        // аномально багато помилок — не тримаємо всі в пам'яті
+                        if (results.Count >= FetchCount * 4) break;
+                    }
                 }
             }
             catch
@@ -122,6 +185,15 @@ public sealed class EventLogService : BackgroundService
             .Take(FetchCount)
             .ToList();
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static EventLogEntry Map(WinEventEntry e) => new(
+        Severity:      MapSeverity(e.EntryType),
+        Source:        e.Source,
+        Message:       TrimMessage(e.Message),
+        EventId:       e.InstanceId.ToString(),
+        TimeGenerated: new DateTimeOffset(e.TimeGenerated));
 
     private static EventSeverity MapSeverity(WinEventType t) => t switch
     {

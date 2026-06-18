@@ -46,7 +46,7 @@ public sealed partial class ResourceMonitorViewModel
 
     public ResourceMonitorViewModel(IMessenger messenger)
     {
-        _dispatcher = Dispatcher.CurrentDispatcher;
+        _dispatcher = System.Windows.Application.Current.Dispatcher;
         messenger.RegisterAll(this);
     }
 
@@ -74,16 +74,31 @@ public sealed partial class ResourceMonitorViewModel
     public void Receive(EventLogUpdatedMessage message)
     {
         var entries = message.Value;
+        if (entries.Count == 0) return;
+
         _dispatcher.InvokeAsync(() =>
         {
-            EventEntries.Clear();
-            foreach (var e in entries)
-                EventEntries.Add(new EventLogEntryViewModel(e));
+            // Перший виклик (EventEntries порожній) — це початковий snapshot,
+            // просто заповнюємо. Наступні виклики — лише нові записи,
+            // вставляємо на початок щоб найновіші були зверху.
+            if (EventEntries.Count == 0)
+            {
+                foreach (var e in entries)
+                    EventEntries.Add(new EventLogEntryViewModel(e));
+            }
+            else
+            {
+                // Нові записи вставляємо зверху
+                for (int i = entries.Count - 1; i >= 0; i--)
+                    EventEntries.Insert(0, new EventLogEntryViewModel(entries[i]));
 
-            EventLogStatus = EventEntries.Count == 0
-                ? "No Error/Critical events found."
-                : $"{EventEntries.Count} recent error(s) — " +
-                  $"last fetched {DateTime.Now:HH:mm:ss}";
+                // Обрізаємо хвіст — не тримаємо більше 50 записів
+                while (EventEntries.Count > 50)
+                    EventEntries.RemoveAt(EventEntries.Count - 1);
+            }
+
+            EventLogStatus = $"{EventEntries.Count} recent error(s) — " +
+                             $"last updated {DateTime.Now:HH:mm:ss}";
         });
     }
 
