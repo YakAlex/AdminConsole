@@ -96,11 +96,20 @@ public partial class App : Application
 
         services.AddHostedService<PingMonitorService>();
         services.AddHostedService<ResourceMonitorService>();
-        services.AddHostedService<EventLogService>();
+
+        // EventLogService реєструємо як Singleton (а не лише AddHostedService),
+        // щоб ResourceMonitorViewModel міг отримати той самий екземпляр напряму
+        // через конструктор (потрібно для читання LastSnapshot).
+        // AddHostedService<T>() реєструє T лише під IHostedService — конкретний
+        // тип T лишається нерезолвним без цього явного AddSingleton.
+        services.AddSingleton<EventLogService>();
+        services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
+
         services.AddHostedService<FileLoggerService>();
         services.AddHostedService<RdpMonitorService>();
         services.AddHostedService<ZabbixPollerService>();
-
+        services.AddSingleton<RemoteEventLogService>();
+        services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();
         services.AddSingleton<CredentialStore>();         
         services.AddSingleton<UserSettingsService>();
@@ -156,6 +165,20 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try
+        {
+            // Скасовуємо фонові WMI/EventLog запити Resource Dashboard'у
+            // ДО StopAsync — інакше осиротілий Task.Run(QueryWmi) може
+            // продовжити висіти на thread pool після завершення хосту.
+            _host.Services
+                .GetRequiredService<ResourceMonitorViewModel>()
+                .Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] ResourceMonitorViewModel dispose error: {ex.Message}");
+        }
+
         try
         {
             _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();

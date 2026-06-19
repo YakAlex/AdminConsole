@@ -5,9 +5,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
-using WinEventLog   = System.Diagnostics.EventLog;
-using WinEventEntry = System.Diagnostics.EventLogEntry;
-using WinEventType  = System.Diagnostics.EventLogEntryType;
 
 namespace AdminConsole.Services;
 
@@ -37,6 +34,14 @@ public sealed class EventLogService : BackgroundService
     // null = перший запуск, читаємо InitialMaxScan записів назад.
     // non-null = інкрементальний режим, читаємо лише нове.
     private DateTimeOffset? _lastRead = null;
+
+    // Кеш останнього повного знімку — потрібен бо UI (ResourceMonitorViewModel)
+    // може підписатись через IMessenger ПІСЛЯ того як цей BackgroundService
+    // вже опублікував перше повідомлення (воно "губиться", якщо нікому
+    // було дослухати в момент Send). ViewModel читає це поле напряму
+    // при ініціалізації, не чекаючи наступного PollIntervalSeconds.
+    private readonly List<EventLogEntry> _lastSnapshot = new();
+    public IReadOnlyList<EventLogEntry> LastSnapshot => _lastSnapshot;
 
     public EventLogService(
         IMessenger messenger,
@@ -89,6 +94,21 @@ public sealed class EventLogService : BackgroundService
             // Оновлюємо курсор лише якщо читання пройшло успішно
             _lastRead = readStart;
 
+            // Оновлюємо кеш — при першому читанні просто зберігаємо,
+            // при наступних додаємо нові записи на початок (найновіші зверху)
+            // і ріжемо хвіст так само як робить ViewModel.
+            if (since is null)
+            {
+                _lastSnapshot.Clear();
+                _lastSnapshot.AddRange(entries);
+            }
+            else if (entries.Count > 0)
+            {
+                _lastSnapshot.InsertRange(0, entries);
+                if (_lastSnapshot.Count > FetchCount)
+                    _lastSnapshot.RemoveRange(FetchCount, _lastSnapshot.Count - FetchCount);
+            }
+
             // Не надсилаємо повідомлення якщо нічого нового немає.
             // Виключення: перший запуск (since == null) — завжди надсилаємо
             // щоб UI отримав початковий стан.
@@ -111,108 +131,8 @@ public sealed class EventLogService : BackgroundService
     }
 
     // ── Читання записів ───────────────────────────────────────────────────────
-
-    /// <summary>
-    /// since == null  → початковий режим: сканує InitialMaxScan записів,
-    ///                  повертає останні FetchCount помилок.
-    /// since != null  → інкрементальний режим: сканує від кінця до since,
-    ///                  зупиняється при першому записі старшому за since (early exit).
-    /// </summary>
+    // Винесено у EventLogReader — спільний для local (цей сервіс)
+    // і remote (RemoteEventLogService) читання.
     private static List<EventLogEntry> ReadErrors(DateTimeOffset? since)
-    {
-        var results = new List<EventLogEntry>();
-
-        foreach (var logName in new[] { "System", "Application" })
-        {
-            try
-            {
-                using var log = new WinEventLog(logName, ".");
-                int count = log.Entries.Count;
-                if (count == 0) continue;
-
-                if (since is null)
-                {
-                    // ── Перший запуск: скануємо назад до InitialMaxScan ──────
-                    int maxScan = Math.Min(count, InitialMaxScan);
-
-                    for (int i = count - 1; i >= count - maxScan; i--)
-                    {
-                        if (results.Count >= FetchCount * 2) break;
-
-                        WinEventEntry e = log.Entries[i];
-
-                        if (e.EntryType is not (WinEventType.Error
-                                            or WinEventType.FailureAudit))
-                            continue;
-
-                        results.Add(Map(e));
-                    }
-                }
-                else
-                {
-                    // ── Інкрементальний режим: early exit по timestamp ───────
-                    // Скануємо від найновішого до найстарішого.
-                    // Як тільки зустріли запис старший або рівний since — стоп.
-                    for (int i = count - 1; i >= 0; i--)
-                    {
-                        WinEventEntry e = log.Entries[i];
-
-                        var generated = new DateTimeOffset(e.TimeGenerated);
-
-                        // Early exit — цей і всі наступні записи вже читались
-                        if (generated <= since.Value) break;
-
-                        if (e.EntryType is not (WinEventType.Error
-                                            or WinEventType.FailureAudit))
-                            continue;
-
-                        results.Add(Map(e));
-
-                        // Захисний ліміт: якщо за 30 сек з'явилось
-                        // аномально багато помилок — не тримаємо всі в пам'яті
-                        if (results.Count >= FetchCount * 4) break;
-                    }
-                }
-            }
-            catch
-            {
-                // Log is inaccessible (permissions) — skip silently.
-            }
-        }
-
-        return results
-            .OrderByDescending(e => e.TimeGenerated)
-            .Take(FetchCount)
-            .ToList();
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static EventLogEntry Map(WinEventEntry e) => new(
-        Severity:      MapSeverity(e.EntryType),
-        Source:        e.Source,
-        Message:       TrimMessage(e.Message),
-        EventId:       e.InstanceId.ToString(),
-        TimeGenerated: new DateTimeOffset(e.TimeGenerated));
-
-    private static EventSeverity MapSeverity(WinEventType t) => t switch
-    {
-        WinEventType.Error        => EventSeverity.Error,
-        WinEventType.FailureAudit => EventSeverity.Critical,
-        WinEventType.Warning      => EventSeverity.Warning,
-        _                         => EventSeverity.Information
-    };
-
-    private static string TrimMessage(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return "(no message)";
-
-        var firstLine = raw
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault()?.Trim() ?? string.Empty;
-
-        return firstLine.Length > 200
-            ? firstLine[..200] + "…"
-            : firstLine;
-    }
+        => EventLogReader.ReadErrors(".", since);
 }

@@ -14,20 +14,154 @@
     <UserControl.Resources>
         <converters:SeverityToColorConverter  x:Key="SeverityToColor" />
         <converters:DoubleToProgressConverter x:Key="ToProgress" />
+        <BooleanToVisibilityConverter         x:Key="BoolToVis" />
     </UserControl.Resources>
 
-    <Grid>
+    <!-- Блокуємо весь UI якщо не Windows -->
+    <Grid IsEnabled="{Binding IsWindowsSupported}">
+
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />  <!-- Header: ComboBox вибору сервера -->
+            <RowDefinition Height="Auto" />  <!-- CPU + RAM cards -->
+            <RowDefinition Height="Auto" />  <!-- Event log header -->
+            <RowDefinition Height="*"    />  <!-- Event log DataGrid -->
+            <RowDefinition Height="Auto" />  <!-- Detail strip -->
         </Grid.RowDefinitions>
 
-        <!-- ═══════════════════════════════════════════════
-             ROW 0 — CPU + RAM gauge cards
-        ═══════════════════════════════════════════════ -->
-        <UniformGrid Grid.Row="0" Columns="2" Margin="0,0,0,16">
+        <!-- ══════════════════════════════════════════════════
+             ROW 0 — Server selector header
+        ══════════════════════════════════════════════════ -->
+        <Border Grid.Row="0"
+                Background="#1AFFFFFF"
+                CornerRadius="8"
+                Padding="16,12"
+                Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*"    />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Іконка + підпис -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="0,0,16,0">
+                    <materialDesign:PackIcon Kind="ServerNetwork"
+                                             Width="22" Height="22"
+                                             Foreground="#FF80CBC4"
+                                             VerticalAlignment="Center" />
+                    <TextBlock Text="Node Dashboard"
+                               Foreground="White"
+                               FontSize="15" FontWeight="SemiBold"
+                               Margin="10,0,0,0"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- ComboBox вибору сервера -->
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableServers}"
+                          SelectedItem="{Binding SelectedServer, Mode=TwoWay}"
+                          VerticalAlignment="Center"
+                          MaxWidth="340"
+                          HorizontalAlignment="Left"
+                          Foreground="White"
+                          Background="#22FFFFFF"
+                          BorderThickness="0"
+                          Padding="12,6"
+                          FontSize="13">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <!-- Ping-статус dot (лише для remote) -->
+                                <Ellipse Width="8" Height="8"
+                                         Margin="0,0,8,0"
+                                         VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsLocal}" Value="False">
+                                                    <Setter Property="Fill" Value="#FF80CBC4" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Text="{Binding Name}"
+                                           Foreground="#FFECEFF1"
+                                           VerticalAlignment="Center" />
+                                <!-- IP для remote серверів -->
+                                <TextBlock Margin="8,0,0,0"
+                                           Foreground="#66FFFFFF"
+                                           FontSize="11"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsLocal}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Setter Property="Text"
+                                                            Value="{Binding IP}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Ping status badge для вибраного remote сервера -->
+                <TextBlock Grid.Column="2"
+                           Text="{Binding ServerStatusBadge}"
+                           VerticalAlignment="Center"
+                           Margin="16,0,0,0"
+                           FontSize="12">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#FF80CBC4" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ServerStatusBadge}"
+                                             Value="● Offline">
+                                    <Setter Property="Foreground" Value="#FFF44336" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ServerStatusBadge}"
+                                             Value="● Online">
+                                    <Setter Property="Foreground" Value="#FF4CAF50" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- Банер "не Windows" -->
+        <Border Grid.Row="0" Grid.RowSpan="5"
+                Background="#CC1C282C"
+                CornerRadius="8"
+                Visibility="{Binding IsWindowsUnsupported,
+                             Converter={StaticResource BoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <materialDesign:PackIcon Kind="Monitor"
+                                         Width="48" Height="48"
+                                         Foreground="#FF80CBC4"
+                                         HorizontalAlignment="Center" />
+                <TextBlock Text="Windows only"
+                           Foreground="White" FontSize="16" FontWeight="Medium"
+                           HorizontalAlignment="Center" Margin="0,12,0,4" />
+                <TextBlock Text="Node Dashboard requires Windows (WMI / Event Log)."
+                           Foreground="#66FFFFFF" FontSize="12"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════
+             ROW 1 — CPU + RAM gauge cards
+        ══════════════════════════════════════════════════ -->
+        <UniformGrid Grid.Row="1" Columns="2" Margin="0,0,0,16">
 
             <!-- CPU Card -->
             <Border Background="#1AFFFFFF" CornerRadius="8"
@@ -50,26 +184,21 @@
                                    Margin="8,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <!-- Big percentage — colour matches the bar -->
                     <TextBlock Grid.Row="1"
                                Text="{Binding CpuLabel}"
                                Foreground="{Binding CpuBarBrush}"
                                FontSize="36" FontWeight="Light"
                                Margin="0,0,0,12" />
 
-                    <!-- ProgressBar — Foreground bound directly to the
-                         pre-computed SolidColorBrush property on the VM.
-                         No converter, no StringToColor, crash-safe. -->
-                    <ProgressBar
-                        Grid.Row="2"
-                        Value="{Binding CpuPercent,
-                                Converter={StaticResource ToProgress},
-                                Mode=OneWay}"
-                        Minimum="0" Maximum="100"
-                        Height="8"
-                        Foreground="{Binding CpuBarBrush}"
-                        Background="#22FFFFFF"
-                        Margin="0,0,0,8" />
+                    <ProgressBar Grid.Row="2"
+                                 Value="{Binding CpuPercent,
+                                         Converter={StaticResource ToProgress},
+                                         Mode=OneWay}"
+                                 Minimum="0" Maximum="100"
+                                 Height="8"
+                                 Foreground="{Binding CpuBarBrush}"
+                                 Background="#22FFFFFF"
+                                 Margin="0,0,0,8" />
 
                     <TextBlock Grid.Row="3"
                                Text="{Binding LastUpdated,
@@ -105,16 +234,15 @@
                                FontSize="36" FontWeight="Light"
                                Margin="0,0,0,12" />
 
-                    <ProgressBar
-                        Grid.Row="2"
-                        Value="{Binding RamPercent,
-                                Converter={StaticResource ToProgress},
-                                Mode=OneWay}"
-                        Minimum="0" Maximum="100"
-                        Height="8"
-                        Foreground="{Binding RamBarBrush}"
-                        Background="#22FFFFFF"
-                        Margin="0,0,0,8" />
+                    <ProgressBar Grid.Row="2"
+                                 Value="{Binding RamPercent,
+                                         Converter={StaticResource ToProgress},
+                                         Mode=OneWay}"
+                                 Minimum="0" Maximum="100"
+                                 Height="8"
+                                 Foreground="{Binding RamBarBrush}"
+                                 Background="#22FFFFFF"
+                                 Margin="0,0,0,8" />
 
                     <TextBlock Grid.Row="3"
                                Text="{Binding RamPercent,
@@ -124,10 +252,10 @@
             </Border>
         </UniformGrid>
 
-        <!-- ═══════════════════════════════════════════════
-             ROW 1 — Event Log section header
-        ═══════════════════════════════════════════════ -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+        <!-- ══════════════════════════════════════════════════
+             ROW 2 — Event Log section header
+        ══════════════════════════════════════════════════ -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
             <materialDesign:PackIcon Kind="AlertCircleOutline"
                                      Width="18" Height="18"
                                      Foreground="#FFFFC107"
@@ -140,11 +268,11 @@
                        VerticalAlignment="Center" />
         </StackPanel>
 
-        <!-- ═══════════════════════════════════════════════
-             ROW 2 — Event Log DataGrid
-        ═══════════════════════════════════════════════ -->
+        <!-- ══════════════════════════════════════════════════
+             ROW 3 — Event Log DataGrid
+        ══════════════════════════════════════════════════ -->
         <DataGrid
-            Grid.Row="2"
+            Grid.Row="3"
             ItemsSource="{Binding EventEntries}"
             SelectedItem="{Binding SelectedEntry}"
             AutoGenerateColumns="False"
@@ -209,7 +337,6 @@
             </DataGrid.CellStyle>
 
             <DataGrid.Columns>
-
                 <DataGridTemplateColumn Header="LEVEL" Width="100" SortMemberPath="Severity">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:EventLogEntryViewModel}">
@@ -266,14 +393,13 @@
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- ═══════════════════════════════════════════════
-             ROW 3 — Selected entry detail strip
-        ═══════════════════════════════════════════════ -->
-        <Border Grid.Row="3"
+        <!-- ══════════════════════════════════════════════════
+             ROW 4 — Selected entry detail strip
+        ══════════════════════════════════════════════════ -->
+        <Border Grid.Row="4"
                 Background="#1AFFFFFF"
                 CornerRadius="4"
                 Padding="12,8"
@@ -287,8 +413,7 @@
                         <Style TargetType="TextBlock">
                             <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedEntry}"
-                                             Value="{x:Null}">
+                                <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
                                     <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                             </Style.Triggers>
@@ -303,8 +428,7 @@
                         <Style TargetType="TextBlock">
                             <Setter Property="Visibility" Value="Visible" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedEntry}"
-                                             Value="{x:Null}">
+                                <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </Style.Triggers>
