@@ -37,15 +37,22 @@ public sealed partial class ZabbixViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // 1. Оновлюємо колекцію проблем
-            Problems.Clear();
-            if (payload.Problems != null)
+            var incoming = payload.Problems ?? [];
+            var incomingIds = incoming.Select(p => p.EventId).ToHashSet();
+            
+            for (int i = Problems.Count - 1; i >= 0; i--)
             {
-                foreach (var p in payload.Problems)
+                if (!incomingIds.Contains(Problems[i].EventId))
+                    Problems.RemoveAt(i);
+            }
+            
+            var existingIds = Problems.Select(p => p.EventId).ToHashSet();
+            foreach (var p in incoming)
+            {
+                if (!existingIds.Contains(p.EventId))
                     Problems.Add(new ZabbixProblemViewModel(p));
             }
-
-            // 2. Підраховуємо лічильники по severity — раніше ніколи не присвоювались!
+            
             DisasterCount = Problems.Count(p => p.Severity == ZabbixSeverity.Disaster);
             HighCount     = Problems.Count(p => p.Severity == ZabbixSeverity.High);
 

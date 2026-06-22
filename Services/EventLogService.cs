@@ -41,7 +41,18 @@ public sealed class EventLogService : BackgroundService
     // було дослухати в момент Send). ViewModel читає це поле напряму
     // при ініціалізації, не чекаючи наступного PollIntervalSeconds.
     private readonly List<EventLogEntry> _lastSnapshot = new();
-    public IReadOnlyList<EventLogEntry> LastSnapshot => _lastSnapshot;
+    private readonly object _snapshotLock = new();
+
+    // Повертаємо знімок під lock — захищаємо від race з FetchAndPublishAsync
+    // яка пише з thread pool, поки UI-потік читає через LoadCachedLocalEventLog.
+    public IReadOnlyList<EventLogEntry> LastSnapshot
+    {
+        get
+        {
+            lock (_snapshotLock)
+                return _lastSnapshot.ToList();
+        }
+    }
 
     public EventLogService(
         IMessenger messenger,
@@ -63,14 +74,22 @@ public sealed class EventLogService : BackgroundService
 
         await FetchAndPublishAsync();
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(PollIntervalSeconds),
-                stoppingToken)
-                .ConfigureAwait(false);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(PollIntervalSeconds),
+                    stoppingToken).ConfigureAwait(false);
 
-            await FetchAndPublishAsync();
+                if (stoppingToken.IsCancellationRequested) break;
+
+                await FetchAndPublishAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Нормальне завершення при StopAsync — ігноруємо.
         }
 
         _logger.LogInformation("EventLogService stopped.");
@@ -97,16 +116,19 @@ public sealed class EventLogService : BackgroundService
             // Оновлюємо кеш — при першому читанні просто зберігаємо,
             // при наступних додаємо нові записи на початок (найновіші зверху)
             // і ріжемо хвіст так само як робить ViewModel.
-            if (since is null)
+            lock (_snapshotLock)
             {
-                _lastSnapshot.Clear();
-                _lastSnapshot.AddRange(entries);
-            }
-            else if (entries.Count > 0)
-            {
-                _lastSnapshot.InsertRange(0, entries);
-                if (_lastSnapshot.Count > FetchCount)
-                    _lastSnapshot.RemoveRange(FetchCount, _lastSnapshot.Count - FetchCount);
+                if (since is null)
+                {
+                    _lastSnapshot.Clear();
+                    _lastSnapshot.AddRange(entries);
+                }
+                else if (entries.Count > 0)
+                {
+                    _lastSnapshot.InsertRange(0, entries);
+                    if (_lastSnapshot.Count > FetchCount)
+                        _lastSnapshot.RemoveRange(FetchCount, _lastSnapshot.Count - FetchCount);
+                }
             }
 
             // Не надсилаємо повідомлення якщо нічого нового немає.

@@ -40,7 +40,8 @@ public sealed class RemoteEventLogService
         string machineNameOrIp,
         CancellationToken ct = default)
     {
-        bool reachable = await IsReachableAsync(machineNameOrIp, ct)
+        bool reachable = await EventLogReader
+            .IsReachableAsync(machineNameOrIp, PingTimeoutMs, ct)
             .ConfigureAwait(false);
 
         if (!reachable)
@@ -149,7 +150,7 @@ public sealed class RemoteEventLogService
         DateTimeOffset timestamp = ParseWmiDateTime(timeGeneratedRaw);
 
         string source  = mo["SourceName"]?.ToString() ?? "Unknown";
-        string message = TrimMessage(mo["Message"]?.ToString() ?? string.Empty);
+        string message = EventLogReader.TrimMessage(mo["Message"]?.ToString() ?? string.Empty);
         string eventId = mo["EventCode"]?.ToString() ?? "0";
 
         return new EventLogEntry(
@@ -179,20 +180,7 @@ public sealed class RemoteEventLogService
             return DateTimeOffset.MinValue;
         }
     }
-
-    private static string TrimMessage(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return "(no message)";
-
-        var firstLine = raw
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault()?.Trim() ?? string.Empty;
-
-        return firstLine.Length > 200
-            ? firstLine[..200] + "…"
-            : firstLine;
-    }
-
+    
     private static async Task<bool> IsReachableAsync(string host, CancellationToken ct)
     {
         try

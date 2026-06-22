@@ -124,7 +124,8 @@ public sealed class ZabbixApiClient
                        ?? "Unknown";
 
         var severity  = (ZabbixSeverity)Math.Clamp(severityInt, 0, 5);
-        var startTime = DateTimeOffset.FromUnixTimeSeconds(long.Parse(clockStr));
+        long.TryParse(clockStr, out long clockUnix);
+        var startTime = DateTimeOffset.FromUnixTimeSeconds(clockUnix);        
         var age       = FormatAge(DateTimeOffset.UtcNow - startTime);
 
         problems.Add(new ZabbixProblem(

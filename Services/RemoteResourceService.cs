@@ -1,7 +1,6 @@
 ﻿using AdminConsole.Core.Models;
 using Microsoft.Extensions.Logging;
 using System.Management;
-using System.Net.NetworkInformation;
 
 namespace AdminConsole.Services;
 
@@ -30,7 +29,8 @@ public sealed class RemoteResourceService
         string machineNameOrIp,
         CancellationToken ct = default)
     {
-        bool reachable = await IsReachableAsync(machineNameOrIp, ct)
+        bool reachable = await EventLogReader
+            .IsReachableAsync(machineNameOrIp, PingTimeoutMs, ct)
             .ConfigureAwait(false);
 
         if (!reachable)
@@ -159,24 +159,7 @@ public sealed class RemoteResourceService
 
         return (0, 0);
     }
-
-    private static async Task<bool> IsReachableAsync(string host, CancellationToken ct)
-    {
-        try
-        {
-            using var ping = new Ping();
-            var reply = await ping
-                .SendPingAsync(host, PingTimeoutMs)
-                .WaitAsync(ct)
-                .ConfigureAwait(false);
-
-            return reply.Status == IPStatus.Success;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    
 }
 
 /// <summary>Результат спроби читання CPU/RAM з віддаленої машини.</summary>

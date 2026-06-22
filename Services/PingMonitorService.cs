@@ -5,26 +5,25 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Net.NetworkInformation;
 
 namespace AdminConsole.Services;
 
-public sealed class PingMonitorService : BackgroundService
+public sealed class PingMonitorService : BackgroundService, IDisposable
 {
     private readonly IMessenger                  _messenger;
     private readonly ILogger<PingMonitorService> _logger;
     private readonly MonitoringSettings          _settings;
     private readonly IReadOnlyList<ServerEntry>  _servers;
 
-    // Track previous state per IP so we only log actual transitions,
-    // not every successful ping.
-    private readonly Dictionary<string, PingStatus> _previousStatus = new();
+    private readonly ConcurrentDictionary<string, PingStatus> _previousStatus = new();
 
     private const int PingTimeoutMs = 2000;
     private const string LogSource  = "PingMonitor";
     private bool _firstRun = true;
     private readonly SemaphoreSlim _pingThrottle = new(10);
-    private System.Collections.Concurrent.ConcurrentBag<PingResult> _cycleBag = new();
+    private ConcurrentBag<PingResult> _cycleBag = new();
     public PingMonitorService(
         IMessenger messenger,
         ILogger<PingMonitorService> logger,
@@ -92,7 +91,7 @@ public sealed class PingMonitorService : BackgroundService
 
     private async Task PingAllServersAsync(CancellationToken ct)
     {
-        _cycleBag = new System.Collections.Concurrent.ConcurrentBag<PingResult>();
+        _cycleBag = new ConcurrentBag<PingResult>();
         
         var tasks = _servers.Select(s => PingSingleServerAsync(s, ct));
         await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -162,5 +161,14 @@ public sealed class PingMonitorService : BackgroundService
         {
             _pingThrottle.Release();
         }
+    }
+    
+    // ── IDisposable ──────────────────────────────────────────────────────────
+    public override void Dispose()
+    {
+        // SemaphoreSlim містить внутрішній WaitHandle (некерований ресурс).
+        // BackgroundService.Dispose() викликається хостом — перевизначаємо тут.
+        _pingThrottle.Dispose();
+        base.Dispose();
     }
 }

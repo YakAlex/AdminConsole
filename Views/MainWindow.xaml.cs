@@ -155,7 +155,7 @@ public partial class MainWindow : Window, ICredentialPrompt
 
     private void Window_StateChanged(object sender, EventArgs e)
     {
-        //Нічого не виконується
+        // Поки залишаємо порожнім — обробник прив'язаний у XAML.
     }
 
     private bool _isExiting = false;

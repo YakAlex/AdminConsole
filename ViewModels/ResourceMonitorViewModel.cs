@@ -267,10 +267,10 @@ public sealed partial class ResourceMonitorViewModel
     
     private async Task LoadRemoteResourceAsync(ServerDashboardEntry server)
     {
-        _remoteResourceCts?.Cancel();
-        _remoteResourceCts?.Dispose();
         var cts = new CancellationTokenSource();
-        _remoteResourceCts = cts;
+        var old = Interlocked.Exchange(ref _remoteResourceCts, cts);
+        old?.Cancel();
+        old?.Dispose();
 
         try
         {
@@ -315,6 +315,8 @@ public sealed partial class ResourceMonitorViewModel
             if (!cts.Token.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false);
+                // Перевіряємо _disposed перед тим як перепланувати —
+                // щоб не стартувати новий WMI-запит після OnExit.
                 if (!_disposed && !cts.Token.IsCancellationRequested && SelectedServer == server)
                     _ = LoadRemoteResourceAsync(server);
             }
@@ -327,11 +329,10 @@ public sealed partial class ResourceMonitorViewModel
     
     private async Task LoadRemoteEventLogAsync(ServerDashboardEntry server)
     {
-        // Скасовуємо попередній запит якщо користувач швидко перемикає сервери
-        _remoteEventLogCts?.Cancel();
-        _remoteEventLogCts?.Dispose();
         var cts = new CancellationTokenSource();
-        _remoteEventLogCts = cts;
+        var old = Interlocked.Exchange(ref _remoteEventLogCts, cts);
+        old?.Cancel();
+        old?.Dispose();
 
         EventLogStatus = $"Checking if {server.Name} is reachable…";
 
@@ -378,7 +379,7 @@ public sealed partial class ResourceMonitorViewModel
     
     // ── IDisposable ──────────────────────────────────────────────────────────
 
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// Скасовує будь-які активні фонові WMI/EventLog запити та зупиняє
@@ -394,12 +395,15 @@ public sealed partial class ResourceMonitorViewModel
         if (_disposed) return;
         _disposed = true;
 
-        _remoteResourceCts?.Cancel();
-        _remoteResourceCts?.Dispose();
-        _remoteResourceCts = null;
+        // Interlocked.Exchange — атомарно забираємо поле і зразу скасовуємо,
+        // щоб не конфліктувати з LoadRemoteResourceAsync/LoadRemoteEventLogAsync
+        // які можуть виконуватись на thread pool в цей самий момент.
+        var resCts = Interlocked.Exchange(ref _remoteResourceCts, null);
+        resCts?.Cancel();
+        resCts?.Dispose();
 
-        _remoteEventLogCts?.Cancel();
-        _remoteEventLogCts?.Dispose();
-        _remoteEventLogCts = null;
+        var evtCts = Interlocked.Exchange(ref _remoteEventLogCts, null);
+        evtCts?.Cancel();
+        evtCts?.Dispose();
     }
 }

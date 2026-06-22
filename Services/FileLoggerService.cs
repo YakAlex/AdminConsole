@@ -22,7 +22,7 @@ namespace AdminConsole.Services;
 ///     in batches for efficiency.
 /// </summary>
 public sealed class FileLoggerService
-    : BackgroundService, IRecipient<AppLogEntryMessage>
+    : BackgroundService, IRecipient<AppLogEntryMessage>, IDisposable
 {
     private readonly IMessenger                   _messenger;
     private readonly ILogger<FileLoggerService>   _logger;
@@ -31,7 +31,9 @@ public sealed class FileLoggerService
     private readonly SemaphoreSlim                _signal = new(0);
 
     private static readonly string LogDirectory =
-        Path.Combine(AppContext.BaseDirectory, "logs");    private const int    FlushBatchSize = 50;
+        Path.Combine(AppContext.BaseDirectory, "logs");
+
+    private const int    FlushBatchSize = 50;
     private const string LogSource      = "FileLogger";
 
     public FileLoggerService(
@@ -161,5 +163,15 @@ public sealed class FileLoggerService
     {
         string fileName = $"app-{DateTime.Now:yyyy-MM-dd}.log";
         return Path.Combine(LogDirectory, fileName);
+    }
+    
+    // ── IDisposable ──────────────────────────────────────────────────────────
+    public override void Dispose()
+    {
+        // SemaphoreSlim містить внутрішній WaitHandle (некерований ресурс)
+        // який необхідно явно звільнити. BackgroundService.Dispose() викликається
+        // хостом при завершенні — тому перевизначаємо тут, а не в StopAsync.
+        _signal.Dispose();
+        base.Dispose();
     }
 }

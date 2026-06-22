@@ -23,6 +23,22 @@ public partial class App : Application
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+            // Глобальний обробник необроблених винятків з UI-потоку.
+            // Критично для async void OnStartup — виняток що виникне після
+            // першого await не може бути перехоплений звичайним try/catch
+            // навколо виклику, тому реєструємо запасний handler тут.
+            DispatcherUnhandledException += (_, args) =>
+            {
+                MessageBox.Show(
+                    $"Необроблена критична помилка:\n\n{args.Exception.Message}\n\n" +
+                    "Додаток буде закрито.",
+                    "Admin Console — Критична помилка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                args.Handled = true;
+                Shutdown(1);
+            };
+
             LoadMaterialDesignResources();
 
             _host = Host.CreateDefaultBuilder()

@@ -1,5 +1,5 @@
 ﻿using AdminConsole.Core.Models;
-
+using System.Net.NetworkInformation;
 using WinEventLog   = System.Diagnostics.EventLog;
 using WinEventEntry = System.Diagnostics.EventLogEntry;
 using WinEventType  = System.Diagnostics.EventLogEntryType;
@@ -97,7 +97,7 @@ public static class EventLogReader
         _                         => EventSeverity.Information
     };
 
-    private static string TrimMessage(string raw)
+    public static string TrimMessage(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "(no message)";
 
@@ -108,5 +108,29 @@ public static class EventLogReader
         return firstLine.Length > 200
             ? firstLine[..200] + "…"
             : firstLine;
+    }
+
+    /// <summary>
+    /// Спільна перевірка доступності хоста через ICMP ping.
+    /// Винесена сюди щоб уникнути дублювання між RemoteResourceService
+    /// та RemoteEventLogService — єдине місце для зміни логіки і таймаутів.
+    /// </summary>
+    public static async Task<bool> IsReachableAsync(
+        string host, int timeoutMs, CancellationToken ct)
+    {
+        try
+        {
+            using var ping  = new Ping();
+            var reply = await ping
+                .SendPingAsync(host, timeoutMs)
+                .WaitAsync(ct)
+                .ConfigureAwait(false);
+
+            return reply.Status == IPStatus.Success;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

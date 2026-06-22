@@ -19,7 +19,7 @@ public sealed partial class LogsViewModel
     : ObservableObject, IRecipient<AppLogEntryMessage>
 {
     private const int MaxEntries = 500;
-    private const int CleanupThreshold = 550;
+    private const int CleanupThreshold = MaxEntries + 50;
     // ── Observable state ─────────────────────────────────────────────────────
 
     public ObservableCollection<LogEntryViewModel> LogEntries { get; } = [];

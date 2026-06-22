@@ -20,7 +20,8 @@ public sealed record AppLogEntry(
     DateTimeOffset Timestamp
 )
 {
-    /// <summary>Pre-formatted line written to the log file and displayed in the UI.</summary>
-    public string Formatted =>
+    // Кешуємо при першому зверненні — record immutable, значення ніколи не змінюється.
+    // Уникаємо повторного форматування рядка при кожному записі у файл та відображенні в UI.
+    public string Formatted { get; } =
         $"[{Timestamp.ToLocalTime():yyyy-MM-dd HH:mm:ss}] [{Severity,-7}] [{Source}] {Message}";
 }

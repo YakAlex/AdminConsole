@@ -22,45 +22,62 @@ public sealed class CredentialStore
     private string? _rdpPassword;
     private string? _zabbixToken;
     private string? _zabbixUsername;
+    private readonly object _lock = new();
 
     public bool UserCancelledRdpPrompt    { get; private set; }
     public bool UserCancelledZabbixPrompt { get; private set; }
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
-    public bool HasRdpCredentials =>
-        !string.IsNullOrWhiteSpace(_rdpUsername) &&
-        !string.IsNullOrWhiteSpace(_rdpPassword);
+    public bool HasRdpCredentials
+    {
+        get { lock (_lock) return !string.IsNullOrWhiteSpace(_rdpUsername) &&
+                                  !string.IsNullOrWhiteSpace(_rdpPassword); }
+    }
 
-    public (string Username, string Password) GetRdp() =>
-        (_rdpUsername ?? string.Empty, _rdpPassword ?? string.Empty);
+    public (string Username, string Password) GetRdp()
+    {
+        lock (_lock) return (_rdpUsername ?? string.Empty, _rdpPassword ?? string.Empty);
+    }
 
     public void LoadRdpFromVault()
     {
         var cred = ReadFromVault(RdpTarget);
         if (cred is not null)
         {
-            _rdpUsername = cred.Value.Username;
-            _rdpPassword = cred.Value.Password;
+            lock (_lock)
+            {
+                _rdpUsername = cred.Value.Username;
+                _rdpPassword = cred.Value.Password;
+            }
         }
     }
 
     public void StoreRdp(string username, string password)
     {
-        _rdpUsername           = username;
-        _rdpPassword           = password;
-        UserCancelledRdpPrompt = false;
+        lock (_lock)
+        {
+            _rdpUsername           = username;
+            _rdpPassword           = password;
+            UserCancelledRdpPrompt = false;
+        }
         WriteToVault(RdpTarget, username, password);
     }
 
     public void ClearRdp()
     {
-        _rdpUsername = null;
-        _rdpPassword = null;
+        lock (_lock)
+        {
+            _rdpUsername = null;
+            _rdpPassword = null;
+        }
         DeleteFromVault(RdpTarget);
     }
 
-    public void MarkRdpCancelled() => UserCancelledRdpPrompt = true;
+    public void MarkRdpCancelled()
+    {
+        lock (_lock) UserCancelledRdpPrompt = true;
+    }
 
     /// <summary>
     /// Тимчасові credentials для quser /server:HOSTNAME (аналог cmdkey /add, через CredWrite).
@@ -73,50 +90,71 @@ public sealed class CredentialStore
 
     // ── Zabbix ───────────────────────────────────────────────────────────────
 
-    public bool HasZabbixCredentials =>
-        !string.IsNullOrWhiteSpace(_zabbixToken);
+    public bool HasZabbixCredentials
+    {
+        get { lock (_lock) return !string.IsNullOrWhiteSpace(_zabbixToken); }
+    }
 
-    public bool ZabbixUsesApiToken =>
-        string.IsNullOrWhiteSpace(_zabbixUsername) &&
-        !string.IsNullOrWhiteSpace(_zabbixToken);
+    public bool ZabbixUsesApiToken
+    {
+        get { lock (_lock) return string.IsNullOrWhiteSpace(_zabbixUsername) &&
+                                  !string.IsNullOrWhiteSpace(_zabbixToken); }
+    }
 
-    public (string Username, string Token) GetZabbix() =>
-        (_zabbixUsername ?? string.Empty, _zabbixToken ?? string.Empty);
+    public (string Username, string Token) GetZabbix()
+    {
+        lock (_lock) return (_zabbixUsername ?? string.Empty, _zabbixToken ?? string.Empty);
+    }
 
     public void LoadZabbixFromVault()
     {
         var cred = ReadFromVault(ZabbixTarget);
         if (cred is not null)
         {
-            _zabbixUsername = cred.Value.Username;
-            _zabbixToken    = cred.Value.Password;
+            lock (_lock)
+            {
+                _zabbixUsername = cred.Value.Username;
+                _zabbixToken    = cred.Value.Password;
+            }
         }
     }
 
     public void StoreZabbixToken(string apiToken)
     {
-        _zabbixUsername           = string.Empty;
-        _zabbixToken              = apiToken;
-        UserCancelledZabbixPrompt = false;
+        lock (_lock)
+        {
+            _zabbixUsername           = string.Empty;
+            _zabbixToken              = apiToken;
+            UserCancelledZabbixPrompt = false;
+        }
         WriteToVault(ZabbixTarget, string.Empty, apiToken);
     }
 
     public void StoreZabbixCredentials(string username, string password)
     {
-        _zabbixUsername           = username;
-        _zabbixToken              = password;
-        UserCancelledZabbixPrompt = false;
+        lock (_lock)
+        {
+            _zabbixUsername           = username;
+            _zabbixToken              = password;
+            UserCancelledZabbixPrompt = false;
+        }
         WriteToVault(ZabbixTarget, username, password);
     }
 
     public void ClearZabbix()
     {
-        _zabbixUsername = null;
-        _zabbixToken    = null;
+        lock (_lock)
+        {
+            _zabbixUsername = null;
+            _zabbixToken    = null;
+        }
         DeleteFromVault(ZabbixTarget);
     }
 
-    public void MarkZabbixCancelled() => UserCancelledZabbixPrompt = true;
+    public void MarkZabbixCancelled()
+    {
+        lock (_lock) UserCancelledZabbixPrompt = true;
+    }
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────
 
@@ -166,12 +204,9 @@ public sealed class CredentialStore
         }
         finally
         {
-            // Затираємо некероване сховище перед звільненням
             if (blobPtr != IntPtr.Zero)
             {
-                // Записуємо нулі поверх blob у некерованій пам'яті
-                var zeros = new byte[blob.Length];
-                Marshal.Copy(zeros, 0, blobPtr, zeros.Length);
+                RtlZeroMemory(blobPtr, (UIntPtr)blob.Length);
                 Marshal.FreeCoTaskMem(blobPtr);
             }
         }
@@ -257,6 +292,9 @@ public sealed class CredentialStore
     }
 
     // ── P/Invoke ──────────────────────────────────────────────────────────────
+
+    [DllImport("kernel32.dll")]
+    private static extern void RtlZeroMemory(IntPtr dest, UIntPtr size);
 
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CredRead(

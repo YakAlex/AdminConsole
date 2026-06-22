@@ -65,14 +65,27 @@ public sealed class ZabbixPollerService : BackgroundService
         // Перший poll одразу
         await PollAsync(stoppingToken).ConfigureAwait(false);
 
-        // Основний loop
-        while (!stoppingToken.IsCancellationRequested)
+        // Основний loop.
+        // try/catch OperationCanceledException — Task.Delay кидає його при
+        // StopAsync. Без catch він піде через async void у AppDomain.
+        // Перевірка IsCancellationRequested після Delay — захист від ситуації
+        // коли токен скасовується між завершенням Delay і викликом PollAsync.
+        try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(_settings.ZabbixPollIntervalSeconds),
-                stoppingToken).ConfigureAwait(false);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(_settings.ZabbixPollIntervalSeconds),
+                    stoppingToken).ConfigureAwait(false);
 
-            await PollAsync(stoppingToken).ConfigureAwait(false);
+                if (stoppingToken.IsCancellationRequested) break;
+
+                await PollAsync(stoppingToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Нормальне завершення при StopAsync — ігноруємо.
         }
     }
 
@@ -204,7 +217,7 @@ public sealed class ZabbixPollerService : BackgroundService
             if (!obtained)
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    "Новий токен не отримано — opитування призупинено до перезапуску."));
+                    "Новий токен не отримано — oпитування призупинено до перезапуску."));
             }
         }
 

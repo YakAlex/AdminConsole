@@ -172,42 +172,50 @@ public sealed class RemoteManagementService
     /// </summary>
     public void OpenSsh(string ip, string name)
     {
-        // Спочатку пробуємо PuTTY
-        var puttyPaths = new[]
+        try
         {
-            @"C:\Program Files\PuTTY\putty.exe",
-            @"C:\Program Files (x86)\PuTTY\putty.exe",
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                @"Programs\PuTTY\putty.exe")
-        };
+            // Спочатку пробуємо PuTTY
+            var puttyPaths = new[]
+            {
+                @"C:\Program Files\PuTTY\putty.exe",
+                @"C:\Program Files (x86)\PuTTY\putty.exe",
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    @"Programs\PuTTY\putty.exe")
+            };
 
-        string? putty = puttyPaths.FirstOrDefault(File.Exists);
+            string? putty = puttyPaths.FirstOrDefault(File.Exists);
 
-        if (putty is not null)
-        {
+            if (putty is not null)
+            {
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    $"Launched PuTTY SSH to {name} ({ip})."));
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName        = putty,
+                    Arguments       = $"-ssh {ip}",
+                    UseShellExecute = false
+                });
+                return;
+            }
+
+            // Fallback — вбудований Windows SSH через cmd
             _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                $"Launched PuTTY SSH to {name} ({ip})."));
+                $"PuTTY not found. Launching Windows SSH to {name} ({ip})."));
 
             Process.Start(new ProcessStartInfo
             {
-                FileName  = putty,
-                Arguments = $"-ssh {ip}",
-                UseShellExecute = false
+                FileName        = "cmd.exe",
+                Arguments       = $"/k ssh {ip}",
+                UseShellExecute = true,
+                CreateNoWindow  = false
             });
-            return;
         }
-
-        // Fallback — вбудований Windows SSH через cmd
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"PuTTY not found. Launching Windows SSH to {name} ({ip})."));
-
-        Process.Start(new ProcessStartInfo
+        catch (Exception ex)
         {
-            FileName        = "cmd.exe",
-            Arguments       = $"/k ssh {ip}",
-            UseShellExecute = true,
-            CreateNoWindow  = false
-        });
+            _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                $"Failed to open SSH to {name} ({ip}): {ex.Message}"));
+        }
     }
 }

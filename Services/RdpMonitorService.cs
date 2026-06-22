@@ -45,11 +45,13 @@ public sealed class RdpMonitorService : BackgroundService
 
     private static readonly Regex ActiveRegex = new(
         @"^(?<user>\S+)\s+(?<session>\S+)\s+(?<id>\d+)\s+Active\s+(?<idle>\S+)\s+(?<logon>.+?)\s*$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        matchTimeout: TimeSpan.FromMilliseconds(500));
 
     private static readonly Regex DiscRegex = new(
         @"^(?<user>\S+)\s+(?<id>\d+)\s+Disc\s+(?<idle>\S+)\s+(?<logon>.+?)\s*$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        matchTimeout: TimeSpan.FromMilliseconds(500));
 
     public RdpMonitorService(
         IMessenger messenger,
@@ -108,13 +110,22 @@ public sealed class RdpMonitorService : BackgroundService
         // Перший poll одразу при старті
         await PollAllServersAsync(stoppingToken);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(_settings.RdpPollIntervalSeconds),
-                stoppingToken).ConfigureAwait(false);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(_settings.RdpPollIntervalSeconds),
+                    stoppingToken).ConfigureAwait(false);
 
-            await PollAllServersAsync(stoppingToken);
+                if (stoppingToken.IsCancellationRequested) break;
+
+                await PollAllServersAsync(stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Нормальне завершення при StopAsync — ігноруємо.
         }
     }
 
@@ -363,7 +374,7 @@ public sealed class RdpMonitorService : BackgroundService
     /// Disconnected сесія (немає SESSIONNAME):
     ///  someuser                                  3  Disc         1:30  10.06.2026 08:00
     /// </summary>
-    private static List<RdpSessionInfo> ParseQuserOutput(
+    private List<RdpSessionInfo> ParseQuserOutput(
         string raw, string serverName, string serverIp)
     {
         var results = new List<RdpSessionInfo>();
@@ -371,42 +382,49 @@ public sealed class RdpMonitorService : BackgroundService
 
         foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            // Прибираємо '>' (маркер поточної сесії) і зайві пробіли
             string normalized = line.Trim().TrimStart('>').Trim();
 
             if (string.IsNullOrWhiteSpace(normalized))                                    continue;
             if (normalized.StartsWith("USERNAME", StringComparison.OrdinalIgnoreCase))    continue;
             if (normalized.StartsWith("SESSIONNAME", StringComparison.OrdinalIgnoreCase)) continue;
 
-            // Спочатку пробуємо Active (є SESSIONNAME у виводі)
-            var match = ActiveRegex.Match(normalized);
-            if (match.Success)
+            try
             {
-                results.Add(new RdpSessionInfo(
-                    Username:    match.Groups["user"].Value.Trim(),
-                    SessionName: match.Groups["session"].Value.Trim(),
-                    SessionId:   match.Groups["id"].Value.Trim(),
-                    State:       RdpSessionState.Active,
-                    IdleTime:    match.Groups["idle"].Value.Trim(),
-                    LogonTime:   match.Groups["logon"].Value.Trim(),
-                    ServerName:  serverName,
-                    ServerIp:    serverIp));
-                continue;
-            }
+                var match = ActiveRegex.Match(normalized);
+                if (match.Success)
+                {
+                    results.Add(new RdpSessionInfo(
+                        Username:    match.Groups["user"].Value.Trim(),
+                        SessionName: match.Groups["session"].Value.Trim(),
+                        SessionId:   match.Groups["id"].Value.Trim(),
+                        State:       RdpSessionState.Active,
+                        IdleTime:    match.Groups["idle"].Value.Trim(),
+                        LogonTime:   match.Groups["logon"].Value.Trim(),
+                        ServerName:  serverName,
+                        ServerIp:    serverIp));
+                    continue;
+                }
 
-            // Потім пробуємо Disconnected (немає SESSIONNAME)
-            match = DiscRegex.Match(normalized);
-            if (match.Success)
+                match = DiscRegex.Match(normalized);
+                if (match.Success)
+                {
+                    results.Add(new RdpSessionInfo(
+                        Username:    match.Groups["user"].Value.Trim(),
+                        SessionName: "—",
+                        SessionId:   match.Groups["id"].Value.Trim(),
+                        State:       RdpSessionState.Disconnected,
+                        IdleTime:    match.Groups["idle"].Value.Trim(),
+                        LogonTime:   match.Groups["logon"].Value.Trim(),
+                        ServerName:  serverName,
+                        ServerIp:    serverIp));
+                }
+            }
+            catch (RegexMatchTimeoutException)
             {
-                results.Add(new RdpSessionInfo(
-                    Username:    match.Groups["user"].Value.Trim(),
-                    SessionName: "—",
-                    SessionId:   match.Groups["id"].Value.Trim(),
-                    State:       RdpSessionState.Disconnected,
-                    IdleTime:    match.Groups["idle"].Value.Trim(),
-                    LogonTime:   match.Groups["logon"].Value.Trim(),
-                    ServerName:  serverName,
-                    ServerIp:    serverIp));
+                // Аномально довгий рядок — пропускаємо, не падаємо
+                _logger.LogWarning(
+                    "RdpMonitorService: regex timeout on line from {Server}: {Line}",
+                    serverName, normalized.Length > 120 ? normalized[..120] + "…" : normalized);
             }
         }
 
