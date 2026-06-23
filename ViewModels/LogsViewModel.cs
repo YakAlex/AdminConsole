@@ -5,9 +5,9 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using System.Collections.ObjectModel;
 using System.Windows;
-
+using System.Windows.Data;
 namespace AdminConsole.ViewModels;
-
+using System.Collections.Specialized;
 /// <summary>
 /// Drives the Logs tab.
 /// Receives AppLogEntryMessage, dispatches to the UI thread,
@@ -19,11 +19,15 @@ public sealed partial class LogsViewModel
     : ObservableObject, IRecipient<AppLogEntryMessage>
 {
     private const int MaxEntries = 500;
-    private const int CleanupThreshold = MaxEntries + 50;
-    // ── Observable state ─────────────────────────────────────────────────────
 
-    public ObservableCollection<LogEntryViewModel> LogEntries { get; } = [];
+    private readonly ObservableCollection<LogEntryViewModel> _logEntries = [];
+    private readonly IMessenger _messenger;
+    public INotifyCollectionChanged LogEntries => _logEntries;
 
+    // CollectionViewSource — сортує від нових до старих на рівні відображення.
+    // Add() в кінець колекції = O(1) і WPF не перебудовує всі індекси.
+    public CollectionViewSource LogEntriesView { get; } = new();
+    
     [ObservableProperty]
     private string _statusText = "Listening for log events…";
 
@@ -33,14 +37,17 @@ public sealed partial class LogsViewModel
     [ObservableProperty]
     private bool _autoScroll = true;
 
-    // ── Constructor ──────────────────────────────────────────────────────────
-
     public LogsViewModel(IMessenger messenger)
     {
+        _messenger = messenger;
+        LogEntriesView.Source = _logEntries;
+        LogEntriesView.SortDescriptions.Add(
+            new System.ComponentModel.SortDescription(
+                nameof(LogEntryViewModel.TimeFull),
+                System.ComponentModel.ListSortDirection.Descending));
+
         messenger.RegisterAll(this);
     }
-
-    // ── IRecipient<AppLogEntryMessage> ───────────────────────────────────────
 
     public void Receive(AppLogEntryMessage message)
     {
@@ -48,22 +55,16 @@ public sealed partial class LogsViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Нові записи зверху — адміністратор бачить останні події
-            // без скролу. Insert(0) = O(n) по пам'яті, але так само
-            // як Add + RemoveAt(0), тільки в правильному порядку.
-            LogEntries.Insert(0, vm);
+            // Add() = O(1), не зсуває масив і не перебудовує всі індекси у DataGrid.
+            // Сортування від нових до старих — через CollectionViewSource.SortDescriptions.
+            _logEntries.Add(vm);
 
-            // Пакетне видалення зі КІНЦЯ — O(1) на відміну від RemoveAt(0).
-            // Кожен RemoveAt(Count-1) не зсуває масив.
-            // Спрацьовує раз на ~50 нових записів завдяки порогу.
-            if (LogEntries.Count > CleanupThreshold)
-            {
-                int toRemove = LogEntries.Count - MaxEntries;
-                for (int i = 0; i < toRemove; i++)
-                    LogEntries.RemoveAt(LogEntries.Count - 1);
-            }
+            // Видаляємо найстаріші (кінець несортованої колекції) якщо перевищили ліміт.
+            // RemoveAt(0) = O(n), але спрацьовує рідко (раз на MaxEntries записів).
+            if (_logEntries.Count > MaxEntries)
+                _logEntries.RemoveAt(0);
 
-            StatusText = $"{LogEntries.Count} entries — last: {vm.TimeShort}";
+            StatusText = $"{_logEntries.Count} entries — last: {vm.TimeShort}";
         });
     }
 
@@ -72,7 +73,7 @@ public sealed partial class LogsViewModel
     [RelayCommand]
     private void ClearLog()
     {
-        LogEntries.Clear();
+        _logEntries.Clear();
         StatusText = "Log cleared.";
     }
 
@@ -85,6 +86,12 @@ public sealed partial class LogsViewModel
             System.IO.Directory.CreateDirectory(fullPath);
             System.Diagnostics.Process.Start("explorer.exe", fullPath);
         }
-        catch { /* silently ignore if explorer fails */ }
+        catch (Exception ex)
+        {
+            // Надсилаємо у лог через messenger замість ILogger —
+            // щоб не додавати нову залежність у VM.
+            _messenger.Send(AppLogEntryMessage.Warning("Logs",
+                $"Не вдалося відкрити папку логів: {ex.Message}"));
+        }
     }
 }

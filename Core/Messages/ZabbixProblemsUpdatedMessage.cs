@@ -15,7 +15,7 @@ public sealed class ZabbixProblemsUpdatedMessage
 }
 
 public sealed record ZabbixProblemsPayload(
-    IReadOnlyList<ZabbixProblem> Problems,
+    IReadOnlyList<ZabbixProblem>? Problems,
     string?                      ErrorMessage,
     DateTimeOffset               FetchedAt
 );

@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AdminConsole.Services;
+using Microsoft.Extensions.Logging;
 
 namespace AdminConsole.ViewModels;
 
@@ -74,6 +75,8 @@ public sealed partial class ResourceMonitorViewModel
     private readonly RemoteEventLogService  _remoteEventLog;
     private readonly EventLogService        _localEventLog;
     private readonly RemoteResourceService  _remoteResource;
+    private readonly IMessenger _messenger;
+    private readonly ILogger<ResourceMonitorViewModel> _logger;
     private CancellationTokenSource? _remoteEventLogCts;
     private CancellationTokenSource? _remoteResourceCts;
 
@@ -81,6 +84,7 @@ public sealed partial class ResourceMonitorViewModel
         IMessenger messenger,
         IOptions<List<ServerEntry>> serversOptions,
         RemoteEventLogService remoteEventLogService,
+        ILogger<ResourceMonitorViewModel> logger,
         EventLogService localEventLogService,
         RemoteResourceService remoteResourceService)
     {
@@ -88,6 +92,8 @@ public sealed partial class ResourceMonitorViewModel
         _localEventLog  = localEventLogService;
         _remoteResource = remoteResourceService;
         _dispatcher     = System.Windows.Application.Current.Dispatcher;
+        _messenger = messenger;
+        _logger      = logger;
 
         // localhost — завжди перший
         AvailableServers.Add(ServerDashboardEntry.Localhost());
@@ -325,6 +331,36 @@ public sealed partial class ResourceMonitorViewModel
         {
             // Очікувано при швидкому перемиканні серверів — таймер просто зупиняється
         }
+        catch (Exception ex)
+        {
+            // Непередбачена помилка — логуємо і гарантовано перезапускаємо loop
+            // через 5 секунд, щоб вкладка не "замерзла" назавжди.
+            // Без цього будь-який некерований виняток (WMI, COM, мережа)
+            // беззвучно зупиняє self-rescheduling і UI більше не оновлюється.
+            _logger.LogWarning(ex,
+                "ResourceMonitorViewModel: непередбачена помилка при опитуванні {Server}. " +
+                "Перезапуск через 5с.",
+                server.Name);
+
+            await _dispatcher.InvokeAsync(() =>
+            {
+                if (SelectedServer == server)
+                {
+                    CpuLabel = "Помилка WMI";
+                    RamLabel = ex.Message;
+                }
+            });
+
+            // Гарантований перезапуск — якщо сервер ще обраний і не disposed
+            if (!_disposed && !cts.Token.IsCancellationRequested)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return; }
+
+                if (!_disposed && !cts.Token.IsCancellationRequested && SelectedServer == server)
+                    _ = LoadRemoteResourceAsync(server);
+            }
+        }
     }
     
     private async Task LoadRemoteEventLogAsync(ServerDashboardEntry server)
@@ -394,10 +430,8 @@ public sealed partial class ResourceMonitorViewModel
     {
         if (_disposed) return;
         _disposed = true;
+        _messenger.UnregisterAll(this);
 
-        // Interlocked.Exchange — атомарно забираємо поле і зразу скасовуємо,
-        // щоб не конфліктувати з LoadRemoteResourceAsync/LoadRemoteEventLogAsync
-        // які можуть виконуватись на thread pool в цей самий момент.
         var resCts = Interlocked.Exchange(ref _remoteResourceCts, null);
         resCts?.Cancel();
         resCts?.Dispose();

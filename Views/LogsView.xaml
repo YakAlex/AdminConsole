@@ -169,7 +169,7 @@
             VirtualizingPanel.IsVirtualizing="True"
             VirtualizingPanel.VirtualizationMode="Recycling"
             Grid.Row="1"
-            ItemsSource="{Binding LogEntries}"
+            ItemsSource="{Binding LogEntriesView.View}"
             SelectedItem="{Binding SelectedEntry}"
             AutoGenerateColumns="False"
             CanUserAddRows="False"

@@ -71,8 +71,14 @@ public sealed partial class PingDashboardViewModel
 
     private void UpdateSummary()
     {
-        OnlineCount  = Servers.Count(s => s.Status == PingStatus.Online);
-        OfflineCount = Servers.Count(s => s.Status == PingStatus.Offline);
+        int online = 0, offline = 0;
+        foreach (var s in Servers)
+        {
+            if      (s.Status == PingStatus.Online)  online++;
+            else if (s.Status == PingStatus.Offline) offline++;
+        }
+        OnlineCount  = online;
+        OfflineCount = offline;
         SummaryText  = $"Online: {OnlineCount}  |  Offline: {OfflineCount}  |  Total: {TotalCount}";
     }
 }

@@ -226,12 +226,19 @@ public sealed class ZabbixPollerService : BackgroundService
             _logger.LogWarning(ex, "ZabbixPollerService: poll failed.");
             _messenger.Send(AppLogEntryMessage.Error(LogSource,
                 $"Zabbix poll failed: {ex.Message}"));
+
+            // Надсилаємо повідомлення з Problems: null — VM збереже старий список
+            // і покаже тільки ErrorMessage. Очищати проблеми при мережевому збої
+            // не можна — це дає хибний сигнал "все гаразд".
             _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                Problems: [],
-                ErrorMessage: ex.Message,
+                Problems: null,
+                ErrorMessage: $"Помилка зв'язку: {ex.Message}",
                 FetchedAt: DateTimeOffset.Now)));
 
-            if (!useApiToken)
+            // Ре-аутентифікація лише при user/password режимі І лише якщо
+            // це не мережева помилка (HttpRequestException = таймаут, недоступність).
+            // При api-token режимі або мережевих збоях — не потрібна.
+            if (!useApiToken && ex is not System.Net.Http.HttpRequestException)
                 await AuthenticateAsync(ct).ConfigureAwait(false);
         }
     }

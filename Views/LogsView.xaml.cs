@@ -29,7 +29,7 @@ public partial class LogsView : UserControl
             _collectionHandler = (_, _) =>
             {
                 if (vm.AutoScroll && LogGrid.Items.Count > 0)
-                    LogGrid.ScrollIntoView(LogGrid.Items[^1]);
+                    LogGrid.ScrollIntoView(LogGrid.Items[0]);
             };
 
             vm.LogEntries.CollectionChanged += _collectionHandler;

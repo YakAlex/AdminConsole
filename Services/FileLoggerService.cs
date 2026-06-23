@@ -84,7 +84,8 @@ public sealed class FileLoggerService
     public void Receive(AppLogEntryMessage message)
     {
         _queue.Enqueue(message.Value);
-        _signal.Release();   // wake the flush loop
+        if (_signal.CurrentCount == 0)
+            _signal.Release();
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -93,11 +94,7 @@ public sealed class FileLoggerService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Wait until at least one entry has been enqueued.
             await _signal.WaitAsync(stoppingToken).ConfigureAwait(false);
-
-            // Small coalesce window: if more entries are in flight, wait
-            // briefly to batch them together in a single file open/write.
             await Task.Delay(200, stoppingToken).ConfigureAwait(false);
 
             FlushQueueToFile();
@@ -121,18 +118,13 @@ public sealed class FileLoggerService
             {
                 AutoFlush = false
             };
-
-            // Основний batch — обмежуємо щоб не тримати файл відкритим нескінченно
             int written = 0;
             while (_queue.TryDequeue(out var entry) && written < FlushBatchSize)
             {
                 writer.WriteLine(entry.Formatted);
                 written++;
             }
-
-            // Дренуємо залишок у тому ж відкритому writer'і.
-            // Це важливо при burst-навантаженні та при StopAsync,
-            // коли в черзі може бути більше ніж FlushBatchSize записів.
+            
             while (_queue.TryDequeue(out var extra))
                 writer.WriteLine(extra.Formatted);
 

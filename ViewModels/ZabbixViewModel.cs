@@ -37,40 +37,41 @@ public sealed partial class ZabbixViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            var incoming = payload.Problems ?? [];
-            var incomingIds = incoming.Select(p => p.EventId).ToHashSet();
-            
-            for (int i = Problems.Count - 1; i >= 0; i--)
+            if (payload.Problems is not null)
             {
-                if (!incomingIds.Contains(Problems[i].EventId))
-                    Problems.RemoveAt(i);
-            }
-            
-            var existingIds = Problems.Select(p => p.EventId).ToHashSet();
-            foreach (var p in incoming)
-            {
-                if (!existingIds.Contains(p.EventId))
-                    Problems.Add(new ZabbixProblemViewModel(p));
-            }
-            
-            DisasterCount = Problems.Count(p => p.Severity == ZabbixSeverity.Disaster);
-            HighCount     = Problems.Count(p => p.Severity == ZabbixSeverity.High);
+                var incoming    = payload.Problems;
+                var incomingIds = incoming.Select(p => p.EventId).ToHashSet();
 
-            // 3. Оновлюємо статус підключення залежно від результату поллінгу
+                for (int i = Problems.Count - 1; i >= 0; i--)
+                {
+                    if (!incomingIds.Contains(Problems[i].EventId))
+                        Problems.RemoveAt(i);
+                }
+
+                var existingIds = Problems.Select(p => p.EventId).ToHashSet();
+                foreach (var p in incoming)
+                {
+                    if (!existingIds.Contains(p.EventId))
+                        Problems.Add(new ZabbixProblemViewModel(p));
+                }
+
+                DisasterCount = Problems.Count(p => p.Severity == ZabbixSeverity.Disaster);
+                HighCount     = Problems.Count(p => p.Severity == ZabbixSeverity.High);
+            }
+
             if (payload.ErrorMessage is not null)
             {
                 IsConnected      = false;
-                ConnectionStatus = "Error";
-                StatusColor      = "#FFF44336"; // червоний
+                ConnectionStatus = "Connection lost";
+                StatusColor      = "#FFF44336";
             }
             else
             {
                 IsConnected      = true;
                 ConnectionStatus = "Connected";
-                StatusColor      = "#FF4CAF50"; // зелений
+                StatusColor      = "#FF4CAF50";
             }
 
-            // 4. Час останнього оновлення
             LastFetched = payload.FetchedAt.ToLocalTime().ToString("HH:mm:ss");
         });
     }
