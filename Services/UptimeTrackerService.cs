@@ -46,13 +46,15 @@ public sealed class UptimeTrackerService
         _messenger = messenger;
         _logger    = logger;
         _messenger.RegisterAll(this);
-        
-        LoadFromDisk(DateTimeOffset.Now);
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        LoadFromDisk(DateTimeOffset.Now);
+        PublishSnapshot();
         _logger.LogInformation("UptimeTrackerService started.");
+        _messenger.Send(AppLogEntryMessage.Info(LogSource, 
+            "Uptime tracker started — відстеження переходів Online/Offline запущено."));
         return Task.CompletedTask;
     }
 
@@ -146,7 +148,7 @@ public sealed class UptimeTrackerService
         try
         {
             var json    = File.ReadAllText(path);
-            var records = JsonSerializer.Deserialize<List<DowntimeRecord>>(json);
+            var records = JsonSerializer.Deserialize<List<DowntimeRecord>>(json, JsonOptions);
 
             if (records is null) return;
 
@@ -188,11 +190,19 @@ public sealed class UptimeTrackerService
             // Зберігаємо тільки записи поточного місяця у відповідний файл
             var thisMonth = snapshot
                 .Where(r => r.FellAt.Year  == month.Year &&
-                             r.FellAt.Month == month.Month)
+                            r.FellAt.Month == month.Month)
                 .ToList();
 
-            var json = JsonSerializer.Serialize(thisMonth, JsonOptions);
-            File.WriteAllText(FilePath(month), json);
+            var finalPath = FilePath(month);
+            var tempPath  = finalPath + ".tmp";
+            var json      = JsonSerializer.Serialize(thisMonth, JsonOptions);
+
+            // Write-then-replace: пишемо у тимчасовий файл, потім атомарно замінюємо.
+            // Якщо процес впаде або світло вимкнеться під час запису —
+            // .tmp буде пошкоджений, але основний .json залишиться цілим.
+            // File.Move з overwrite:true — атомарна операція на рівні ОС (NTFS).
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, finalPath, overwrite: true);
         }
         catch (Exception ex)
         {

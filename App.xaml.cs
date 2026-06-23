@@ -186,9 +186,6 @@ public partial class App : Application
     {
         try
         {
-            // Скасовуємо фонові WMI/EventLog запити Resource Dashboard'у
-            // ДО StopAsync — інакше осиротілий Task.Run(QueryWmi) може
-            // продовжити висіти на thread pool після завершення хосту.
             _host.Services
                 .GetRequiredService<ResourceMonitorViewModel>()
                 .Dispose();
@@ -196,6 +193,17 @@ public partial class App : Application
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[OnExit] ResourceMonitorViewModel dispose error: {ex.Message}");
+        }
+
+        try
+        {
+            _host.Services
+                .GetRequiredService<UptimeViewModel>()
+                .Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] UptimeViewModel dispose error: {ex.Message}");
         }
 
         try

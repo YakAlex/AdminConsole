@@ -11,9 +11,10 @@ using System.Windows.Data;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class UptimeViewModel
-    : ObservableObject, IRecipient<UptimeUpdatedMessage>
+    : ObservableObject, IRecipient<UptimeUpdatedMessage>, IDisposable
 {
-    private readonly UptimeTrackerService _tracker;
+    private readonly UptimeTrackerService  _tracker;
+    private readonly System.Threading.Timer _refreshTimer;
 
     // ── Колекція і групування ────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ public sealed partial class UptimeViewModel
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters))]
-    private string _filterGroup = string.Empty;
+    private string _filterGroup = "All";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasActiveFilters))]
@@ -54,7 +55,7 @@ public sealed partial class UptimeViewModel
 
     public bool HasActiveFilters =>
         !string.IsNullOrWhiteSpace(FilterServer) ||
-        !string.IsNullOrWhiteSpace(FilterGroup)  ||
+        FilterGroup    != "All"                  ||
         FilterStatus   != "All"                  ||
         FilterDateFrom.HasValue                  ||
         FilterDateTo.HasValue;
@@ -85,8 +86,25 @@ public sealed partial class UptimeViewModel
         // Підписуємось ПІСЛЯ налаштування CollectionViewSource
         messenger.RegisterAll(this);
 
-        // Завантажуємо початковий знімок від сервісу
-        ApplySnapshot(_tracker.GetSnapshot());
+        // Завантажуємо початковий знімок напряму у колекцію
+        var initial = _tracker.GetSnapshot();
+        foreach (var r in initial)
+            _allRecords.Add(r);
+        UpdateSummary(initial);
+        UpdateFilterLists(initial);
+
+        // Запускаємо таймер оновлення тривалості активних інцидентів.
+        // Спрацьовує кожні 10 секунд — тільки якщо є активні інциденти,
+        // щоб не смикати UI даремно коли всі інциденти завершені.
+        _refreshTimer = new System.Threading.Timer(
+            _ => Application.Current?.Dispatcher?.InvokeAsync(() =>
+            {
+                if (ActiveIncidents > 0)
+                    RecordsView.View?.Refresh();
+            }),
+            state:     null,
+            dueTime:   TimeSpan.FromSeconds(10),
+            period:    TimeSpan.FromSeconds(10));
     }
 
     // ── Реакція на зміни фільтрів ────────────────────────────────────────────
@@ -123,14 +141,20 @@ public sealed partial class UptimeViewModel
                 _allRecords.RemoveAt(i);
         }
 
-        var existingKeys = _allRecords
-            .Select(r => (r.ServerIp, r.FellAt))
-            .ToHashSet();
-
-        foreach (var r in records)
+        foreach (var incoming in records)
         {
-            if (!existingKeys.Contains((r.ServerIp, r.FellAt)))
-                _allRecords.Add(r);
+            var existing = _allRecords.FirstOrDefault(
+                x => x.ServerIp == incoming.ServerIp &&
+                     x.FellAt   == incoming.FellAt);
+
+            if (existing is null)
+            {
+                _allRecords.Add(incoming);
+            }
+            else if (existing.RecoveredAt != incoming.RecoveredAt)
+            {
+                existing.RecoveredAt = incoming.RecoveredAt;
+            }
         }
 
         UpdateSummary(records);
@@ -146,8 +170,9 @@ public sealed partial class UptimeViewModel
         ActiveIncidents = records.Count(r => !r.IsResolved);
         TodayIncidents  = records.Count(r => r.FellAt.Date == today).ToString();
 
+        // Враховуємо всі інциденти — і завершені, і активні.
+        // Активний інцидент може тривати довше за будь-який завершений.
         var longest = records
-            .Where(r => r.IsResolved)
             .OrderByDescending(r => r.Duration)
             .FirstOrDefault();
 
@@ -232,9 +257,16 @@ public sealed partial class UptimeViewModel
     private void ClearFilters()
     {
         FilterServer   = string.Empty;
-        FilterGroup    = string.Empty;
+        FilterGroup    = "All";
         FilterStatus   = "All";
         FilterDateFrom = null;
         FilterDateTo   = null;
+    }
+
+    // ── IDisposable ──────────────────────────────────────────────────────────
+    public void Dispose()
+    {
+        // Зупиняємо таймер щоб не смикати Dispatcher після закриття вікна.
+        _refreshTimer.Dispose();
     }
 }

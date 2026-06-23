@@ -1,11 +1,6 @@
 ﻿namespace AdminConsole.Core.Models;
+using System.Text.Json.Serialization;
 
-/// <summary>
-/// Один інцидент недоступності сервера.
-/// FellAt — момент переходу Online→Offline.
-/// RecoveredAt — момент переходу Offline→Online (null = досі offline).
-/// Зберігається у JSON на диску через UptimeTrackerService.
-/// </summary>
 public sealed class DowntimeRecord
 {
     public string          ServerName   { get; init; } = string.Empty;
@@ -14,16 +9,15 @@ public sealed class DowntimeRecord
     public DateTimeOffset  FellAt       { get; init; }
     public DateTimeOffset? RecoveredAt  { get; set;  }
 
-    /// <summary>
-    /// Тривалість простою. Якщо ще не відновлено — рахується до поточного моменту.
-    /// </summary>
+    [JsonIgnore]
     public TimeSpan Duration => RecoveredAt.HasValue
         ? RecoveredAt.Value - FellAt
         : DateTimeOffset.Now - FellAt;
 
+    [JsonIgnore]
     public bool IsResolved => RecoveredAt.HasValue;
 
-    /// <summary>Форматований рядок тривалості для UI: "1г 23хв" або "00:05:12".</summary>
+    [JsonIgnore]
     public string DurationDisplay
     {
         get

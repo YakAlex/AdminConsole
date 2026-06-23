@@ -300,7 +300,7 @@
             <DataGrid.Columns>
 
                 <!-- Статус badge -->
-                <DataGridTemplateColumn Header="СТАТУС" Width="110">
+                <DataGridTemplateColumn Header="STATUS" Width="110">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type models:DowntimeRecord}">
                             <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
@@ -334,7 +334,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- Сервер -->
-                <DataGridTextColumn Header="СЕРВЕР"
+                <DataGridTextColumn Header="SERVER"
                                     Binding="{Binding ServerName}"
                                     Width="140">
                     <DataGridTextColumn.ElementStyle>
@@ -347,7 +347,7 @@
                 </DataGridTextColumn>
 
                 <!-- Група -->
-                <DataGridTextColumn Header="ГРУПА"
+                <DataGridTextColumn Header="GROUP"
                                     Binding="{Binding ServerGroup}"
                                     Width="160">
                     <DataGridTextColumn.ElementStyle>
@@ -360,7 +360,7 @@
                 </DataGridTextColumn>
 
                 <!-- Впав о -->
-                <DataGridTextColumn Header="ВПАВ О"
+                <DataGridTextColumn Header="DOWN AT"
                                     Binding="{Binding FellAt,
                                         StringFormat='{}{0:dd.MM HH:mm:ss}'}"
                                     Width="130">
@@ -375,7 +375,7 @@
                 </DataGridTextColumn>
 
                 <!-- Відновлено о -->
-                <DataGridTextColumn Header="ВІДНОВЛЕНО О"
+                <DataGridTextColumn Header="RECOVERED AT"
                                     Binding="{Binding RecoveredAt,
                                         StringFormat='{}{0:dd.MM HH:mm:ss}'}"
                                     Width="130">
@@ -390,7 +390,7 @@
                 </DataGridTextColumn>
 
                 <!-- Тривалість -->
-                <DataGridTextColumn Header="ТРИВАЛІСТЬ"
+                <DataGridTextColumn Header="DURATION"
                                     Binding="{Binding DurationDisplay}"
                                     Width="*">
                     <DataGridTextColumn.ElementStyle>
