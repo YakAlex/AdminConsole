@@ -115,7 +115,7 @@
                                FontWeight="SemiBold" Margin="8,0,0,0"
                                VerticalAlignment="Center">
                         <Run Text="{Binding TodayIncidents, Mode=OneWay}" />
-                        <Run Text=" СЬОГОДНІ" />
+                        <Run Text=" TODAY" />
                     </TextBlock>
                 </StackPanel>
             </Border>
@@ -132,7 +132,7 @@
                                FontWeight="SemiBold" Margin="8,0,0,0"
                                VerticalAlignment="Center">
                         <Run Text="{Binding TotalIncidents, Mode=OneWay}" />
-                        <Run Text=" ВСЬОГО" />
+                        <Run Text=" TOTAL" />
                     </TextBlock>
                 </StackPanel>
             </Border>
@@ -146,7 +146,7 @@
                                              VerticalAlignment="Center" />
                     <TextBlock Foreground="#FF90A4AE" FontSize="13"
                                Margin="8,0,0,0" VerticalAlignment="Center">
-                        <Run Text="Макс. простій: " />
+                        <Run Text="Max Downtime: " />
                         <Run Text="{Binding LongestDowntime, Mode=OneWay}"
                              Foreground="#FFECEFF1" FontWeight="SemiBold" />
                     </TextBlock>
@@ -173,14 +173,14 @@
                              Width="160" Foreground="White"
                              Background="Transparent" BorderThickness="0,0,0,1"
                              BorderBrush="#44FFFFFF" FontSize="12"
-                             materialDesign:HintAssist.Hint="Сервер…"
+                             materialDesign:HintAssist.Hint="Machine…"
                              materialDesign:HintAssist.Foreground="#66FFFFFF" />
                 </StackPanel>
 
                 <!-- Фільтр по групі -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,16,0"
                             VerticalAlignment="Center">
-                    <TextBlock Text="Група:" Foreground="#FF80CBC4"
+                    <TextBlock Text="Group:" Foreground="#FF80CBC4"
                                FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,6,0" />
                     <ComboBox ItemsSource="{Binding AvailableGroups}"
@@ -193,7 +193,7 @@
                 <!-- Фільтр по статусу -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,16,0"
                             VerticalAlignment="Center">
-                    <TextBlock Text="Статус:" Foreground="#FF80CBC4"
+                    <TextBlock Text="Status:" Foreground="#FF80CBC4"
                                FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,6,0" />
                     <ComboBox ItemsSource="{Binding StatusOptions}"
@@ -206,7 +206,7 @@
                 <!-- Дата від -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,16,0"
                             VerticalAlignment="Center">
-                    <TextBlock Text="Від:" Foreground="#FF80CBC4"
+                    <TextBlock Text="From:" Foreground="#FF80CBC4"
                                FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,6,0" />
                     <DatePicker SelectedDate="{Binding FilterDateFrom}"
@@ -217,7 +217,7 @@
 
                 <!-- Дата до -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="До:" Foreground="#FF80CBC4"
+                    <TextBlock Text="To:" Foreground="#FF80CBC4"
                                FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,6,0" />
                     <DatePicker SelectedDate="{Binding FilterDateTo}"
