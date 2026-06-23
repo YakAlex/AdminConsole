@@ -29,7 +29,7 @@ public sealed partial class UptimeViewModel
     [ObservableProperty] private int    _totalIncidents;
     [ObservableProperty] private int    _activeIncidents;
     [ObservableProperty] private string _longestDowntime = "—";
-    [ObservableProperty] private string _todayIncidents  = "0";
+    [ObservableProperty] private int _todayIncidents;
 
     // ── Фільтри ──────────────────────────────────────────────────────────────
 
@@ -100,7 +100,14 @@ public sealed partial class UptimeViewModel
             _ => Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 if (ActiveIncidents > 0)
+                {
+                    var saved = SelectedRecord;
                     RecordsView.View?.Refresh();
+                    if (saved is not null) SelectedRecord = saved;
+                    // Оновлюємо detail strip — DowntimeRecord не INotifyPropertyChanged,
+                    // тому DurationDisplay у нижній панелі не оновлюється автоматично.
+                    OnPropertyChanged(nameof(SelectedRecord));
+                }
             }),
             state:     null,
             dueTime:   TimeSpan.FromSeconds(10),
@@ -116,8 +123,14 @@ public sealed partial class UptimeViewModel
     partial void OnFilterDateToChanged(DateTime? value)   => RefreshView();
 
     private void RefreshView()
-        => Application.Current?.Dispatcher?.InvokeAsync(
-            () => RecordsView.View?.Refresh());
+    {
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            var saved = SelectedRecord;
+            RecordsView.View?.Refresh();
+            if (saved is not null) SelectedRecord = saved;
+        });
+    }
 
     // ── IRecipient ────────────────────────────────────────────────────────────
 
@@ -168,7 +181,7 @@ public sealed partial class UptimeViewModel
 
         TotalIncidents  = records.Count;
         ActiveIncidents = records.Count(r => !r.IsResolved);
-        TodayIncidents  = records.Count(r => r.FellAt.Date == today).ToString();
+        TodayIncidents = records.Count(r => r.FellAt.Date == today);
 
         // Враховуємо всі інциденти — і завершені, і активні.
         // Активний інцидент може тривати довше за будь-який завершений.
@@ -183,16 +196,26 @@ public sealed partial class UptimeViewModel
 
     private void UpdateFilterLists(IReadOnlyList<DowntimeRecord> records)
     {
-        var groups  = records.Select(r => r.ServerGroup).Distinct().OrderBy(g => g).ToList();
-        var servers = records.Select(r => r.ServerName).Distinct().OrderBy(s => s).ToList();
+        var newGroups  = records.Select(r => r.ServerGroup).Distinct().OrderBy(g => g).ToList();
+        var newServers = records.Select(r => r.ServerName).Distinct().OrderBy(s => s).ToList();
 
-        AvailableGroups.Clear();
-        AvailableGroups.Add("All");
-        foreach (var g in groups) AvailableGroups.Add(g);
+        // Оновлюємо тільки якщо зміст справді змінився — щоб Clear() не скидав
+        // SelectedItem у ComboBox на null між Clear() і повторним Add() потрібного значення.
+        if (!AvailableGroups.Skip(1).SequenceEqual(newGroups))
+        {
+            var savedGroup = FilterGroup;
+            AvailableGroups.Clear();
+            AvailableGroups.Add("All");
+            foreach (var g in newGroups) AvailableGroups.Add(g);
+            FilterGroup = AvailableGroups.Contains(savedGroup) ? savedGroup : "All";
+        }
 
-        AvailableServers.Clear();
-        AvailableServers.Add("All");
-        foreach (var s in servers) AvailableServers.Add(s);
+        if (!AvailableServers.Skip(1).SequenceEqual(newServers))
+        {
+            AvailableServers.Clear();
+            AvailableServers.Add("All");
+            foreach (var s in newServers) AvailableServers.Add(s);
+        }
     }
 
     // ── CollectionViewSource фільтр ──────────────────────────────────────────
