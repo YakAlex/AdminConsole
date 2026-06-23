@@ -140,12 +140,25 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
                     server.Name, server.IP);
             }
 
-            // Only log state transitions — not every ping result.
-            if (_previousStatus.TryGetValue(server.IP, out var prev) && prev != status)
+            // Логуємо тільки реальні переходи станів, ігноруємо стартовий шум.
+            // SUCCESS — тільки при реальному відновленні: Offline → Online.
+            //           Unknown/Checking → Online при старті логувати не потрібно.
+            // ERROR   — тільки при реальному падінні: Online → Offline.
+            //           Checking → Offline при старті логуємо — сервер реально недоступний.
+            _previousStatus.TryGetValue(server.IP, out var prev);
+
+            if (status == PingStatus.Online && prev == PingStatus.Offline)
             {
-                if (status == PingStatus.Online)
-                    _messenger.Send(AppLogEntryMessage.Success(LogSource,
-                        $"{server.Name} ({server.IP}) is back ONLINE. Latency: {latencyMs} ms."));
+                _messenger.Send(AppLogEntryMessage.Success(LogSource,
+                    $"{server.Name} ({server.IP}) is back ONLINE. Latency: {latencyMs} ms."));
+            }
+            else if (status == PingStatus.Offline && prev != PingStatus.Offline)
+            {
+                // При старті (Checking→Offline) — логуємо як Warning, не Error.
+                // При реальному падінні (Online→Offline) — логуємо як Error.
+                if (prev is PingStatus.Unknown or PingStatus.Checking)
+                    _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                        $"{server.Name} ({server.IP}) недоступний при старті."));
                 else
                     _messenger.Send(AppLogEntryMessage.Error(LogSource,
                         $"{server.Name} ({server.IP}) went OFFLINE."));
