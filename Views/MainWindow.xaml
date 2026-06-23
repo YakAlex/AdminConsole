@@ -31,6 +31,9 @@
         <DataTemplate DataType="{x:Type viewModels:PingDashboardViewModel}">
             <views:PingDashboardView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:UptimeViewModel}">
+            <views:UptimeView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:ResourceMonitorViewModel}">
             <views:ResourceMonitorView />
         </DataTemplate>
@@ -142,26 +145,37 @@
 
                         <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="1">
                             <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="ClockAlertOutline"
+                                                         Width="18" Height="18"
+                                                         Foreground="#FF80CBC4"
+                                                         VerticalAlignment="Center" />
+                                <TextBlock Text="Uptime" Margin="10,0,0,0"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="2">
+                            <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Cpu64Bit" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Resources" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="2">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="3">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="RemoteDesktop" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="RDP Sessions" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="3">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="4">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Bell" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Zabbix Alerts" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="4">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="5">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />

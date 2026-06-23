@@ -124,6 +124,8 @@ public partial class App : Application
         services.AddHostedService<FileLoggerService>();
         services.AddHostedService<RdpMonitorService>();
         services.AddHostedService<ZabbixPollerService>();
+        services.AddSingleton<UptimeTrackerService>();
+        services.AddHostedService(sp => sp.GetRequiredService<UptimeTrackerService>());
         services.AddSingleton<RemoteEventLogService>();
         services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();
@@ -142,6 +144,7 @@ public partial class App : Application
         services.AddSingleton<RdpSessionViewModel>();
         services.AddSingleton<ZabbixViewModel>();
         services.AddSingleton<LogsViewModel>();
+        services.AddSingleton<UptimeViewModel>();
     }
 
     private static void RegisterViews(IServiceCollection services)

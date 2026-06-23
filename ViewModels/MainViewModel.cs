@@ -8,6 +8,7 @@ public sealed partial class MainViewModel : ObservableObject
 {
     // ── Child ViewModels ──────────────────────────────────────────────────────
     public PingDashboardViewModel   PingDashboard   { get; }
+    public UptimeViewModel          Uptime          { get; }
     public ResourceMonitorViewModel ResourceMonitor { get; }
     public RdpSessionViewModel      RdpSessions     { get; }
     public ZabbixViewModel          Zabbix          { get; }
@@ -46,6 +47,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel(
         PingDashboardViewModel   pingDashboard,
+        UptimeViewModel          uptime,
         ResourceMonitorViewModel resourceMonitor,
         RdpSessionViewModel      rdpSessions,
         ZabbixViewModel          zabbix,
@@ -53,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject
         UserSettingsService      userSettings)
     {
         PingDashboard   = pingDashboard;
+        Uptime          = uptime;
         ResourceMonitor = resourceMonitor;
         RdpSessions     = rdpSessions;
         Zabbix          = zabbix;
@@ -73,10 +76,11 @@ public sealed partial class MainViewModel : ObservableObject
         (CurrentView, CurrentPageTitle) = index switch
         {
             0 => ((object)PingDashboard,  "Ping Dashboard"),
-            1 => (ResourceMonitor,         "Resource Monitor"),
-            2 => (RdpSessions,             "RDP Sessions"),
-            3 => (Zabbix,                  "Zabbix Alerts"),
-            4 => (Logs,                    "Logs"),
+            1 => (Uptime,                  "Uptime & Incidents"),
+            2 => (ResourceMonitor,         "Resource Monitor"),
+            3 => (RdpSessions,             "RDP Sessions"),
+            4 => (Zabbix,                  "Zabbix Alerts"),
+            5 => (Logs,                    "Logs"),
             _ => (PingDashboard,           "Admin Console")
         };
     }
