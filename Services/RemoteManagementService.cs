@@ -163,7 +163,7 @@ public sealed class RemoteManagementService
                 inParams["Flags"] = isReboot ? 6 : 5;
                 inParams["Reserved"] = 0;
 
-                var outParams = os.InvokeMethod("Win32Shutdown", inParams, null);
+                using var outParams = os.InvokeMethod("Win32Shutdown", inParams, null);
 
                 if (outParams != null)
                 {
@@ -186,7 +186,6 @@ public sealed class RemoteManagementService
     {
         try
         {
-            // Спочатку пробуємо PuTTY
             var puttyPaths = new[]
             {
                 @"C:\Program Files\PuTTY\putty.exe",
@@ -200,21 +199,17 @@ public sealed class RemoteManagementService
 
             if (putty is not null)
             {
-                _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                    $"Launched PuTTY SSH to {name} ({ip})."));
-
                 Process.Start(new ProcessStartInfo
                 {
                     FileName        = putty,
                     Arguments       = $"-ssh {ip}",
                     UseShellExecute = false
                 });
+
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    $"Launched PuTTY SSH to {name} ({ip})."));
                 return;
             }
-
-            // Fallback — вбудований Windows SSH через cmd
-            _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                $"PuTTY not found. Launching Windows SSH to {name} ({ip})."));
 
             Process.Start(new ProcessStartInfo
             {
@@ -223,6 +218,9 @@ public sealed class RemoteManagementService
                 UseShellExecute = true,
                 CreateNoWindow  = false
             });
+
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                $"PuTTY not found. Launching Windows SSH to {name} ({ip})."));
         }
         catch (Exception ex)
         {
