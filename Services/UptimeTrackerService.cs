@@ -65,13 +65,11 @@ public sealed class UptimeTrackerService
     public void Receive(PingBatchResultMessage message)
     {
         bool changed = false;
-        var logMessages = new List<AppLogEntryMessage>();
-
+        
         lock (_lock)
         {
             foreach (var result in message.Value.Results)
             {
-                // Пропускаємо Unknown і Checking — не реальні статуси
                 if (result.Status is PingStatus.Unknown or PingStatus.Checking)
                 {
                     _lastStatus[result.IP] = result.Status;
@@ -94,9 +92,7 @@ public sealed class UptimeTrackerService
 
                     _records.Insert(0, record);
                     changed = true;
-
-                    logMessages.Add(AppLogEntryMessage.Warning(LogSource,
-                        $"{result.Name} ({result.IP}) перейшов у стан OFFLINE."));
+                    
                 }
                 else if (result.Status == PingStatus.Online
                          && prev == PingStatus.Offline)
@@ -108,25 +104,22 @@ public sealed class UptimeTrackerService
                     {
                         open.RecoveredAt = DateTimeOffset.Now;
                         changed = true;
-
-                        logMessages.Add(AppLogEntryMessage.Info(LogSource,
-                            $"{result.Name} ({result.IP}) відновлено. " +
-                            $"Простій: {open.DurationDisplay}."));
                     }
                 }
 
                 _lastStatus[result.IP] = result.Status;
             }
         }
-
-        // Відправляємо log-повідомлення поза lock
-        foreach (var msg in logMessages)
-            _messenger.Send(msg);
-
         if (!changed) return;
-
-        SaveToDisk(DateTimeOffset.Now);
-        PublishSnapshot();
+        try
+        {
+            SaveToDisk(DateTimeOffset.Now);
+        }
+        catch { }
+        finally
+        {
+            PublishSnapshot();
+        }
     }
 
     // ── Public API для UptimeViewModel ────────────────────────────────────────
@@ -149,9 +142,6 @@ public sealed class UptimeTrackerService
     {
         lock (_lock)
         {
-            // Якщо видаляємо активний інцидент — скидаємо статус IP на Online.
-            // Без цього _lastStatus залишиться Offline і трекер більше ніколи
-            // не створить новий інцидент для цього сервера (prev == Offline → умова не виконається).
             if (!record.IsResolved && _lastStatus.ContainsKey(record.ServerIp))
                 _lastStatus[record.ServerIp] = PingStatus.Online;
 
@@ -208,7 +198,6 @@ public sealed class UptimeTrackerService
 
             lock (_lock)
             {
-                // Додаємо завантажені записи, уникаючи дублювань при повторному старті
                 foreach (var r in records)
                 {
                     bool exists = _records.Any(x =>
@@ -217,8 +206,6 @@ public sealed class UptimeTrackerService
 
                     if (!exists) _records.Add(r);
                 }
-
-                // Сортуємо: найновіші зверху
                 _records.Sort((a, b) => b.FellAt.CompareTo(a.FellAt));
             }
 
