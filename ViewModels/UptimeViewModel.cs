@@ -59,7 +59,10 @@ public sealed partial class UptimeViewModel
         FilterStatus   != "All"                  ||
         FilterDateFrom.HasValue                  ||
         FilterDateTo.HasValue;
-
+    
+    // Керує видимістю кнопки "Clear History" у Toolbar
+    public bool HasResolvedRecords => _allRecords.Any(r => r.IsResolved);
+    
     // Списки для ComboBox-ів (динамічно з даних)
     public ObservableCollection<string> AvailableGroups  { get; } = ["All"];
     public ObservableCollection<string> AvailableServers { get; } = ["All"];
@@ -173,6 +176,7 @@ public sealed partial class UptimeViewModel
         UpdateSummary(records);
         UpdateFilterLists(records);
         RecordsView.View?.Refresh();
+        OnPropertyChanged(nameof(HasResolvedRecords));
     }
 
     private void UpdateSummary(IReadOnlyList<DowntimeRecord> records)
@@ -284,6 +288,38 @@ public sealed partial class UptimeViewModel
         FilterStatus   = "All";
         FilterDateFrom = null;
         FilterDateTo   = null;
+    }
+    
+    /// <summary>
+    /// Видаляє один запис — викликається з кнопки у рядку DataGrid.
+    /// Виконується на UI-потоці (RelayCommand → WPF binding).
+    /// _allRecords НЕ чіпаємо напряму — делегуємо сервісу,
+    /// який через PublishSnapshot → ApplySnapshot оновить колекцію.
+    /// </summary>
+    [RelayCommand]
+    private void DeleteRecord(DowntimeRecord? record)
+    {
+        if (record is null) return;
+
+        if (SelectedRecord == record)
+            SelectedRecord = null; 
+        _tracker.DeleteRecord(record);
+    }
+
+    /// <summary>
+    /// Видаляє всі завершені інциденти.
+    /// НЕ робимо поелементне Remove в _allRecords — це спричинило б
+    /// N подій CollectionChanged і зависання UI при великій кількості записів.
+    /// Замість цього делегуємо сервісу який через PublishSnapshot → ApplySnapshot
+    /// зробить один diff-прохід і один Refresh.
+    /// </summary>
+    [RelayCommand]
+    private void ClearAllResolved()
+    {
+        if (SelectedRecord?.IsResolved == true)
+            SelectedRecord = null;
+
+        _tracker.ClearAllResolved();
     }
 
     // ── IDisposable ──────────────────────────────────────────────────────────

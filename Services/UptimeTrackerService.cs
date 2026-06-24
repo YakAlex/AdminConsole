@@ -26,6 +26,8 @@ public sealed class UptimeTrackerService
     // Всі інциденти в пам'яті (поточна сесія + завантажені з диску)
     private readonly List<DowntimeRecord> _records = new();
     private readonly object               _lock    = new();
+    
+    private readonly object               _saveLock = new();
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
@@ -137,6 +139,58 @@ public sealed class UptimeTrackerService
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Видаляє один запис з пам'яті та диску.
+    /// Якщо запис активний (!IsResolved) — скидає _lastStatus[IP] на Online,
+    /// щоб трекер коректно відстежував наступний перехід для цього сервера.
+    /// Викликається з UI-потоку через RelayCommand у UptimeViewModel.
+    /// </summary>
+    public void DeleteRecord(DowntimeRecord record)
+    {
+        lock (_lock)
+        {
+            // Якщо видаляємо активний інцидент — скидаємо статус IP на Online.
+            // Без цього _lastStatus залишиться Offline і трекер більше ніколи
+            // не створить новий інцидент для цього сервера (prev == Offline → умова не виконається).
+            if (!record.IsResolved && _lastStatus.ContainsKey(record.ServerIp))
+                _lastStatus[record.ServerIp] = PingStatus.Online;
+
+            _records.Remove(record);
+        }
+
+        SaveToDisk(DateTimeOffset.Now);
+        PublishSnapshot();
+
+        _messenger.Send(AppLogEntryMessage.Info(LogSource,
+            $"Інцидент видалено вручну: {record.ServerName} ({record.ServerIp}), " +
+            $"впав {record.FellAt:dd.MM HH:mm:ss}."));
+    }
+
+    /// <summary>
+    /// Видаляє всі завершені (IsResolved) інциденти поточного місяця.
+    /// Активні інциденти та _lastStatus — не чіпає.
+    /// Для UI використовує PublishSnapshot → ApplySnapshot (один Refresh),
+    /// а не поелементне Remove щоб уникнути 200 подій CollectionChanged.
+    /// </summary>
+    public void ClearAllResolved()
+    {
+        int removed;
+        lock (_lock)
+        {
+            removed = _records.RemoveAll(r => r.IsResolved);
+        }
+
+        if (removed == 0) return;
+
+        SaveToDisk(DateTimeOffset.Now);
+        PublishSnapshot();
+
+        _messenger.Send(AppLogEntryMessage.Info(LogSource,
+            $"Очищено {removed} завершених інцидентів з історії."));
+    }
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+
     private static string FilePath(DateTimeOffset month)
         => Path.Combine(LogDir, $"uptime-{month:yyyy-MM}.json");
 
@@ -180,33 +234,31 @@ public sealed class UptimeTrackerService
 
     private void SaveToDisk(DateTimeOffset month)
     {
-        try
+        List<DowntimeRecord> snapshot;
+        lock (_lock) snapshot = _records.ToList();
+
+        lock (_saveLock)
         {
-            Directory.CreateDirectory(LogDir);
+            try
+            {
+                Directory.CreateDirectory(LogDir);
 
-            List<DowntimeRecord> snapshot;
-            lock (_lock) snapshot = _records.ToList();
+                var thisMonth = snapshot
+                    .Where(r => r.FellAt.Year  == month.Year &&
+                                r.FellAt.Month == month.Month)
+                    .ToList();
 
-            // Зберігаємо тільки записи поточного місяця у відповідний файл
-            var thisMonth = snapshot
-                .Where(r => r.FellAt.Year  == month.Year &&
-                            r.FellAt.Month == month.Month)
-                .ToList();
+                var finalPath = FilePath(month);
+                var tempPath  = finalPath + ".tmp";
+                var json      = JsonSerializer.Serialize(thisMonth, JsonOptions);
 
-            var finalPath = FilePath(month);
-            var tempPath  = finalPath + ".tmp";
-            var json      = JsonSerializer.Serialize(thisMonth, JsonOptions);
-
-            // Write-then-replace: пишемо у тимчасовий файл, потім атомарно замінюємо.
-            // Якщо процес впаде або світло вимкнеться під час запису —
-            // .tmp буде пошкоджений, але основний .json залишиться цілим.
-            // File.Move з overwrite:true — атомарна операція на рівні ОС (NTFS).
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, finalPath, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UptimeTrackerService: помилка збереження на диск.");
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, finalPath, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UptimeTrackerService: помилка збереження на диск.");
+            }
         }
     }
 
