@@ -1,6 +1,7 @@
-# AdminConsole
+# AdminConsole v2
 
-Десктопний WPF-додаток для адміністрування та моніторингу серверної інфраструктури домену. Написаний на C# / .NET 8, використовує патерн MVVM та Microsoft Generic Host для управління lifecycle фонових сервісів.
+> Десктопний WPF-інструмент для моніторингу та адміністрування серверної інфраструктури домену.
+> Написаний на **C# / .NET 8**, архітектура — **MVVM + Microsoft Generic Host**.
 
 ---
 
@@ -9,138 +10,164 @@
 - [Можливості](#можливості)
 - [Архітектура](#архітектура)
 - [Структура проєкту](#структура-проєкту)
-- [Залежності](#залежності)
 - [Конфігурація](#конфігурація)
-- [Безпека та credentials](#безпека-та-credentials)
-- [Фонові та on-demand сервіси](#фонові-та-on-demand-сервіси)
-- [Messenger та batching повідомлень](#messenger-та-batching-повідомлень)
-- [Запуск та збірка](#запуск-та-збірка)
+- [Безпека та Credentials](#безпека-та-credentials)
+- [Фонові сервіси](#фонові-сервіси)
+- [Messenger та повідомлення](#messenger-та-повідомлення)
+- [Паралельність та потокобезпека](#паралельність-та-потокобезпека)
+- [Logging](#logging)
+- [Залежності](#залежності)
+- [Збірка та запуск](#збірка-та-запуск)
 - [Вимоги до середовища](#вимоги-до-середовища)
 
 ---
 
 ## Можливості
 
-| Модуль | Опис |
-|---|---|
-| **Ping Dashboard** | Безперервний ICMP-моніторинг усіх серверів з групуванням та індикацією затримки. Логує лише зміни стану (Online / Offline). Паралелізм обмежений `SemaphoreSlim(10)`. Результати за весь цикл публікуються одним пакетним повідомленням. |
-| **Resource Monitor (Server Dashboard)** | Вибір вузла зі списку (`localhost` або будь-який Windows-сервер з `appsettings.json`) через `ComboBox`. Для `localhost` — CPU/RAM у реальному часі через `PerformanceCounter` та Win32 `GlobalMemoryStatusEx`. Для віддалених машин — ті самі метрики через WMI (`Win32_Processor`, `Win32_OperatingSystem`), з періодичним оновленням кожні 5с, поки сервер обраний. У цій же вкладці — останні системні помилки вибраного вузла (Event Log). |
-| **RDP Sessions** | Опитування термінальних серверів через `quser /server:HOSTNAME`. Показує активні та відключені сесії, ім'я користувача, час входу та idle-час. |
-| **Zabbix Alerts** | Інтеграція із Zabbix API (JSON-RPC 2.0). Відображає активні проблеми з severity High та Disaster з підтримкою API-токена. |
-| **Event Log** | Локально — фоновий інкрементальний reader `System`/`Application` журналів. Для обраного у Server Dashboard віддаленого вузла — on-demand читання через WMI (`Win32_NTLogEvent`) з фільтром по часу (останні 3 дні) та типу (Error). |
-| **Logs** | Єдиний агрегований потік подій усіх сервісів у реальному часі (App Logs — "журнал польотів" самої програми, не плутати з Event Log вузлів). Записується у rolling-файл (`logs/app-YYYY-MM-DD.log`). |
-| **Remote Management** | Перезавантаження та вимкнення серверів через WMI (`Win32Shutdown`), відкриття RDP-сесії (`mstsc.exe`), запуск безперервного пінгу (`ping -t`) у окремому вікні. Доступність кнопок залежить від `Type` сервера (`Windows` / `Linux` / `Network`). |
+| Вкладка | Опис |
+|---------|------|
+| **Ping Dashboard** | Безперервний ICMP-моніторинг усіх серверів з групуванням, індикацією затримки та кольоровим статусом. Логує лише реальні зміни стану. Паралелізм обмежений `SemaphoreSlim`. Результати всього циклу публікуються одним batch-повідомленням. |
+| **Uptime & Incidents** | Автоматичне фіксування інцидентів недоступності: час падіння, відновлення, тривалість простою. Повна фільтрація по сервері, групі, даті та статусу. Зберігається на диск у `logs/uptime-YYYY-MM.json` з атомарним записом. |
+| **Resource Monitor** | CPU та RAM у реальному часі — для `localhost` через `PerformanceCounter` і `GlobalMemoryStatusEx`, для віддалених машин через WMI. Відображає останні помилки Event Log обраного вузла. |
+| **RDP Sessions** | Опитування Terminal Servers через `quser /server:HOSTNAME`. Показує активні та відключені сесії, ім'я користувача, час входу та idle. |
+| **Zabbix Alerts** | Інтеграція із Zabbix API (JSON-RPC 2.0). Активні проблеми severity High та Disaster. Підтримка API-токена. |
+| **Logs** | Агрегований потік подій усіх сервісів у реальному часі з рівнями severity. Записується у rolling-файл. |
+| **Remote Management** | Перезавантаження та вимкнення через WMI (`Win32Shutdown` з Force-флагами), RDP (`mstsc.exe`), безперервний ping у новому вікні, SSH через PuTTY або вбудований Windows SSH. |
 
 ---
 
 ## Архітектура
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│                      WPF UI (Views)                      │
-│  MainWindow · PingDashboard · RdpSessions · Zabbix       │
-│  ResourceMonitor (Server Dashboard) · Logs               │
-└────────────────────────┬─────────────────────────────────┘
-                         │  DataBinding (MVVM)
-┌────────────────────────▼─────────────────────────────────┐
-│                  ViewModels (MVVM)                       │
-│  MainViewModel · PingDashboardViewModel                  │
-│  RdpSessionViewModel · ZabbixViewModel                   │
-│  ResourceMonitorViewModel (IDisposable) · LogsViewModel  │
-└────────────────────────┬─────────────────────────────────┘
-                         │  WeakReferenceMessenger (MVVM Toolkit)
-┌────────────────────────▼─────────────────────────────────┐
-│            Background Services (IHostedService)          │
-│  PingMonitorService · RdpMonitorService                  │
-│  ZabbixPollerService · ResourceMonitorService (local)    │
-│  EventLogService (local, кешує LastSnapshot)             │
-│  FileLoggerService                                       │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────┐
-│        On-demand сервіси (звичайні Singleton, не Hosted) │
-│  RemoteResourceService   — WMI CPU/RAM з обраного вузла  │
-│  RemoteEventLogService   — WMI Event Log з обраного вузла│
-│  EventLogReader (static) — спільна логіка читання локально│
-└────────────────────────┬─────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────┐
-│                 Infrastructure / Core                    │
-│  CredentialStore (Win32 Credential Manager)              │
-│  ZabbixApiClient (HttpClient / JSON-RPC)                 │
-│  RemoteManagementService (WMI / Process)                 │
-│  CredentialPromptCoordinator (SemaphoreSlim)             │
-│  OverlayDialogService · UserSettingsService              │
-└──────────────────────────────────────────────────────────┘
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        WPF UI (Views)                       │
+│  MainWindow · PingDashboard · UptimeView · RdpSessions      │
+│  ResourceMonitor · ZabbixAlerts · Logs                      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ DataBinding (MVVM)
+┌───────────────────────────▼─────────────────────────────────┐
+│                    ViewModels (MVVM)                        │
+│  MainViewModel · PingDashboardViewModel                     │
+│  UptimeViewModel (IDisposable) · RdpSessionViewModel        │
+│  ZabbixViewModel · ResourceMonitorViewModel (IDisposable)   │
+│  LogsViewModel                                              │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ WeakReferenceMessenger
+┌───────────────────────────▼─────────────────────────────────┐
+│           Background Services (IHostedService)              │
+│  PingMonitorService    — ICMP, Main + Recovery loop         │
+│  UptimeTrackerService  — фіксація інцидентів, JSON          │
+│  RdpMonitorService     — quser polling                      │
+│  ZabbixPollerService   — Zabbix JSON-RPC                    │
+│  ResourceMonitorService — CPU/RAM localhost                  │
+│  EventLogService       — Event Log localhost                 │
+│  FileLoggerService     — rolling file sink                  │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│          On-demand сервіси (Singleton, не Hosted)           │
+│  RemoteResourceService   — WMI CPU/RAM remote               │
+│  RemoteEventLogService   — WMI Event Log remote             │
+│  RemoteManagementService — WMI shutdown/restart, SSH, RDP   │
+│  EventLogReader (static) — спільна логіка + IsReachableAsync│
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                    Infrastructure / Core                    │
+│  CredentialStore         — Win32 Credential Manager + lock  │
+│  CredentialPromptCoordinator — SemaphoreSlim(1,1)           │
+│  ZabbixApiClient         — HttpClient / JSON-RPC 2.0        │
+│  OverlayDialogService    — модальні overlay без сторонніх   │
+│  UserSettingsService     — %LocalAppData% JSON              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Ключові архітектурні рішення
 
-**Generic Host** — управляє lifecycle усіх `BackgroundService`-ів, DI-контейнером та конфігурацією. Забезпечує коректне завершення сервісів при закритті вікна.
+**Generic Host** — управляє lifecycle усіх `BackgroundService`-ів, DI-контейнером та конфігурацією. Забезпечує коректне graceful-завершення при закритті вікна.
 
-**WeakReferenceMessenger** — шина повідомлень між сервісами та ViewModel-ами. Сервіси публікують повідомлення (`Send`), ViewModel-и підписуються (`RegisterAll`). Відсутня пряма залежність між шарами. Повідомлення не зберігають історію — якщо в момент `Send` нікого не підписано, повідомлення губиться (див. розділ про `EventLogService.LastSnapshot` нижче).
+**WeakReferenceMessenger** — шина повідомлень між сервісами та ViewModel-ами. Сервіси публікують (`Send`), ViewModel-и підписуються (`RegisterAll`). Пряма залежність між шарами відсутня. Підписка відбувається у конструкторі, щоб не пропустити перші повідомлення при старті.
 
-**On-demand сервіси замість BackgroundService для remote-даних** — `RemoteResourceService` та `RemoteEventLogService` не є `IHostedService`: вони викликаються напряму з `ResourceMonitorViewModel` у момент, коли користувач обирає віддалений сервер у Server Dashboard. Це свідомий вибір замість одного "універсального" BackgroundService, що опитує всі сервери одразу — навантаження на мережу (WMI/DCOM) створюється лише для того одного вузла, який реально переглядається.
+**Dual-loop Ping** — `PingMonitorService` запускає два незалежних Task'и через `Task.WhenAll` + `RunLoopGuardedAsync`: основний цикл (всі сервери кожні N секунд) та recovery loop (тільки Offline сервери кожні M секунд). Падіння одного циклу автоматично зупиняє інший через `LinkedCancellationTokenSource`. Синхронізація між циклами — CAS через `ConcurrentDictionary.TryUpdate` без блокувань.
 
-**Подвійний шлях читання Event Log** — локальна машина читається через легкий `System.Diagnostics.EventLog(".")` (інкрементально, з `early exit` по таймстемпу). Віддалені машини читаються через WMI (`Win32_NTLogEvent`), бо `System.Diagnostics.EventLog` з чистою IP-адресою (без NetBIOS-резолву) ненадійний і часто мовчки повертає 0 записів.
+**CAS-патерн замість lock** — у `PingMonitorService` відсутній будь-який `lock` чи `Mutex`. Потокобезпека досягається через `ConcurrentDictionary<string, PingStatus>.TryUpdate` (Compare-And-Swap): тільки перший потік що виграє гонку оновлює статус і логує перехід. Другий потік отримує `false` і мовчить. Це усуває потребу в `_transitionLock` та будь-якому `Clear()`.
 
-**Захист від RPC/DCOM-таймаутів** — перед кожним WMI-запитом до віддаленої машини (`RemoteResourceService`, `RemoteEventLogService`) виконується короткий (1.5с) ICMP ping. Якщо вузол не відповідає — WMI-запит не виконується взагалі, замість очікування 30-60с на типовий DCOM-таймаут.
+**UptimeTrackerService** — окремий Singleton-сервіс що підписується на `PingBatchResultMessage` і веде журнал інцидентів незалежно від UI. Зберігає дані на диск атомарно через write-then-replace (`*.tmp` → rename). `lock(_lock)` захищає список інцидентів, окремий `_saveLock` захищає I/O від одночасного запису з двох потоків.
 
-**CredentialPromptCoordinator** — серіалізує показ модальних вікон введення credentials через `SemaphoreSlim(1,1)`. Якщо кілька фонових сервісів одночасно потребують credentials, відкривається лише одне вікно; решта отримують той самий результат через спільний `Task`.
+**On-demand WMI** — `RemoteResourceService` та `RemoteEventLogService` не є `IHostedService`. Вони викликаються напряму з `ResourceMonitorViewModel` коли користувач обирає вузол. Навантаження WMI/DCOM виникає лише для того одного вузла що реально переглядається.
 
-**OverlayDialogService** — модальні підтвердження (restart/shutdown) реалізовані як overlay-Grid у MainWindow, без сторонніх DialogHost-бібліотек.
+**Спільний `EventLogReader.IsReachableAsync`** — ICMP ping-перевірка перед кожним WMI-запитом до remote машини винесена у спільний статичний метод. Раніше дублювалась у `RemoteResourceService` і `RemoteEventLogService` — тепер одне місце.
 
-**IDisposable на ResourceMonitorViewModel** — Server Dashboard для віддаленого вузла запускає self-rescheduling WMI-опитування (CPU/RAM кожні 5с), поки цей вузол обраний. Щоб уникнути "осиротілих" задач на thread pool при закритті програми, `App.xaml.cs` явно викликає `ResourceMonitorViewModel.Dispose()` у `OnExit`, до зупинки хосту.
+**Thread-safe CredentialStore** — всі поля credentials (`_rdpUsername`, `_rdpPassword`, `_zabbixToken`) захищені спільним `_lock`. Читання та запис з різних потоків (`RdpMonitorService`, `ZabbixPollerService`, UI) безпечні.
+
+**IDisposable на ViewModel-ах** — `ResourceMonitorViewModel` та `UptimeViewModel` явно викликаються через `Dispose()` у `App.xaml.cs OnExit` до зупинки хосту. Це зупиняє self-rescheduling WMI-опитування та таймер оновлення тривалості інцидентів.
 
 ---
 
 ## Структура проєкту
 
-```text
+```
 AdminConsole/
-├── App.xaml / App.xaml.cs          # Точка входу, DI-реєстрація, Host lifecycle
-├── appsettings.json                # Конфігурація серверів та інтервалів
+├── App.xaml / App.xaml.cs              # Точка входу, DI, Host lifecycle, DispatcherUnhandledException
+├── appsettings.json                    # Сервери, інтервали, Zabbix URL
 │
 ├── Configuration/
-│   └── AppSettings.cs              # MonitoringSettings, UserSettings
+│   └── AppSettings.cs                  # MonitoringSettings (+ OfflinePingIntervalSeconds)
 │
 ├── Core/
-│   ├── Models/                     # Чисті record/sealed-типи:
-│   │   │                           # PingResult, RdpSessionInfo, ZabbixProblem,
-│   │   │                           # ResourceSnapshot, AppLogEntry, EventLogEntry,
-│   │   │                           # ServerEntry (з полем Type), ServerDashboardEntry
-│   └── Messages/                   # Messenger-повідомлення між шарами:
-│                                   # PingBatchResultMessage, EventLogUpdatedMessage,
-│                                   # ResourceSnapshotUpdatedMessage,
-│                                   # RdpSessionsUpdatedMessage, ZabbixProblemsUpdatedMessage,
-│                                   # AppLogEntryMessage
+│   ├── Models/
+│   │   ├── PingResult.cs               # record: Name, IP, Group, Status, LatencyMs, LastChecked
+│   │   ├── DowntimeRecord.cs           # sealed class: FellAt, RecoveredAt, Duration, DurationDisplay
+│   │   ├── ServerEntry.cs
+│   │   ├── ServerDashboardEntry.cs
+│   │   ├── ResourceSnapshot.cs
+│   │   ├── RdpSessionInfo.cs
+│   │   ├── ZabbixProblem.cs
+│   │   ├── AppLogEntry.cs              # sealed record, Formatted кешується при ініціалізації
+│   │   └── EventLogEntry.cs
+│   └── Messages/
+│       ├── PingBatchResultMessage.cs
+│       ├── UptimeMessages.cs           # UptimeUpdatedMessage
+│       ├── AppLogEntryMessage.cs
+│       ├── EventLogUpdatedMessage.cs
+│       ├── ResourceSnapshotUpdatedMessage.cs
+│       ├── RdpSessionsUpdatedMessage.cs
+│       └── ZabbixProblemsUpdatedMessage.cs
 │
 ├── Services/
-│   ├── CredentialStore.cs          # Win32 Credential Manager (CredWrite/CredRead/CredFree)
-│   ├── CredentialPromptCoordinator.cs  # Дедуплікація credential-діалогів
-│   ├── PingMonitorService.cs       # ICMP-моніторинг (BackgroundService), SemaphoreSlim(10)
-│   ├── RdpMonitorService.cs        # quser + CredentialManager (BackgroundService)
-│   ├── ZabbixPollerService.cs      # Zabbix API polling (BackgroundService)
-│   ├── ZabbixApiClient.cs          # JSON-RPC 2.0 HTTP-клієнт
-│   ├── ResourceMonitorService.cs   # CPU/RAM локальної машини (BackgroundService)
-│   ├── EventLogService.cs          # Event Log локальної машини (BackgroundService, кешує LastSnapshot)
-│   ├── EventLogReader.cs           # Статична спільна логіка читання локального Event Log
-│   ├── RemoteResourceService.cs    # On-demand WMI CPU/RAM з обраного віддаленого вузла
-│   ├── RemoteEventLogService.cs    # On-demand WMI Event Log з обраного віддаленого вузла
-│   ├── FileLoggerService.cs        # Rolling file logger (ConcurrentQueue)
-│   ├── RemoteManagementService.cs  # WMI shutdown/restart, mstsc, ping
-│   └── OverlayDialogService.cs     # Overlay-діалоги підтвердження
+│   ├── PingMonitorService.cs           # Dual-loop ICMP, CAS TryUpdate, RunLoopGuardedAsync
+│   ├── UptimeTrackerService.cs         # Інциденти, JSON persistence, atomic write
+│   ├── RdpMonitorService.cs            # quser, Regex з matchTimeout
+│   ├── ZabbixPollerService.cs          # JSON-RPC 2.0, token auth
+│   ├── ZabbixApiClient.cs              # HttpClient, TryParse для clock
+│   ├── ResourceMonitorService.cs       # PerformanceCounter + GlobalMemoryStatusEx
+│   ├── EventLogService.cs              # Incremental reader, LastSnapshot (thread-safe lock)
+│   ├── EventLogReader.cs               # public static TrimMessage, IsReachableAsync
+│   ├── RemoteResourceService.cs        # On-demand WMI CPU/RAM
+│   ├── RemoteEventLogService.cs        # On-demand WMI Event Log (Win32_NTLogEvent)
+│   ├── FileLoggerService.cs            # ConcurrentQueue, SemaphoreSlim (Dispose)
+│   ├── RemoteManagementService.cs      # WMI Win32Shutdown (Force), SSH, RDP
+│   ├── CredentialStore.cs              # advapi32 P/Invoke, lock на всі поля, RtlZeroMemory
+│   ├── CredentialPromptCoordinator.cs  # SemaphoreSlim(1,1), дедуплікація діалогів
+│   └── OverlayDialogService.cs
 │
-├── ViewModels/                     # ObservableObject + RelayCommand (MVVM Toolkit)
-│   ├── MainViewModel.cs            # Навігація, Settings overlay
+├── ViewModels/
+│   ├── MainViewModel.cs                # Навігація (6 вкладок), Settings overlay
 │   ├── PingDashboardViewModel.cs
+│   ├── UptimeViewModel.cs              # CollectionViewSource, фільтри, Timer, IDisposable
 │   ├── RdpSessionViewModel.cs
-│   ├── ZabbixViewModel.cs
-│   ├── ResourceMonitorViewModel.cs # Server Dashboard: вибір вузла, CPU/RAM, Event Log; IDisposable
-│   └── LogsViewModel.cs
+│   ├── ZabbixViewModel.cs              # Diff-оновлення колекції
+│   ├── ResourceMonitorViewModel.cs     # Interlocked.Exchange для CTS, IDisposable
+│   └── LogsViewModel.cs               # CleanupThreshold = MaxEntries + 50
 │
-├── Views/                          # XAML + code-behind
-│   └── MainWindow.xaml(.cs)        # ICredentialPrompt implementation; кнопка Settings — у Sidebar
+├── Views/
+│   ├── MainWindow.xaml(.cs)
+│   ├── UptimeView.xaml(.cs)            # DataGrid, фільтр-бар, Delete кнопка per-row
+│   ├── PingDashboardView.xaml(.cs)
+│   ├── RdpSessionView.xaml(.cs)
+│   ├── ZabbixView.xaml(.cs)
+│   ├── ResourceMonitorView.xaml(.cs)
+│   └── LogsView.xaml(.cs)
 │
 └── Resources/
     └── icon.ico
@@ -148,42 +175,24 @@ AdminConsole/
 
 ---
 
-## Залежності
-
-| Пакет | Версія | Призначення |
-|---|---|---|
-| `CommunityToolkit.Mvvm` | 8.3.2 | `ObservableObject`, `RelayCommand`, `WeakReferenceMessenger` |
-| `MaterialDesignThemes` | 5.1.0 | Material Design 3 UI компоненти та теми |
-| `MaterialDesignColors` | 3.1.0 | Палітра кольорів Material Design |
-| `Microsoft.Extensions.Hosting` | 8.0.1 | Generic Host, DI, `BackgroundService` |
-| `Microsoft.Extensions.Http` | 8.0.1 | `IHttpClientFactory`, typed `HttpClient` |
-| `Microsoft.Extensions.Configuration.Json` | 8.0.1 | `appsettings.json` конфігурація |
-| `System.Management` | 8.0.0 | WMI (`ManagementScope`, `ManagementObjectSearcher`) — локальний і **remote** доступ |
-
-Вбудовані (Windows Desktop SDK):
-- `System.Diagnostics.PerformanceCounter` — CPU моніторинг (localhost)
-- `System.Net.NetworkInformation.Ping` — ICMP (Ping Dashboard + pre-check перед WMI-запитами)
-- `System.Diagnostics.EventLog` — Event Log локальної машини
-- `advapi32.dll` (P/Invoke) — `CredWrite`, `CredRead`, `CredFree`, `CredDelete`
-- `kernel32.dll` (P/Invoke) — `GlobalMemoryStatusEx`
-
----
-
 ## Конфігурація
 
-Усі параметри зберігаються у `appsettings.json` поруч із виконуваним файлом. Зчитується з `AppContext.BaseDirectory` (а не `Directory.GetCurrentDirectory()`), тому коректно працює незалежно від робочої директорії запуску.
+Файл `appsettings.json` зчитується з `AppContext.BaseDirectory` — коректно незалежно від робочої директорії запуску.
 
 ### Секція `Monitoring`
 
 ```jsonc
 "Monitoring": {
-  "PingIntervalSeconds": 30,           // Інтервал ICMP-опитування
-  "ZabbixUrl": "http://<host>/zabbix/api_jsonrpc.php",  // URL Zabbix API
-  "ZabbixPollIntervalSeconds": 60,     // Інтервал опитування Zabbix
-  "RdpPollIntervalSeconds": 120,       // Інтервал опитування quser
-  "LocalResourcePollIntervalSeconds": 3 // Інтервал CPU/RAM локальної машини
+  "PingIntervalSeconds": 30,              // Основний цикл ICMP — всі сервери
+  "OfflinePingIntervalSeconds": 10,       // Recovery loop — тільки Offline сервери
+  "ZabbixUrl": "http://<host>/zabbix/api_jsonrpc.php",
+  "ZabbixPollIntervalSeconds": 60,
+  "RdpPollIntervalSeconds": 120,
+  "LocalResourcePollIntervalSeconds": 3
 }
 ```
+
+> `OfflinePingIntervalSeconds` — мінімальне значення 5с (захист у коді через `Math.Max`). Recovery loop пінгує тільки сервери зі статусом Offline, тому не збільшує навантаження при здоровій інфраструктурі.
 
 ### Секція `Servers`
 
@@ -195,161 +204,259 @@ AdminConsole/
 ]
 ```
 
-**Поля:**
+| Поле | Опис |
+|------|------|
+| `Name` | Доменне ім'я (для `quser /server:Name` та відображення) |
+| `IP` | IP-адреса (для ICMP, RDP, WMI) |
+| `Group` | Група для візуального групування у Ping Dashboard та Uptime |
+| `Type` | `Windows` / `Linux` / `Network`. Визначає кнопки керування та видимість у Server Dashboard |
+
+**Важливі правила:**
+- `quser` опитує тільки сервери з групою `Terminal Servers` (порівняння `OrdinalIgnoreCase`)
+- Server Dashboard показує лише `Type = "Windows"` сервери (WMI/Event Log недоступні на Linux/Network)
+- У `Name` має бути **доменне ім'я**, не IP — `quser` через Named Pipes вимагає NetBIOS-резолву
+
+### Користувацькі налаштування
+
+Зберігаються у `%LocalAppData%\AdminConsole\user_settings.json`, редагуються через Settings overlay (шестерня в sidebar):
 
 | Поле | Опис |
-|---|---|
-| `Name` | Доменне ім'я хоста (використовується у `quser /server:Name`) та у Server Dashboard |
-| `IP` | IP-адреса (використовується для Ping, RDP, WMI) |
-| `Group` | Група для візуального групування у Ping Dashboard |
-| `Type` | `Windows` / `Linux` / `Network`. Визначає набір кнопок керування у Ping Dashboard (RDP/Restart/Shutdown — лише для `Windows`) і **чи показується вузол у Server Dashboard** (лише `Windows`-сервери підтримують WMI/Event Log). За відсутності поля — `Windows` за замовчуванням (зворотна сумісність). |
-
-> **Важливо для RDP-моніторингу:** у полі `Name` має бути вказано **доменне ім'я**, а не IP. `quser` працює через Named Pipes / NetBIOS; підключення по IP (RPC over TCP) у більшості доменних середовищ заблоковане.
-
-> **Групи Terminal Servers:** лише сервери з групою `"Terminal Servers"` опитуються через `quser`. Назва групи чутлива до регістру не є — порівняння відбувається через `OrdinalIgnoreCase`.
-
-> **Server Dashboard:** список вузлів у `ComboBox` будується як `localhost` (завжди перший) + усі сервери з `Type = "Windows"`. Сервери типу `Linux`/`Network` у цьому списку не з'являються — WMI та Windows Event Log на них недоступні за визначенням.
-
-### Користувацькі налаштування (`UserSettings`)
-
-Окремо від `appsettings.json` — зберігаються у `%LocalAppData%\AdminConsole\user_settings.json`, змінюються під час роботи програми через Settings overlay (кнопка-шестерня внизу sidebar):
-
-| Поле | Опис |
-|---|---|
-| `CloseToTray` | `true` — закриття вікна згортає програму у трей; `false` — повністю завершує процес |
+|------|------|
+| `CloseToTray` | `true` — згортання у трей при закритті; `false` — завершення процесу |
 
 ---
 
-## Безпека та credentials
+## Безпека та Credentials
 
 ### Windows Credential Manager
 
-Додаток **не зберігає паролі у файлах або реєстрі**. Усі credentials зберігаються у Windows Credential Manager через Win32 API (`CredWrite` / `CredRead`) з типом `CRED_TYPE_GENERIC`.
+Паролі **не зберігаються у файлах або реєстрі**. Використовується Win32 Credential Manager (`advapi32.dll`):
 
 | Target | Вміст | Persist |
-|---|---|---|
-| `AdminConsole/RDP` | Доменний логін (`DOMAIN\user`) та пароль для `quser` | `CRED_PERSIST_ENTERPRISE` |
-| `AdminConsole/Zabbix` | API-токен  Zabbix | `CRED_PERSIST_ENTERPRISE` |
+|--------|-------|---------|
+| `AdminConsole/RDP` | Логін + пароль для `quser` | `CRED_PERSIST_ENTERPRISE` |
+| `AdminConsole/Zabbix` | API-токен або пароль | `CRED_PERSIST_ENTERPRISE` |
 | `<hostname>` | Тимчасові credentials для конкретного quser-запиту | `CRED_PERSIST_SESSION` |
 
-Тимчасові session-credentials для `quser` (`CRED_PERSIST_SESSION`) автоматично видаляються у блоці `finally` після кожного запиту — незалежно від успіху або помилки.
+Тимчасові session-credentials видаляються у `finally` після кожного запиту — незалежно від успіху.
 
-### Захист паролів у пам'яті
+### Захист пам'яті
 
-- Масив байтів `blob` (UTF-16 LE пароль) затирається через `Array.Clear()` одразу після `Marshal.Copy` до некерованої пам'яті.
-- Некерований буфер `blobPtr` перезаписується нулями перед `Marshal.FreeCoTaskMem` у блоці `finally`.
+- `byte[] blob` (UTF-16 пароль) затирається через `Array.Clear()` одразу після `Marshal.Copy`
+- Некерований `blobPtr` перезаписується нулями через `RtlZeroMemory` (`kernel32.dll`) у `finally` — без виділення нового `byte[]` в `finally`, що було б небезпечним при `OutOfMemoryException`
 
-### WMI-доступ до віддалених машин
+### Thread-safety
 
-`RemoteResourceService` та `RemoteEventLogService` підключаються через `ManagementScope` із `ImpersonationLevel.Impersonate` — використовуються **поточні Windows-credentials** користувача, який запустив `AdminConsole.exe` (передається через DCOM). Окремих credentials для WMI не запитується і не зберігається. Якщо обліковий запис не має прав WMI на цільовій машині — повертається керована помилка (`"Access denied…"`) замість краша.
+`CredentialStore` — Singleton. Всі поля credentials захищені `private readonly object _lock`. Читання/запис з `RdpMonitorService` (thread pool), `ZabbixPollerService` (thread pool) та UI-потоку — безпечні.
 
-### Введення credentials
+### WMI-доступ
 
-При першому запуску (або після відхилення токена Zabbix чи невірного пароля RDP) відображається модальний діалог. `CredentialPromptCoordinator` гарантує, що одночасно відкрите лише одне вікно введення, навіть якщо кілька фонових потоків запросили credentials одночасно.
-
-Якщо користувач закрив діалог без введення — сервіс зупиняє опитування до перезапуску додатку (не показує повторні діалоги у циклі).
+`RemoteResourceService` та `RemoteEventLogService` використовують `ImpersonationLevel.Impersonate` — поточні Windows-credentials користувача AdminConsole. Окремих WMI-credentials не зберігається. `UnauthorizedAccessException` обробляється — показується `"Access denied"` замість краша.
 
 ---
 
-## Фонові та on-demand сервіси
+## Фонові сервіси
 
-### PingMonitorService (BackgroundService)
+### PingMonitorService
 
-- Паралельно пінгує всі сервери з таймаутом 2000 мс, обмежено `SemaphoreSlim(10)` — не більше 10 одночасних ICMP-запитів незалежно від кількості серверів у конфігурації.
-- Логує лише зміну стану (Online → Offline або навпаки), а не кожен успішний пінг.
-- Результати **всього циклу** збираються і публікуються **одним** `PingBatchResultMessage` (а не окремим повідомленням на кожен сервер) — підписники (`PingDashboardViewModel`, `ResourceMonitorViewModel`) оновлюють UI за один прохід замість N окремих `Dispatcher`-викликів за цикл.
-- При старті негайно публікує batch-стан `Checking` для всіх серверів.
+Два паралельних Task у `ExecuteAsync`:
 
-### RdpMonitorService (BackgroundService)
+```
+ExecuteAsync
+├── RunMainLoopAsync      — всі сервери, кожні PingIntervalSeconds
+│   └── PingServersAsync  — локальний ConcurrentBag, один PingBatchResultMessage
+└── RunRecoveryLoopAsync  — тільки Offline сервери, кожні OfflinePingIntervalSeconds
+    └── PingServersAsync  — окремий SemaphoreSlim(5), окремий ConcurrentBag
+```
 
-- Опитує лише сервери з групою `Terminal Servers`.
-- Виконує `quser.exe /server:<hostname>` асинхронно (`WaitForExitAsync`) з таймаутом 30 секунд і `CancellationToken`.
-- Реєструє credentials у Credential Manager перед `quser` та видаляє їх у `finally`.
-- При отриманні `Logon failure` або `Access Denied` — очищає збережені credentials та запитує нові (до 3 спроб).
-- Парсить формат виводу `quser` (WS2008R2 / WS2012+) для Active та Disconnected сесій.
+**CAS-синхронізація без lock:**
+```csharp
+var prev = _previousStatus.GetOrAdd(server.IP, PingStatus.Unknown);
+if (prev != status)
+    if (_previousStatus.TryUpdate(server.IP, status, prev))
+        // тільки перший хто виграв гонку — логує перехід
+```
 
-### ZabbixPollerService (BackgroundService)
+**`RunLoopGuardedAsync`** — якщо один цикл падає з критичним винятком, автоматично скасовує другий через `LinkedCancellationTokenSource` і перекидає виняток у `Task.WhenAll`.
 
-- Підтримує два режими авторизації: **API Token** (Zabbix 5.4+) та **User/Password** (session token).
-- Відстежує severity `4` (High) та `5` (Disaster).
-- При отриманні `ZabbixAuthException` — очищає токен, запитує новий через діалог з linked `CancellationToken` (скасовується при зупинці сервісу або через 5-хвилинний таймаут очікування діалогу) та продовжує роботу без рекурсії.
-- HTTP-таймаут: 30 секунд (налаштовано через `IHttpClientFactory`).
+**SemaphoreSlim з `acquired` прапорцем:**
+```csharp
+var acquired = false;
+try {
+    await throttle.WaitAsync(ct);
+    acquired = true;
+    // ... ping ...
+} finally {
+    if (acquired) throttle.Release(); // Release тільки якщо WaitAsync успішний
+}
+```
 
-### ResourceMonitorService (BackgroundService, локальна машина)
+### UptimeTrackerService
 
-- CPU: `PerformanceCounter("Processor", "% Processor Time", "_Total")`. Перший "прогрівальний" зчитує у `StartAsync`, реальні дані — починаючи з другого.
-- RAM: Win32 `GlobalMemoryStatusEx` — точніше ніж `PerformanceCounter` для RAM.
-- Інтервал — `LocalResourcePollIntervalSeconds` (за замовчуванням 3с).
-- Вимикається автоматично на не-Windows платформах.
+Підписується на `PingBatchResultMessage`. Логіка переходів:
 
-### EventLogService (BackgroundService, локальна машина)
+| Перехід | Дія |
+|---------|-----|
+| `Online → Offline` | Створює `DowntimeRecord` з `FellAt = Now`, вставляє на початок |
+| `Offline → Online` | Заповнює `RecoveredAt` для відкритого інциденту |
+| `Unknown/Checking → Offline` | Не створює запис (стартовий шум) |
+| `Unknown/Checking → Online` | Тихо, без логу |
 
-- Сканує до 2000 останніх записів у журналах `System` та `Application` через спільний `EventLogReader.ReadErrors(".", since)`.
-- Відбирає типи `Error` та `FailureAudit`.
-- Інкрементальний режим: наступні цикли скануються лише від часу останнього читання, з early exit одразу як зустрівся вже прочитаний запис.
-- Не публікує повідомлення, якщо за цикл немає нових записів (крім самого першого циклу).
-- **Кешує** останній знімок у `LastSnapshot` (до 20 записів). Це потрібно тому, що `IMessenger` не зберігає історію повідомлень: якщо `ResourceMonitorViewModel` ще не підписаний у момент першої публікації (типовий випадок при старті програми — вкладку Resources ще не відкрили), повідомлення губиться. ViewModel читає `LastSnapshot` напряму при відкритті вкладки замість очікування наступного циклу.
-- Зареєстрований у DI одночасно як `AddSingleton<EventLogService>()` **і** `AddHostedService(sp => sp.GetRequiredService<EventLogService>())` — конкретний тип, а не лише `IHostedService`, потрібен щоб `ResourceMonitorViewModel` міг отримати **той самий** екземпляр через конструктор (інакше DI створив би два незалежні об'єкти з різним станом).
+**Атомарний запис на диск:**
+```
+1. Серіалізуємо JSON → uptime-YYYY-MM.json.tmp
+2. File.Move(.tmp → .json, overwrite: true)   ← атомарна операція NTFS
+```
 
-### RemoteResourceService (Singleton, on-demand, **не** BackgroundService)
+Якщо процес впаде під час запису — `.tmp` пошкоджений, але основний `.json` цілий.
 
-- Викликається з `ResourceMonitorViewModel` лише коли користувач обирає віддалений вузол у Server Dashboard.
-- Перед WMI-запитом виконує власний короткий (1.5с) ping — не покладається на потенційно застарілий (до 30с) статус з `PingMonitorService`.
-- CPU: `Win32_Processor.LoadPercentage`, усереднено по всіх логічних ядрах.
-- RAM: `Win32_OperatingSystem.TotalVisibleMemorySize` / `FreePhysicalMemory`.
-- WMI-таймаут — 8с (`ConnectionOptions.Timeout`).
-- Поки обраний той самий віддалений вузол — self-rescheduling опитування кожні 5с (рідше за локальні 3с, бо WMI суттєво дорожчий за `PerformanceCounter`).
-- `ManagementObjectSearcher.Get()` та кожен `ManagementObject` явно обгорнуті в `using` — без цього `ManagementObjectCollection` (окремий COM RCW над WMI-енумератором) не звільняється, що при періодичному опитуванні (кожні 5с) поступово накопичує пам'ять процесу.
-- Обробляє `UnauthorizedAccessException` окремо — повертає керовану помилку замість краша, якщо поточний обліковий запис не має прав WMI на цільовій машині.
+**Два lock-и:**
+- `_lock` — захищає `_records` і `_lastStatus` (швидкі in-memory операції)
+- `_saveLock` — захищає I/O (повільні операції з диском)
 
-### RemoteEventLogService (Singleton, on-demand, **не** BackgroundService)
+`_messenger.Send(AppLogEntryMessage)` — завжди **поза** `_lock`, щоб уникнути потенційного дедлоку при синхронному виклику підписників.
 
-- Аналогічно до `RemoteResourceService` — викликається лише при виборі віддаленого вузла.
-- На відміну від локального `EventLogService`, читає **через WMI** (`Win32_NTLogEvent`), а не `System.Diagnostics.EventLog` — останній ненадійний з чистими IP-адресами (вимагає NetBIOS-резолву, часто мовчки повертає 0 записів).
-- WQL-запит фільтрує одразу на стороні провайдера: `EventType=1` (Error) **і** `TimeGenerated >= <3 дні тому>` — другий предикат дозволяє `Win32_NTLogEvent` раніше зупинити сканування, що суттєво пришвидшує запит на "галасливих" логах, де Error-записи перемежовані великою кількістю Information.
-- Додатковий захисний ліміт `maxScanPerLog = 500` — підстраховка для серверів, що генерують аномально багато Error-записів навіть у вузькому часовому вікні.
-- Той самий ping pre-check і `UnauthorizedAccessException`-обробка, що й у `RemoteResourceService`.
+**Видалення записів:**
 
-### EventLogReader (статичний клас)
+При видаленні активного (`!IsResolved`) запису — `_lastStatus[IP]` скидається на `Online`, щоб трекер коректно відслідковував наступний перехід для цього сервера.
 
-- Спільна логіка читання Windows Event Log (`ReadErrors`, мапінг severity, обрізка повідомлень), параметризована іменем машини (`"."` для локальної).
-- Використовується **лише** локальним `EventLogService`. `RemoteEventLogService` цей клас не використовує (читає через окремий WMI-шлях, описаний вище) — спроба читати remote через `System.Diagnostics.EventLog(name, ip)` виявилась ненадійною на практиці.
+`ClearAllResolved` не робить поелементне `Remove` у VM — делегує сервісу, який через `PublishSnapshot → ApplySnapshot` робить один diff-прохід і один `RecordsView.View.Refresh()` замість N подій `CollectionChanged`.
 
-### FileLoggerService (BackgroundService)
+### RdpMonitorService
 
-- Всі `AppLogEntryMessage` з будь-якого сервісу або ViewModel потрапляють у `ConcurrentQueue`.
-- Окремий flush-loop читає чергу батчами по 50 записів з коалесценс-вікном 200 мс.
-- Rolling-файл змінюється кожен день: `logs/app-2026-06-19.log`, шлях — `AppContext.BaseDirectory/logs` (абсолютний, не залежить від поточної робочої директорії).
-- При зупинці хоста виконує фінальний flush черги.
+- Опитує тільки `Group = "Terminal Servers"`
+- `quser.exe` з `WaitForExitAsync` і таймаутом 30с
+- `Regex` з `matchTimeout: 500ms` — захист від catastrophic backtracking
+- Credentials реєструються у Credential Manager перед запитом і видаляються у `finally`
+- До 3 спроб при `Logon failure` / `Access Denied`
+
+### ZabbixPollerService
+
+- Два режими: API Token (Zabbix 5.4+)
+- Severity `4` (High) і `5` (Disaster)
+- `OperationCanceledException` з `Task.Delay` перехоплюється коректно
+- HTTP-таймаут 30с через `IHttpClientFactory`
+
+### EventLogService
+
+- Інкрементальний reader: наступні цикли читають від часу останнього читання
+- `LastSnapshot` (до 20 записів) захищений `lock(_snapshotLock)` — читається з UI-потоку, пишеться з thread pool
+- Зареєстрований як `AddSingleton<EventLogService>()` + `AddHostedService(sp => sp.GetRequiredService<EventLogService>())` — щоб DI повертав **той самий** екземпляр при запиті конкретного типу
+
+### FileLoggerService
+
+- `SemaphoreSlim _signal` явно `Dispose()`-ується через перевизначення `Dispose()` у `BackgroundService`
+- Flush-loop: батчі по 50 записів, коалесценс-вікно 200 мс
+- Фінальний flush при зупинці хосту
 
 ---
 
-## Messenger та batching повідомлень
+## Messenger та повідомлення
 
-| Повідомлення | Видавець | Підписники | Періодичність |
+| Повідомлення | Видавець | Підписники | Коли |
 |---|---|---|---|
-| `PingBatchResultMessage` | `PingMonitorService` | `PingDashboardViewModel`, `ResourceMonitorViewModel` (badge статусу вузла) | Один раз за весь цикл пінгу (не на кожен сервер) |
-| `ResourceSnapshotUpdatedMessage` | `ResourceMonitorService` | `ResourceMonitorViewModel` (лише коли обрано `localhost`) | Кожні `LocalResourcePollIntervalSeconds` |
-| `EventLogUpdatedMessage` | `EventLogService` | `ResourceMonitorViewModel` (лише коли обрано `localhost`) | При появі нових записів (не публікується, якщо нічого нового) |
+| `PingBatchResultMessage` | `PingMonitorService` | `PingDashboardViewModel`, `UptimeTrackerService`, `ResourceMonitorViewModel` | Один раз за цикл (batch всіх результатів) |
+| `UptimeUpdatedMessage` | `UptimeTrackerService` | `UptimeViewModel` | При кожній зміні інцидентів |
+| `ResourceSnapshotUpdatedMessage` | `ResourceMonitorService` | `ResourceMonitorViewModel` | Кожні `LocalResourcePollIntervalSeconds` |
+| `EventLogUpdatedMessage` | `EventLogService` | `ResourceMonitorViewModel` | При появі нових записів |
 | `RdpSessionsUpdatedMessage` | `RdpMonitorService` | `RdpSessionViewModel` | Кожні `RdpPollIntervalSeconds` |
 | `ZabbixProblemsUpdatedMessage` | `ZabbixPollerService` | `ZabbixViewModel` | Кожні `ZabbixPollIntervalSeconds` |
-| `AppLogEntryMessage` | Будь-який сервіс/ViewModel | `LogsViewModel`, `FileLoggerService` | За подією |
+| `AppLogEntryMessage` | Будь-який сервіс / ViewModel | `LogsViewModel`, `FileLoggerService` | За подією |
 
-> **Чому batching важливий:** до переходу на `PingBatchResultMessage` `PingMonitorService` публікував окреме повідомлення на кожен сервер — при 15+ серверах це означало 15+ окремих `Dispatcher.InvokeAsync` викликів і перемальовувань `DataGrid` за один цикл опитування. Зараз весь цикл збирається в один `ConcurrentBag`, формується один `PingBatchPayload` і публікується одним повідомленням — підписники застосовують усі оновлення за один прохід.
+**Чому batch для Ping важливий:** до переходу на `PingBatchResultMessage` кожен сервер публікував окреме повідомлення — при 15 серверах 15 окремих `Dispatcher.InvokeAsync` і перемальовувань за цикл. Тепер один batch → один прохід у підписниках.
 
-> **CPU/RAM та Event Log для remote-вузлів НЕ йдуть через Messenger** — `RemoteResourceService`/`RemoteEventLogService` викликаються напряму через `await` з `ResourceMonitorViewModel` і повертають результат як значення, а не публікують подію. Це навмисна асиметрія з локальним шляхом (через Messenger): remote-дані потрібні лише одному конкретному ViewModel у конкретний момент, тому публікація через шину повідомлень на всю програму була б зайвою.
+**CPU/RAM та Event Log для remote через direct call, не Messenger** — `RemoteResourceService`/`RemoteEventLogService` повертають результат як значення з `await`, а не публікують подію. Навмисна асиметрія: remote-дані потрібні одному конкретному ViewModel в конкретний момент.
 
 ---
 
-## Запуск та збірка
+## Паралельність та потокобезпека
 
-### Збірка
+| Компонент | Механізм | Причина |
+|-----------|----------|---------|
+| `PingMonitorService._previousStatus` | `ConcurrentDictionary` + `TryUpdate` (CAS) | Main і recovery loop пишуть паралельно |
+| `UptimeTrackerService._records` | `lock(_lock)` | `Receive` (thread pool) + `DeleteRecord` (UI) |
+| `UptimeTrackerService` — I/O | `lock(_saveLock)` | `Receive` + `DeleteRecord` можуть одночасно викликати `SaveToDisk` |
+| `EventLogService._lastSnapshot` | `lock(_snapshotLock)` | Thread pool пише, UI-потік читає |
+| `CredentialStore` — всі поля | `lock(_lock)` | `RdpMonitorService`, `ZabbixPollerService`, UI |
+| `ResourceMonitorViewModel._remoteResourceCts` | `Interlocked.Exchange` | `Dispose()` і `LoadRemoteResourceAsync` з різних потоків |
+| `ResourceMonitorViewModel._disposed` | `volatile bool` | Видима між потоками без lock |
+| `PingMonitorService._mainThrottle` | `SemaphoreSlim(10)` | Обмеження паралельних ICMP з основного циклу |
+| `PingMonitorService._recoveryThrottle` | `SemaphoreSlim(5)` | Окремо від основного — recovery не блокується |
+| `CredentialPromptCoordinator` | `SemaphoreSlim(1,1)` | Один модальний діалог одночасно |
+
+---
+
+## Logging
+
+Rolling-файли у `logs/` поруч із `.exe` (`AppContext.BaseDirectory`):
+
+```
+logs/
+├── app-2026-06-18.log
+├── app-2026-06-19.log
+├── uptime-2026-06.json
+└── uptime-2026-07.json
+```
+
+**Формат App Log:**
+```
+[2026-06-19 10:24:01] [SUCCESS] [PingMonitor]  Kiev-dc1 (192.168.244.86) is back ONLINE. Latency: 1 ms.
+[2026-06-19 10:24:03] [ERROR]   [PingMonitor]  Websvr3 (192.168.244.144) went OFFLINE.
+[2026-06-19 10:24:15] [WARNING] [UptimeTracker] Websvr3 (192.168.244.144) перейшов у стан OFFLINE.
+[2026-06-19 10:31:42] [INFO]    [UptimeTracker] Websvr3 (192.168.244.144) відновлено. Простій: 7хв 27с.
+```
+
+**Формат Uptime JSON** (`logs/uptime-2026-06.json`):
+```json
+[
+  {
+    "ServerName": "Server3",
+    "ServerIp": "192.168.244.1",
+    "ServerGroup": "DataBase Servers",
+    "FellAt": "2026-06-19T10:24:15+03:00",
+    "RecoveredAt": "2026-06-19T10:31:42+03:00"
+  }
+]
+```
+
+> **App Logs** — журнал подій самого AdminConsole. Не плутати з **Event Log** вузлів у вкладці Resource Monitor (там — системні помилки Windows цільових машин).
+
+---
+
+## Залежності
+
+| Пакет | Версія | Призначення |
+|-------|--------|-------------|
+| `CommunityToolkit.Mvvm` | 8.3.2 | `ObservableObject`, `RelayCommand`, `WeakReferenceMessenger` |
+| `MaterialDesignThemes` | 5.1.0 | Material Design 3 UI компоненти |
+| `MaterialDesignColors` | 3.1.0 | Палітра кольорів |
+| `Microsoft.Extensions.Hosting` | 8.0.1 | Generic Host, DI, `BackgroundService` |
+| `Microsoft.Extensions.Http` | 8.0.1 | `IHttpClientFactory` |
+| `Microsoft.Extensions.Configuration.Json` | 8.0.1 | `appsettings.json` |
+| `System.Management` | 8.0.0 | WMI — локальний і remote доступ |
+
+**Вбудовані (Windows Desktop SDK):**
+- `System.Net.NetworkInformation.Ping` — ICMP
+- `System.Diagnostics.PerformanceCounter` — CPU localhost
+- `System.Diagnostics.EventLog` — Event Log localhost
+- `advapi32.dll` P/Invoke — `CredWrite`, `CredRead`, `CredFree`, `CredDelete`
+- `kernel32.dll` P/Invoke — `GlobalMemoryStatusEx`, `RtlZeroMemory`
+
+---
+
+## Збірка та запуск
+
+### Debug (Visual Studio 2022+)
+
+Відкрити `AdminConsole.sln` і натиснути `F5`.
+
+### Build
 
 ```bash
 dotnet build AdminConsole.csproj -c Release
 ```
 
-### Публікація (self-contained)
+### Publish (self-contained)
 
 ```bash
 dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -o ./publish
@@ -361,54 +468,60 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 ./publish/AdminConsole.exe
 ```
 
-або відкрити `AdminConsole.sln` / `AdminConsole.csproj` у Visual Studio 2022+ і запустити (`F5`).
+`appsettings.json` має знаходитись поруч із `.exe`.
 
 ---
 
 ## Вимоги до середовища
 
 | Вимога | Деталі |
-|---|---|
+|--------|--------|
 | **ОС** | Windows 10 / Windows Server 2016 або новіше |
 | **.NET Runtime** | .NET 8 (або self-contained публікація) |
-| **Права** | Член домену; права локального адміністратора для WMI-команд (restart/shutdown, Server Dashboard CPU/RAM/Event Log для віддалених вузлів) |
-| **Мережа** | Доступ до Zabbix API по HTTP/HTTPS; ICMP (ping) до всіх серверів; Named Pipes / NetBIOS до Terminal Servers для `quser`; DCOM/WMI (TCP 135 + динамічний діапазон портів) до Windows-вузлів для Server Dashboard |
+| **Права** | Член домену; локальний адміністратор для WMI-команд (restart/shutdown, remote CPU/RAM/Event Log) |
+| **Мережа** | ICMP до всіх серверів; HTTP/HTTPS до Zabbix API; TCP 445 до Terminal Servers; DCOM/WMI (TCP 135 + динамічні порти) до Windows-вузлів |
 | **quser.exe** | Вбудований у Windows Server та Windows 10 Pro/Enterprise |
-| **Zabbix** | Версія 5.0+ (API token підтримується з 5.4+; для старіших версій — user/password) |
+| **Zabbix** | 5.0+ (API token з 5.4+;  |
+| **PuTTY** (опціонально) | Для SSH через PuTTY; fallback — вбудований `ssh.exe` (OpenSSH) |
 
-### Firewall / мережеві вимоги для RDP-моніторингу
+### Firewall для RDP-моніторингу (`quser`)
 
-`quser /server:<hostname>` використовує Named Pipes через SMB (порт **445**). Підключення по IP замість доменного імені не підтримується (RPC over TCP, зазвичай заблокований).
+- TCP **445** (SMB / Named Pipes) до Terminal Servers
+- `Name` у конфігурації — **доменне ім'я**, не IP
 
-На цільових Terminal Servers має бути відкритий:
-- TCP 445 (SMB / Named Pipes)
+### Firewall для Server Dashboard (WMI/DCOM)
 
-### Firewall / мережеві вимоги для Server Dashboard (CPU/RAM/Event Log віддалених вузлів)
+На цільових машинах:
+- Служба `Windows Management Instrumentation` запущена
+- Правило `Windows Management Instrumentation (DCOM-In)` у `wf.msc` дозволено
+- Поточний користувач AdminConsole має права WMI (членство в `Administrators` або явний WMI namespace security)
 
-WMI/DCOM використовує TCP 135 для початкового підключення, після чого DCOM узгоджує додатковий порт із динамічного діапазону. На цільових машинах:
-- Служба `Windows Management Instrumentation` має бути запущена
-- Файрвол повинен дозволяти вхідні DCOM-з'єднання (правило `Windows Management Instrumentation (DCOM-In)` у `wf.msc`)
-- Поточний користувач `AdminConsole.exe` має мати права WMI на цільовій машині (типово — членство в локальній групі `Administrators` або явний WMI namespace security)
-
-> Якщо WMI недоступний — Server Dashboard коректно показує `"Access denied"` або `"Server is offline or unreachable"` замість краша; пінг-перевірка перед запитом запобігає довгому очікуванню DCOM-таймауту на офлайн-вузлах.
+> Якщо WMI недоступний — показується `"Access denied"` або `"Server is offline"` замість краша. Ping pre-check перед запитом запобігає довгому очікуванню DCOM-таймауту.
 
 ---
 
-## Логування
+## Changelog (останні зміни)
 
-Файли логів зберігаються у папці `logs/` поруч із виконуваним файлом (абсолютний шлях через `AppContext.BaseDirectory`):
+### Нові функції
+- **Uptime & Incidents** — нова вкладка з повним журналом інцидентів, фільтрацією, збереженням на диск та видаленням записів
+- **Recovery Loop** — прискорений пінг (кожні `OfflinePingIntervalSeconds`) тільки для Offline серверів
+- **WMI Force shutdown/restart** — `Win32Shutdown` з Force-флагами (5/6) замість звичайних (1/2)
 
-```text
-logs/
-├── app-2026-06-18.log
-└── app-2026-06-19.log
-```
+### Архітектурні покращення
+- CAS-патерн (`TryUpdate`) замість `_transitionLock + Clear()` у `PingMonitorService`
+- `RunLoopGuardedAsync` — взаємне скасування циклів через `LinkedCancellationTokenSource`
+- `Interlocked.Exchange` для CTS у `ResourceMonitorViewModel` замість non-atomic replace
+- `EventLogReader.IsReachableAsync` — спільний метод замість дублювання у двох сервісах
+- `AppLogEntry.Formatted` — кешується при ініціалізації (immutable record)
+- `CollectionViewSource` diff-оновлення у `ZabbixViewModel` і `UptimeViewModel` замість `Clear()`
 
-Формат запису (приклад):
-
-```text
-[2026-06-19 10:24:01 +03:00] [INF] [RdpMonitor] Tsvr3: знайдено 2 сесій.
-[2026-06-19 10:24:03 +03:00] [ERR] [PingMonitor] Websvr2 (192.168.244.9) went OFFLINE.
-```
-
-> Це **App Logs** — журнал подій самого додатку. Не плутати з **Event Log** вузлів (Server Dashboard), який показує помилки операційної системи цільової машини, а не самого AdminConsole.
+### Виправлені баги
+- `SemaphoreSlim` (`_pingThrottle`, `_recoveryThrottle`, `_signal`) тепер явно `Dispose()`-ується
+- `EventLogService._lastSnapshot` захищений `lock` від race між thread pool і UI-потоком
+- `CredentialStore` — всі поля credentials під `lock`, `RtlZeroMemory` замість `new byte[]` у `finally`
+- `RdpMonitorService` — `Regex` з `matchTimeout: 500ms`
+- `ZabbixApiClient` — `long.TryParse` замість `long.Parse` для `clock`
+- `OpenSsh` — `Process.Start` до логу, не після
+- `ManagementBaseObject outParams` — тепер у `using`
+- Стартовий спам `[SUCCESS] is back ONLINE` прибраний — тихий перехід `Unknown/Checking → Online`
+- `UptimeTrackerService` реєстрація у конструкторі — не пропускає перший `PingBatchResultMessage`
