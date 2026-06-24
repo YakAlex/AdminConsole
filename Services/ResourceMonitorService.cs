@@ -81,10 +81,11 @@ public sealed class ResourceMonitorService : BackgroundService
                 _logger.LogWarning(ex, "ResourceMonitorService: error building snapshot.");
             }
 
-            await Task.Delay(
-                TimeSpan.FromSeconds(_settings.LocalResourcePollIntervalSeconds),
-                stoppingToken)
-                .ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_settings.LocalResourcePollIntervalSeconds), stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { break; }
         }
 
         _logger.LogInformation("ResourceMonitorService stopped.");
@@ -95,8 +96,6 @@ public sealed class ResourceMonitorService : BackgroundService
         _cpuCounter?.Dispose();
         base.Dispose();
     }
-
-    // -------------------------------------------------------------------------
 
     private ResourceSnapshot BuildSnapshot()
     {

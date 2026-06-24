@@ -118,15 +118,13 @@ public sealed class FileLoggerService
             {
                 AutoFlush = false
             };
+
             int written = 0;
             while (_queue.TryDequeue(out var entry) && written < FlushBatchSize)
             {
                 writer.WriteLine(entry.Formatted);
                 written++;
             }
-            
-            while (_queue.TryDequeue(out var extra))
-                writer.WriteLine(extra.Formatted);
 
             writer.Flush();
         }

@@ -73,13 +73,25 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
 
         PublishInitialCheckingState();
 
-        // Запускаємо обидва цикли паралельно.
-        // Task.WhenAll чекає на обидва — якщо один впаде з винятком,
-        // другий продовжує працювати (OperationCanceledException ігнорується).
-        await Task.WhenAll(
-            RunMainLoopAsync(stoppingToken),
-            RunRecoveryLoopAsync(offlineInterval, stoppingToken)
-        ).ConfigureAwait(false);
+        // LinkedCts дозволяє одному циклу скасувати інший при падінні.
+        // Без цього якщо MainLoop впаде з винятком — RecoveryLoop
+        // продовжує крутитись нескінченно і навпаки.
+        using var linkedCts = CancellationTokenSource
+            .CreateLinkedTokenSource(stoppingToken);
+
+        try
+        {
+            await Task.WhenAll(
+                RunLoopGuardedAsync(RunMainLoopAsync(linkedCts.Token),     linkedCts),
+                RunLoopGuardedAsync(RunRecoveryLoopAsync(offlineInterval,
+                    linkedCts.Token),                  linkedCts)
+            ).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PingMonitorService: критична помилка циклу.");
+        }
 
         _logger.LogInformation("PingMonitorService stopped.");
         _messenger.Send(AppLogEntryMessage.Warning(LogSource, "Ping monitor stopped."));
@@ -119,38 +131,52 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
 
     private async Task RunRecoveryLoopAsync(int intervalSec, CancellationToken ct)
     {
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(
+                TimeSpan.FromSeconds(intervalSec),
+                ct).ConfigureAwait(false);
+
+            if (ct.IsCancellationRequested) break;
+            
+            var offlineServers = _servers
+                .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
+                            && st == PingStatus.Offline)
+                .ToList();
+
+            if (offlineServers.Count == 0) continue;
+
+            _logger.LogDebug(
+                "Recovery loop: pinging {Count} offline server(s).",
+                offlineServers.Count);
+
+            await PingServersAsync(offlineServers, _recoveryThrottle, ct)
+                .ConfigureAwait(false);
+        }
+    }
+    
+    // ── Guard для циклів ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Обгортка над циклом: якщо цикл впав з неочікуваним винятком —
+    /// скасовує linkedCts щоб зупинити паралельний цикл,
+    /// потім перекидає виняток щоб Task.WhenAll його побачив.
+    /// OperationCanceledException — нормальне завершення, ігнорується.
+    /// </summary>
+    private static async Task RunLoopGuardedAsync(
+        Task                       loop,
+        CancellationTokenSource    linkedCts)
+    {
         try
         {
-            while (!ct.IsCancellationRequested)
-            {
-                await Task.Delay(
-                    TimeSpan.FromSeconds(intervalSec),
-                    ct).ConfigureAwait(false);
-
-                if (ct.IsCancellationRequested) break;
-
-                // Будуємо список Offline серверів на початку тіку.
-                // Знімок робимо атомарно — якщо між цим і пінгом основний
-                // цикл змінить статус, PingServersAsync все одно запінгує
-                // і коректно оновить _previousStatus.
-                var offlineServers = _servers
-                    .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
-                                && st == PingStatus.Offline)
-                    .ToList();
-
-                if (offlineServers.Count == 0) continue;
-
-                _logger.LogDebug(
-                    "Recovery loop: pinging {Count} offline server(s).",
-                    offlineServers.Count);
-
-                await PingServersAsync(offlineServers, _recoveryThrottle, ct)
-                    .ConfigureAwait(false);
-            }
+            await loop.ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) { }
+        catch (Exception)
         {
-            // Нормальне завершення при StopAsync — ігноруємо.
+            // Падіння одного циклу → зупиняємо другий
+            linkedCts.Cancel();
+            throw;
         }
     }
 
@@ -196,9 +222,12 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         ConcurrentBag<PingResult> bag,
         CancellationToken ct)
     {
-        await throttle.WaitAsync(ct).ConfigureAwait(false);
+        var acquired = false;
         try
         {
+            await throttle.WaitAsync(ct).ConfigureAwait(false);
+            acquired = true;  // слот захоплено — тепер Release() безпечний
+
             PingStatus status;
             long?      latencyMs = null;
 
@@ -258,9 +287,10 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
                 server.Name, server.IP, server.Group,
                 status, latencyMs, DateTimeOffset.Now));
         }
+        catch (OperationCanceledException) { }
         finally
         {
-            throttle.Release();
+            if (acquired) throttle.Release();
         }
     }
 
