@@ -159,9 +159,21 @@ public sealed class RemoteManagementService
             using (os)
             using (var inParams = os.GetMethodParameters("Win32Shutdown"))
             {
-                inParams["Flags"]    = isReboot ? 2 : 1;
+                // 6 = Reboot + Force, 5 = Shutdown + Force
+                inParams["Flags"] = isReboot ? 6 : 5;
                 inParams["Reserved"] = 0;
-                os.InvokeMethod("Win32Shutdown", inParams, null);
+
+                var outParams = os.InvokeMethod("Win32Shutdown", inParams, null);
+
+                if (outParams != null)
+                {
+                    var returnValue = Convert.ToInt32(outParams["ReturnValue"]);
+                    if (returnValue != 0)
+                    {
+                        throw new Exception($"WMI Error Code: {returnValue}. " +
+                                            $"Check permissions, policies, or open applications.");
+                    }
+                }
             }
         }
     }
