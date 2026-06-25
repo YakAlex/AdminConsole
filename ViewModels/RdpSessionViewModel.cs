@@ -8,14 +8,12 @@ using System.Windows;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class RdpSessionViewModel
-    : ObservableObject, IRecipient<RdpSessionsUpdatedMessage>, IRecipient<RdpCredentialsClearedMessage>
+    : ObservableObject,
+      IRecipient<RdpSessionsUpdatedMessage>,
+      IRecipient<RdpCredentialsClearedMessage>,
+      IRecipient<CredentialsChangedMessage>       // ← додаємо новий інтерфейс
 {
-    // ── Observable state ─────────────────────────────────────────────────────
-
-    /// <summary>Flat list of all sessions across all terminal servers.</summary>
     public ObservableCollection<RdpSessionRowViewModel> Sessions { get; } = [];
-
-    /// <summary>One status entry per polled server.</summary>
     public ObservableCollection<ServerPollStatusViewModel> ServerStatuses { get; } = [];
 
     [ObservableProperty] private RdpSessionRowViewModel? _selectedSession;
@@ -23,15 +21,36 @@ public sealed partial class RdpSessionViewModel
     [ObservableProperty] private int    _activeCount;
     [ObservableProperty] private int    _disconnectedCount;
 
+    // Встановлюється при видаленні credentials — блокує успішні повідомлення
+    // що лежали в черзі диспетчера до видалення.
+    // Скидається одразу при отриманні CredentialsChangedMessage(Saved) —
+    // тобто до того як прийдуть результати нового poll.
+    private bool _credentialsCleared;
+
     public RdpSessionViewModel(IMessenger messenger)
     {
         messenger.RegisterAll(this);
     }
-    
+
+    // Скидаємо прапорець як тільки нові credentials збережено —
+    // наступний poll буде від нових credentials і має відображатись нормально.
+    public void Receive(CredentialsChangedMessage message)
+    {
+        if (message.Target != CredentialTarget.Rdp) return;
+        if (message.Action != CredentialAction.Saved) return;
+
+        // Не через Dispatcher — просто скидаємо прапорець.
+        // Він читається тільки всередині InvokeAsync (UI-потік),
+        // тому запис з будь-якого потоку тут безпечний для bool.
+        _credentialsCleared = false;
+    }
+
     public void Receive(RdpCredentialsClearedMessage _)
     {
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
+            _credentialsCleared = true;
+
             Sessions.Clear();
             foreach (var s in ServerStatuses)
                 s.Update(new RdpSessionsPayload(
@@ -45,15 +64,19 @@ public sealed partial class RdpSessionViewModel
         });
     }
 
-    // ── IRecipient ────────────────────────────────────────────────────────────
-
     public void Receive(RdpSessionsUpdatedMessage message)
     {
         var payload = message.Value;
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Remove all existing sessions for this server, then re-add.
+            // Якщо credentials видалено і нові ще не збережено —
+            // ігноруємо будь-які повідомлення (і успішні і з помилками від старого poll).
+            // Як тільки юзер збереже нові credentials — Receive(CredentialsChangedMessage)
+            // скине _credentialsCleared до того як прийде перший результат нового poll.
+            if (_credentialsCleared)
+                return;
+
             var toRemove = Sessions
                 .Where(s => s.ServerIp == payload.ServerIp)
                 .ToList();
@@ -64,7 +87,6 @@ public sealed partial class RdpSessionViewModel
             foreach (var session in payload.Sessions)
                 Sessions.Add(new RdpSessionRowViewModel(session));
 
-            // Update or insert server poll status.
             var statusRow = ServerStatuses
                 .FirstOrDefault(s => s.ServerIp == payload.ServerIp);
 
@@ -77,7 +99,6 @@ public sealed partial class RdpSessionViewModel
 
             statusRow.Update(payload);
 
-            // Recompute totals.
             ActiveCount       = Sessions.Count(s => s.State == RdpSessionState.Active);
             DisconnectedCount = Sessions.Count(s => s.State == RdpSessionState.Disconnected);
 
