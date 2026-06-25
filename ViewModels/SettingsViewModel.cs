@@ -135,7 +135,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         _messenger.Send(AppLogEntryMessage.Info("Settings",
             $"RDP credentials збережено для: {RdpNewUsername.Trim()} — запускаємо опитування серверів…"));
-
+        _messenger.Send(AppLogEntryMessage.Warning("Settings",
+            "Увага: RDP пароль не перевіряється локально. " +
+            "Результат опитування покаже чи credentials коректні."));
+        
         RefreshCredentialState();
     }
     
@@ -200,20 +203,27 @@ private async Task SaveZabbixTokenAsync()
         _credentials.StoreZabbixToken(tokenToSave);
         _credentials.ResetZabbixCancelledFlag();
 
+        // Надсилаємо ОДРАЗУ після збереження — незалежно від результату тесту
+        // і від того чи юзер закриє Settings під час тесту.
+        _messenger.Send(new CredentialsChangedMessage
+        {
+            Target = CredentialTarget.Zabbix,
+            Action = CredentialAction.Saved
+        });
+
         _messenger.Send(AppLogEntryMessage.Info("Settings",
             "Zabbix API токен збережено — перевіряємо з'єднання…"));
 
-        RefreshCredentialState(); // скидає ZabbixNewToken, IsZabbixEditMode = false
+        RefreshCredentialState();
 
-        // Автоматично тестуємо збережений токен — юзер одразу бачить результат
         if (!string.IsNullOrWhiteSpace(_zabbixUrl))
         {
             _testCts?.Cancel();
             _testCts?.Dispose();
             _testCts = new CancellationTokenSource();
 
-            IsTestingZabbix  = true;
-            ZabbixTestResult = string.Empty;
+            IsTestingZabbix   = true;
+            ZabbixTestResult  = string.Empty;
             ZabbixTestSuccess = false;
 
             try
@@ -230,38 +240,19 @@ private async Task SaveZabbixTokenAsync()
                         : $"❌ {error}";
                 });
 
-                _messenger.Send(new CredentialsChangedMessage
-                {
-                    Target = CredentialTarget.Zabbix,
-                    Action = CredentialAction.Saved
-                });
-
                 if (success)
-                {
                     _messenger.Send(AppLogEntryMessage.Success("Settings",
                         $"Zabbix {version} — з'єднання успішне, поллер оновлено."));
-                }
                 else
-                {
                     _messenger.Send(AppLogEntryMessage.Warning("Settings",
                         $"Токен збережено, тест показав помилку: {error}. " +
                         $"Поллер спробує самостійно."));
-                }
             }
             catch (OperationCanceledException) { }
             finally
             {
                 IsTestingZabbix = false;
             }
-        }
-        else
-        {
-            // ZabbixUrl не налаштований — просто повідомляємо поллер без тесту
-            _messenger.Send(new CredentialsChangedMessage
-            {
-                Target = CredentialTarget.Zabbix,
-                Action = CredentialAction.Saved
-            });
         }
     }
 

@@ -121,8 +121,12 @@ public sealed class ZabbixPollerService : BackgroundService
 
                 if (stoppingToken.IsCancellationRequested) break;
 
-                // Credentials можуть з'явитись вперше саме тут (після wake-up)
-                if (!_credentials.HasZabbixCredentials) continue;
+                if (!_credentials.HasZabbixCredentials)
+                {
+                    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                        "Zabbix: credentials відсутні — poll пропущено."));
+                    continue;
+                }
 
                 // Якщо це перший успішний wake-up після старту без credentials —
                 // логуємо запуск і автентифікуємось якщо потрібно
@@ -232,72 +236,75 @@ public sealed class ZabbixPollerService : BackgroundService
 
     private async Task PollAsync(CancellationToken ct)
     {
-        // Читаємо актуальний стан кожного разу — може змінитись після
-        // RequestFreshZabbixTokenAsync між циклами
-        bool useApiToken = _credentials.ZabbixUsesApiToken;
-
-        try
+        while (true)
         {
-            var (_, token) = _credentials.GetZabbix();
-            string auth = useApiToken ? token : _sessionToken ?? string.Empty;
+            bool useApiToken = _credentials.ZabbixUsesApiToken;
 
-            var problems = await _client.GetActiveProblemsAsync(
-                _settings.ZabbixUrl, auth, useApiToken,
-                WatchedSeverities, ct).ConfigureAwait(false);
-
-            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                Problems: problems,
-                ErrorMessage: null,
-                FetchedAt: DateTimeOffset.Now)));
-        }
-        catch (OperationCanceledException) { }
-
-        catch (ZabbixAuthException ex)
-        {
-            // Токен невалідний (видалено адміністратором або змінено)
-            _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
-
-            _credentials.ClearZabbix();
-            _sessionToken = null;
-
-            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                Problems: [],
-                ErrorMessage: "Токен відхилено — потрібна повторна авторизація",
-                FetchedAt: DateTimeOffset.Now)));
-
-            // Одразу показуємо діалог — не чекаємо наступного циклу
-            using var dialogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            dialogCts.CancelAfter(TimeSpan.FromMinutes(5)); // таймаут діалогу — на випадок якщо юзер пішов
-            bool obtained = await RequestFreshZabbixTokenAsync(
-                reason: ex.Message,
-                ct: dialogCts.Token).ConfigureAwait(false);
-
-            if (!obtained)
+            try
             {
-                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    "Новий токен не отримано — oпитування призупинено до перезапуску."));
+                var (_, token) = _credentials.GetZabbix();
+                string auth = useApiToken ? token : _sessionToken ?? string.Empty;
+
+                var problems = await _client.GetActiveProblemsAsync(
+                    _settings.ZabbixUrl, auth, useApiToken,
+                    WatchedSeverities, ct).ConfigureAwait(false);
+
+                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                    Problems: problems,
+                    ErrorMessage: null,
+                    FetchedAt: DateTimeOffset.Now)));
+                
+                return; 
             }
-        }
+            catch (OperationCanceledException) 
+            { 
+                return; 
+            }
+            catch (ZabbixAuthException ex)
+            {
+                _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
 
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "ZabbixPollerService: poll failed.");
-            _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                $"Zabbix poll failed: {ex.Message}"));
+                _credentials.ClearZabbix();
+                _sessionToken = null;
 
-            // Надсилаємо повідомлення з Problems: null — VM збереже старий список
-            // і покаже тільки ErrorMessage. Очищати проблеми при мережевому збої
-            // не можна — це дає хибний сигнал "все гаразд".
-            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                Problems: null,
-                ErrorMessage: $"Помилка зв'язку: {ex.Message}",
-                FetchedAt: DateTimeOffset.Now)));
+                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                    Problems: [],
+                    ErrorMessage: "Токен відхилено — потрібна повторна авторизація",
+                    FetchedAt: DateTimeOffset.Now)));
 
-            // Ре-аутентифікація лише при user/password режимі І лише якщо
-            // це не мережева помилка (HttpRequestException = таймаут, недоступність).
-            // При api-token режимі або мережевих збоях — не потрібна.
-            if (!useApiToken && ex is not System.Net.Http.HttpRequestException)
-                await AuthenticateAsync(ct).ConfigureAwait(false);
+                using var dialogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                dialogCts.CancelAfter(TimeSpan.FromMinutes(5)); 
+                
+                bool obtained = await RequestFreshZabbixTokenAsync(
+                    reason: ex.Message,
+                    ct: dialogCts.Token).ConfigureAwait(false);
+
+                if (!obtained)
+                {
+                    _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                        "Новий токен не отримано — oпитування призупинено до перезапуску або зміни в налаштуваннях."));
+                    return;
+                }
+
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    "Новий токен отримано через діалог — перевіряємо..."));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ZabbixPollerService: poll failed.");
+                _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                    $"Zabbix poll failed: {ex.Message}"));
+
+                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                    Problems: null,
+                    ErrorMessage: $"Помилка зв'язку: {ex.Message}",
+                    FetchedAt: DateTimeOffset.Now)));
+
+                if (!useApiToken && ex is not System.Net.Http.HttpRequestException)
+                    await AuthenticateAsync(ct).ConfigureAwait(false);
+                
+                return;
+            }
         }
     }
 
