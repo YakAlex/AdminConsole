@@ -229,22 +229,8 @@ public sealed class RdpMonitorService : BackgroundService
 
     // ── Опитування одного сервера ────────────────────────────────────────────
 
-    private const int MaxCredentialRetries = 3;
-
-    private async Task PollServerAsync(ServerEntry server, CancellationToken ct)
-    {
-        for (int attempt = 0; attempt < MaxCredentialRetries; attempt++)
-        {
-            var retry = await PollServerOnceAsync(server, ct).ConfigureAwait(false);
-            if (retry is null)
-                return;
-
-            bool gotNew = await RequestFreshRdpCredentialsAsync(retry, ct)
-                .ConfigureAwait(false);
-            if (!gotNew)
-                return;
-        }
-    }
+    private Task PollServerAsync(ServerEntry server, CancellationToken ct)
+        => PollServerOnceAsync(server, ct);
 
     /// <returns>null — завершено; non-null — причина повторного запиту credentials.</returns>
     private async Task<string?> PollServerOnceAsync(ServerEntry server, CancellationToken ct)
@@ -253,6 +239,15 @@ public sealed class RdpMonitorService : BackgroundService
 
         try
         {
+            // Перевіряємо ще раз перед poll — паралельний сервер міг очистити credentials
+            if (!_credentials.HasRdpCredentials)
+            {
+                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
+                    server.Name, server.IP, Sessions: [],
+                    ErrorMessage: "Credentials недоступні — оновіть в Settings")));
+                return null;
+            }
+
             var (user, pass) = _credentials.GetRdp();
 
             if (!_credentials.StoreQuserSession(hostname, user, pass))
@@ -276,10 +271,14 @@ public sealed class RdpMonitorService : BackgroundService
                 allText.Contains("невірн"))
             {
                 _credentials.ClearRdp();
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"{hostname}: невірний логін або пароль — оновіть credentials в Settings."));
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Невірний логін або пароль — оновіть credentials")));
-                return "невірний пароль або пароль змінено";
+                    ErrorMessage: "Невірний логін або пароль — оновіть credentials в Settings")));
+                return null;  // ← НЕ відкриваємо діалог тут
+                //   PollAllServersAsync наступного разу побачить HasRdpCredentials=false
+                //   і запитає credentials через діалог один раз для всіх серверів
             }
 
             if (allText.Contains("access is denied") ||
@@ -287,11 +286,11 @@ public sealed class RdpMonitorService : BackgroundService
             {
                 _credentials.ClearRdp();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"{hostname}: Access Denied — можливо пароль змінено. Запитуємо нові credentials…"));
+                    $"{hostname}: Access Denied — можливо пароль змінено. Оновіть credentials в Settings."));
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Access Denied — оновіть пароль або перевір права")));
-                return "Access Denied (можливо пароль змінено)";
+                    ErrorMessage: "Access Denied — оновіть credentials в Settings")));
+                return null;
             }
 
             if (allText.Contains("rpc server is unavailable") ||
