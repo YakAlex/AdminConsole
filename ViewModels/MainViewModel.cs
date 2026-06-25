@@ -82,7 +82,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         _userSettings.Current.CloseToTray = Settings.CloseToTray;
         _userSettings.Save();
-        Settings.Dispose();
+        Settings.CancelPendingTest();
         IsSettingsOpen = false;
     }
 

@@ -209,6 +209,17 @@ public partial class App : Application
 
         try
         {
+            _host.Services
+                .GetRequiredService<SettingsViewModel>()
+                .Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] SettingsViewModel dispose error: {ex.Message}");
+        }
+
+        try
+        {
             _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
         }
         catch (Exception ex)

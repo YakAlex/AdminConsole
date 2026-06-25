@@ -353,13 +353,27 @@ private async Task SaveZabbixTokenAsync()
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
-    public void Dispose()
+    /// <summary>
+    /// Скасовує активний HTTP тест при закритті Settings overlay.
+    /// Не скидає стан VM — Singleton живе весь час роботи програми.
+    /// </summary>
+    public void CancelPendingTest()
     {
         _testCts?.Cancel();
         _testCts?.Dispose();
         _testCts = null;
+        // Скидаємо спінер якщо тест ще йшов коли юзер закрив Settings
+        IsTestingZabbix  = false;
+        ZabbixTestResult = string.Empty;
+    }
 
-        // Затираємо тимчасовий пароль з пам'яті
+    /// <summary>
+    /// Фінальне очищення при виході з програми.
+    /// Викликається з App.xaml.cs OnExit.
+    /// </summary>
+    public void Dispose()
+    {
+        CancelPendingTest();
         _rdpNewPassword = string.Empty;
         ZabbixNewToken  = string.Empty;
     }

@@ -69,27 +69,32 @@ public sealed class ZabbixPollerService : BackgroundService
             return;
         }
 
-        // Перший запуск — отримати credentials якщо немає
-        bool ready = await EnsureCredentialsAsync(stoppingToken);
-        if (!ready) return;
-
-        LogStarted();
-
-        // Якщо user/password — автентифікуємось одразу
-        if (!_credentials.ZabbixUsesApiToken)
+        // Якщо credentials немає і юзер скасував діалог при старті —
+        // не виходимо з ExecuteAsync, а входимо в цикл очікування.
+        // Коли юзер збереже токен через Settings → CredentialsChangedMessage
+        // прокине delayCts → цикл зробить poll з новими credentials.
+        if (!_credentials.HasZabbixCredentials && !_credentials.UserCancelledZabbixPrompt)
         {
-            await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
-            if (_sessionToken is null) return;
+            bool ready = await EnsureCredentialsAsync(stoppingToken);
+            if (!ready && stoppingToken.IsCancellationRequested) return;
+            // Якщо скасував діалог (ready=false) але програма ще працює —
+            // падаємо в основний цикл і чекаємо credentials через Settings.
         }
 
-        // Перший poll одразу
-        await PollAsync(stoppingToken).ConfigureAwait(false);
+        // Credentials є (або щойно отримали) — запускаємось повноцінно
+        if (_credentials.HasZabbixCredentials)
+        {
+            LogStarted();
 
-        // Основний loop.
-        // try/catch OperationCanceledException — Task.Delay кидає його при
-        // StopAsync. Без catch він піде через async void у AppDomain.
-        // Перевірка IsCancellationRequested після Delay — захист від ситуації
-        // коли токен скасовується між завершенням Delay і викликом PollAsync.
+            if (!_credentials.ZabbixUsesApiToken)
+            {
+                await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
+                if (_sessionToken is null && stoppingToken.IsCancellationRequested) return;
+            }
+
+            await PollAsync(stoppingToken).ConfigureAwait(false);
+        }
+
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -116,12 +121,24 @@ public sealed class ZabbixPollerService : BackgroundService
 
                 if (stoppingToken.IsCancellationRequested) break;
 
+                // Credentials можуть з'явитись вперше саме тут (після wake-up)
+                if (!_credentials.HasZabbixCredentials) continue;
+
+                // Якщо це перший успішний wake-up після старту без credentials —
+                // логуємо запуск і автентифікуємось якщо потрібно
+                if (!_credentials.ZabbixUsesApiToken && _sessionToken is null)
+                {
+                    LogStarted();
+                    await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
+                    if (_sessionToken is null) continue;
+                }
+
                 await PollAsync(stoppingToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
-            // Ignored
+            // Нормальне завершення при StopAsync — ігноруємо.
         }
         finally
         {
