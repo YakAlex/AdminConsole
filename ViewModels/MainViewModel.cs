@@ -13,6 +13,7 @@ public sealed partial class MainViewModel : ObservableObject
     public RdpSessionViewModel      RdpSessions     { get; }
     public ZabbixViewModel          Zabbix          { get; }
     public LogsViewModel            Logs            { get; }
+    public SettingsViewModel        Settings        { get; }
 
     private readonly UserSettingsService _userSettings;
 
@@ -29,22 +30,6 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSettingsOpen = false;
 
-    /// <summary>
-    /// Прив'язується до CheckBox у Settings overlay.
-    /// При зміні — одразу зберігає на диск.
-    /// </summary>
-    public bool CloseToTray
-    {
-        get => _userSettings.Current.CloseToTray;
-        set
-        {
-            if (_userSettings.Current.CloseToTray == value) return;
-            _userSettings.Current.CloseToTray = value;
-            _userSettings.Save();
-            OnPropertyChanged();
-        }
-    }
-
     public MainViewModel(
         PingDashboardViewModel   pingDashboard,
         UptimeViewModel          uptime,
@@ -52,6 +37,7 @@ public sealed partial class MainViewModel : ObservableObject
         RdpSessionViewModel      rdpSessions,
         ZabbixViewModel          zabbix,
         LogsViewModel            logs,
+        SettingsViewModel        settings,
         UserSettingsService      userSettings)
     {
         PingDashboard   = pingDashboard;
@@ -60,11 +46,9 @@ public sealed partial class MainViewModel : ObservableObject
         RdpSessions     = rdpSessions;
         Zabbix          = zabbix;
         Logs            = logs;
+        Settings        = settings;
         _userSettings   = userSettings;
 
-        // Ініціалізуємо через NavigateTo щоб CurrentPageTitle
-        // завжди був синхронізований з CurrentView,
-        // навіть якщо порядок вкладок зміниться у майбутньому.
         NavigateTo("0");
     }
 
@@ -86,10 +70,21 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenSettings() => IsSettingsOpen = true;
+    private void OpenSettings()
+    {
+        Settings.RefreshCredentialState();
+        Settings.LoadCloseToTray(_userSettings.Current.CloseToTray);
+        IsSettingsOpen = true;
+    }
 
     [RelayCommand]
-    private void CloseSettings() => IsSettingsOpen = false;
+    private void CloseSettings()
+    {
+        _userSettings.Current.CloseToTray = Settings.CloseToTray;
+        _userSettings.Save();
+        Settings.Dispose();
+        IsSettingsOpen = false;
+    }
 
     public void SetStatusBarText(string text)
     {

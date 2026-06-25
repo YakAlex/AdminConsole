@@ -8,10 +8,12 @@ namespace AdminConsole.Views;
 public partial class MainWindow : Window, ICredentialPrompt
 {
     private readonly MainViewModel _viewModel;
+    private readonly SettingsViewModel _settingsVm;
     private TaskbarIcon? _trayIcon;
-    public MainWindow(MainViewModel viewModel, IDialogService dialogService)
+    public MainWindow(MainViewModel viewModel,SettingsViewModel settingsVm, IDialogService dialogService)
     {   
         _viewModel = viewModel;
+        _settingsVm = settingsVm;
         DataContext = viewModel;
         InitializeComponent();
         if (dialogService is OverlayDialogService overlay)
@@ -160,13 +162,22 @@ public partial class MainWindow : Window, ICredentialPrompt
 
     private bool _isExiting = false;
 
+    // ── PasswordBox handler ───────────────────────────────────────────────────
+
+    // PasswordBox не підтримує стандартний {Binding} з безпекових міркувань WPF.
+    // Тому передаємо пароль напряму з code-behind у SettingsViewModel.
+    private void RdpPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.PasswordBox pb)
+            _settingsVm.SetRdpPassword(pb.Password);
+    }
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         // Якщо закриття ініційовано з меню трею або Shutdown() — не перехоплюємо
         if (_isExiting) return;
 
         // Читаємо налаштування через ViewModel — єдине джерело правди
-        var closeToTray = (_viewModel?.CloseToTray) ?? true;
+        var closeToTray = (_viewModel?.Settings.CloseToTray) ?? true;
 
         if (closeToTray)
         {

@@ -145,6 +145,7 @@ public partial class App : Application
         services.AddSingleton<ZabbixViewModel>();
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<UptimeViewModel>();
+        services.AddSingleton<SettingsViewModel>();
     }
 
     private static void RegisterViews(IServiceCollection services)

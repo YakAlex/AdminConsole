@@ -7,6 +7,7 @@
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:viewModels="clr-namespace:AdminConsole.ViewModels"
     xmlns:views="clr-namespace:AdminConsole.Views"
+    xmlns:converters="clr-namespace:AdminConsole.Converters"
     mc:Ignorable="d"
     Icon="pack://application:,,,/Resources/icon.ico"
     Title="Admin Console"
@@ -47,6 +48,7 @@
             <views:LogsView />
         </DataTemplate>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
     </Window.Resources>
 
     <!--
@@ -335,102 +337,511 @@
             Той самий підхід що DialogOverlay — Grid шар з ZIndex.
             Закривається кнопкою або кліком на темний фон.
         -->
-        <Grid Grid.Row="0" Grid.RowSpan="3"
-              Panel.ZIndex="99"
-              Visibility="{Binding IsSettingsOpen,
-                           Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid x:Name="SettingsOverlay"
+              Grid.Row="0" Grid.RowSpan="3"
+              Panel.ZIndex="90">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSettingsOpen}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
 
-            <!-- Темний фон — клік закриває overlay -->
+            <!-- Темний фон — клік закриває Settings -->
             <Rectangle Fill="#BB000000"
                        Cursor="Arrow">
                 <Rectangle.InputBindings>
                     <MouseBinding MouseAction="LeftClick"
-                                  Command="{Binding CloseSettingsCommand}" />
+                                  Command="{Binding CloseSettingsCommand}"/>
                 </Rectangle.InputBindings>
             </Rectangle>
 
-            <!-- Панель налаштувань -->
-            <Border Width="360"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
+            <!-- Панель Settings -->
+            <Border Width="420"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Stretch"
                     Background="#FF2C3E44"
-                    CornerRadius="8"
-                    Padding="28,24">
-                <StackPanel>
+                    BorderBrush="#FF37474F"
+                    BorderThickness="1,0,0,0"
+                    Padding="24,20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                    <!-- Заголовок -->
-                    <DockPanel Margin="0,0,0,20">
-                        <materialDesign:PackIcon Kind="Cog"
-                                                 Width="24" Height="24"
-                                                 Foreground="#FF80CBC4"
-                                                 VerticalAlignment="Center" />
-                        <TextBlock Text="Налаштування"
-                                   Foreground="White"
-                                   FontSize="16" FontWeight="SemiBold"
-                                   Margin="10,0,0,0"
-                                   VerticalAlignment="Center" />
-                        <!-- Кнопка закрити -->
+                    <!-- Заголовок Settings -->
+                    <DockPanel Grid.Row="0" Margin="0,0,0,20">
                         <Button DockPanel.Dock="Right"
                                 Command="{Binding CloseSettingsCommand}"
-                                HorizontalAlignment="Right"
-                                Width="28" Height="28"
-                                Cursor="Hand"
-                                Background="Transparent"
-                                BorderThickness="0">
+                                Cursor="Hand" Padding="6">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
-                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="14">
+                                    <Border x:Name="Bd" Background="Transparent"
+                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
                                         <materialDesign:PackIcon Kind="Close"
-                                                                 Width="16" Height="16"
-                                                                 Foreground="#FF80CBC4"
-                                                                 HorizontalAlignment="Center"
-                                                                 VerticalAlignment="Center" />
+                                                                 Width="18" Height="18"
+                                                                 Foreground="#88FFFFFF"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
+                                            <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="Cog" Width="20" Height="20"
+                                                     Foreground="#FF80CBC4"
+                                                     VerticalAlignment="Center"/>
+                            <TextBlock Text="Settings" Foreground="White"
+                                       FontSize="16" FontWeight="Medium"
+                                       Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </DockPanel>
 
-                    <Separator Background="#33FFFFFF" Margin="0,0,0,20" />
+                    <!-- Контент Settings — скролиться якщо не влізає -->
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
 
-                    <!-- Секція: Поведінка при закритті -->
-                    <TextBlock Text="ПОВЕДІНКА ПРИ ЗАКРИТТІ"
-                               Foreground="#FF80CBC4"
-                               FontSize="14" FontWeight="Medium"
-                               Margin="0,0,0,12" />
+                            <!-- ══ RDP Credentials ══════════════════════════════════════════ -->
+                            <TextBlock Text="RDP / quser" Foreground="#FF80CBC4"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Margin="0,0,0,8" />
 
-                    <Border Background="#22FFFFFF"
-                            CornerRadius="6"
-                            Padding="16,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                            <Border Background="#1AFFFFFF" CornerRadius="6"
+                                    Padding="14,10" Margin="0,0,0,4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Column="0" 
-                                       Text="Згортати у трей при закритті"
-                                       VerticalAlignment="Center"
-                                       Foreground="White"
-                                       FontSize="14" />
- 
-                            <ToggleButton Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          IsChecked="{Binding CloseToTray, Mode=TwoWay}"
-                                          Style="{StaticResource MaterialDesignSwitchToggleButton}">
-                                <ToggleButton.LayoutTransform>
-                                    <ScaleTransform ScaleX="0.8" ScaleY="0.8" />
-                                </ToggleButton.LayoutTransform>
-                            </ToggleButton>
-                        </Grid>
-                    </Border>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
 
-                </StackPanel>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Foreground="#FFECEFF1" FontSize="13"
+                                                       Visibility="{Binding Settings.HasRdpCredentials,
+                                                           Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Run Text="Логін: " Foreground="#FF80CBC4"/>
+                                                <Run Text="{Binding Settings.RdpUsername, Mode=OneWay}"
+                                                     FontWeight="SemiBold"/>
+                                            </TextBlock>
+                                            <TextBlock Text="Не налаштовано" Foreground="#66FFFFFF"
+                                                       FontSize="13" FontStyle="Italic">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Settings.HasRdpCredentials}"
+                                                                         Value="False">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="1"
+                                                Command="{Binding Settings.EnterRdpEditModeCommand}"
+                                                Margin="8,0,4,0" Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.IsRdpEditMode}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#2280CBC4"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Змінити" Foreground="#FF80CBC4" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+
+                                        <Button Grid.Column="2"
+                                                Command="{Binding Settings.ClearRdpCredentialsCommand}"
+                                                Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.HasRdpCredentials}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#22F44336"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Очистити" Foreground="#FFEF5350" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#44F44336"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+
+                                    <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.IsRdpEditMode}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+
+                                        <TextBox Text="{Binding Settings.RdpNewUsername,
+                                                     UpdateSourceTrigger=PropertyChanged}"
+                                                 Foreground="White" Background="#22FFFFFF"
+                                                 BorderBrush="#44FFFFFF" BorderThickness="1"
+                                                 Padding="8,6" FontSize="12" Margin="0,0,0,6"
+                                                 materialDesign:HintAssist.Hint="DOMAIN\username"
+                                                 materialDesign:HintAssist.Foreground="#66FFFFFF"/>
+
+                                        <PasswordBox x:Name="RdpPasswordBox"
+                                                     PasswordChanged="RdpPasswordBox_PasswordChanged"
+                                                     Foreground="White" Background="#22FFFFFF"
+                                                     BorderBrush="#44FFFFFF" BorderThickness="1"
+                                                     Padding="8,6" FontSize="12" Margin="0,0,0,10"
+                                                     materialDesign:HintAssist.Hint="Пароль"
+                                                     materialDesign:HintAssist.Foreground="#66FFFFFF"/>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Command="{Binding Settings.SaveRdpCredentialsCommand}"
+                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#2280CBC4"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Text="Зберегти" Foreground="#FF80CBC4"
+                                                                       FontSize="12" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                            <Button Command="{Binding Settings.CancelRdpEditCommand}"
+                                                    Padding="12,6" Cursor="Hand">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#1AFFFFFF"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Text="Скасувати" Foreground="#88FFFFFF" FontSize="12"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#2AFFFFFF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Роздільник -->
+                            <Border Height="1" Background="#1AFFFFFF" Margin="0,12,0,12"/>
+
+                            <!-- ══ Zabbix Credentials ════════════════════════════════════════ -->
+                            <TextBlock Text="Zabbix API" Foreground="#FF80CBC4"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Margin="0,0,0,8"/>
+
+                            <Border Background="#1AFFFFFF" CornerRadius="6"
+                                    Padding="14,10" Margin="0,0,0,4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Foreground="#FFECEFF1" FontSize="13"
+                                                       Visibility="{Binding Settings.HasZabbixCredentials,
+                                                           Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Run Text="Токен: " Foreground="#FF80CBC4"/>
+                                                <Run Text="{Binding Settings.ZabbixTokenMasked, Mode=OneWay}"
+                                                     FontFamily="Consolas, Courier New" FontWeight="SemiBold"/>
+                                            </TextBlock>
+                                            <TextBlock Text="Не налаштовано" Foreground="#66FFFFFF"
+                                                       FontSize="13" FontStyle="Italic">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Settings.HasZabbixCredentials}"
+                                                                         Value="False">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="1"
+                                                Command="{Binding Settings.EnterZabbixEditModeCommand}"
+                                                Margin="8,0,4,0" Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.IsZabbixEditMode}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#2280CBC4"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Змінити" Foreground="#FF80CBC4" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+
+                                        <Button Grid.Column="2"
+                                                Command="{Binding Settings.ClearZabbixCredentialsCommand}"
+                                                Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.HasZabbixCredentials}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#22F44336"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Очистити" Foreground="#FFEF5350" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#44F44336"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+
+                                    <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.IsZabbixEditMode}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+
+                                        <TextBox Text="{Binding Settings.ZabbixNewToken,
+                                                     UpdateSourceTrigger=PropertyChanged}"
+                                                 Foreground="White" Background="#22FFFFFF"
+                                                 BorderBrush="#44FFFFFF" BorderThickness="1"
+                                                 Padding="8,6" FontSize="12" Margin="0,0,0,8"
+                                                 FontFamily="Consolas, Courier New"
+                                                 materialDesign:HintAssist.Hint="API токен Zabbix"
+                                                 materialDesign:HintAssist.Foreground="#66FFFFFF"/>
+
+                                        <TextBlock Text="{Binding Settings.ZabbixTestResult, Mode=OneWay}"
+                                                   FontSize="12" Margin="0,0,0,8"
+                                                   TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#FFEF5350"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.ZabbixTestSuccess}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FF4CAF50"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Settings.ZabbixTestResult}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Command="{Binding Settings.SaveZabbixTokenCommand}"
+                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#2280CBC4"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Text="Зберегти" Foreground="#FF80CBC4"
+                                                                       FontSize="12" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+
+                                            <Button Command="{Binding Settings.TestZabbixConnectionCommand}"
+                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand"
+                                                    IsEnabled="{Binding Settings.IsTestingZabbix,
+                                                        Converter={StaticResource InverseBoolConverter}}">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#22FF9800"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <materialDesign:PackIcon Kind="Loading"
+                                                                    Width="14" Height="14"
+                                                                    Foreground="#FFFFA726"
+                                                                    VerticalAlignment="Center"
+                                                                    Margin="0,0,6,0">
+                                                                    <materialDesign:PackIcon.Style>
+                                                                        <Style TargetType="materialDesign:PackIcon">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Settings.IsTestingZabbix}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </materialDesign:PackIcon.Style>
+                                                                </materialDesign:PackIcon>
+                                                                <TextBlock Foreground="#FFFFA726" FontSize="12">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Text" Value="Перевірити"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Settings.IsTestingZabbix}" Value="True">
+                                                                                    <Setter Property="Text" Value="Перевіряємо…"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#44FF9800"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsEnabled" Value="False">
+                                                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+
+                                            <Button Command="{Binding Settings.CancelZabbixEditCommand}"
+                                                    Padding="12,6" Cursor="Hand">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#1AFFFFFF"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Text="Скасувати" Foreground="#88FFFFFF" FontSize="12"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#2AFFFFFF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Роздільник -->
+                            <Border Height="1" Background="#1AFFFFFF" Margin="0,12,0,12"/>
+
+                            <!-- ══ Загальні налаштування ══════════════════════════════════════ -->
+                            <TextBlock Text="Загальні" Foreground="#FF80CBC4"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Margin="0,0,0,8"/>
+
+                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="14,10">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ToggleButton IsChecked="{Binding Settings.CloseToTray}"
+                                                  Margin="0,0,10,0"
+                                                  Style="{DynamicResource MaterialDesignSwitchToggleButton}"/>
+                                    <StackPanel>
+                                        <TextBlock Text="Згортати у трей при закритті"
+                                                   Foreground="#FFECEFF1" FontSize="13"/>
+                                        <TextBlock Text="Програма залишається активною у системному треї"
+                                                   Foreground="#66FFFFFF" FontSize="11"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </Border>
         </Grid>
 
