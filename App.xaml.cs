@@ -129,7 +129,8 @@ public partial class App : Application
         services.AddSingleton<RemoteEventLogService>();
         services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();
-        services.AddSingleton<CredentialStore>();         
+        services.AddSingleton<CredentialStore>();
+        services.AddSingleton<RdpCredentialValidator>();
         services.AddSingleton<UserSettingsService>();
         services.AddSingleton<OverlayDialogService>();
         services.AddSingleton<IDialogService>(sp =>

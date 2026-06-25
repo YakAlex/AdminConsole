@@ -544,17 +544,51 @@
 
                                         <StackPanel Orientation="Horizontal">
                                             <Button Command="{Binding Settings.SaveRdpCredentialsCommand}"
-                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand">
+                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand"
+                                                    IsEnabled="{Binding Settings.IsValidatingRdp,
+                                                        Converter={StaticResource InverseBoolConverter}}">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
                                                         <Border x:Name="Bd" Background="#2280CBC4"
                                                                 CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                            <TextBlock Text="Зберегти" Foreground="#FF80CBC4"
-                                                                       FontSize="12" FontWeight="SemiBold"/>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <materialDesign:PackIcon Kind="Loading"
+                                                                    Width="14" Height="14"
+                                                                    Foreground="#FF80CBC4"
+                                                                    VerticalAlignment="Center"
+                                                                    Margin="0,0,6,0">
+                                                                    <materialDesign:PackIcon.Style>
+                                                                        <Style TargetType="materialDesign:PackIcon">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Settings.IsValidatingRdp}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </materialDesign:PackIcon.Style>
+                                                                </materialDesign:PackIcon>
+                                                                <TextBlock Foreground="#FF80CBC4"
+                                                                           FontSize="12" FontWeight="SemiBold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Text" Value="Зберегти"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Settings.IsValidatingRdp}" Value="True">
+                                                                                    <Setter Property="Text" Value="Перевіряємо…"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </StackPanel>
                                                         </Border>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsEnabled" Value="False">
+                                                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
                                                             </Trigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>
@@ -577,6 +611,25 @@
                                                 </Button.Template>
                                             </Button>
                                         </StackPanel>
+
+                                        <!-- Результат валідації RDP — аналогічно до ZabbixTestResult -->
+                                        <TextBlock Text="{Binding Settings.RdpValidationResult, Mode=OneWay}"
+                                                   FontSize="12" Margin="0,8,0,0"
+                                                   TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#FFEF5350"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.RdpValidationSuccess}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FF4CAF50"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Settings.RdpValidationResult}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </Grid>
                             </Border>

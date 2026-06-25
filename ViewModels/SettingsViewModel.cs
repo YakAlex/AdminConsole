@@ -10,6 +10,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly CredentialStore  _credentials;
     private readonly ZabbixApiClient  _zabbixClient;
+    private readonly RdpCredentialValidator _rdpValidator;
     private readonly IMessenger       _messenger;
     private readonly string           _zabbixUrl;
 
@@ -23,6 +24,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool   _hasRdpCredentials;
     [ObservableProperty] private bool   _isRdpEditMode;
     [ObservableProperty] private string _rdpNewUsername     = string.Empty;
+    [ObservableProperty] private bool   _isValidatingRdp;
+    [ObservableProperty] private string _rdpValidationResult  = string.Empty;
+    [ObservableProperty] private bool   _rdpValidationSuccess;
 
     // Пароль не зберігаємо у VM як ObservableProperty —
     // він приходить з PasswordBox через SetRdpPassword() з code-behind.
@@ -39,7 +43,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _zabbixTestResult     = string.Empty;
     [ObservableProperty] private bool   _zabbixTestSuccess;
 
-    private CancellationTokenSource? _testCts;
+    private CancellationTokenSource? _rdpValidationCts;
+    private CancellationTokenSource? _zabbixTestCts;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -47,10 +52,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         CredentialStore  credentials,
         ZabbixApiClient  zabbixClient,
         IMessenger       messenger,
+        RdpCredentialValidator rdpValidator,
         Microsoft.Extensions.Options.IOptions<Configuration.MonitoringSettings> settings)
     {
         _credentials  = credentials;
         _zabbixClient = zabbixClient;
+        _rdpValidator = rdpValidator;
         _messenger    = messenger;
         _zabbixUrl    = settings.Value.ZabbixUrl;
 
@@ -75,6 +82,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         IsZabbixEditMode = false;
         RdpNewUsername   = string.Empty;
         _rdpNewPassword  = string.Empty;
+        RdpValidationResult  = string.Empty;
+        RdpValidationSuccess = false;
         ZabbixNewToken   = string.Empty;
         ZabbixTestResult = string.Empty;
     }
@@ -99,7 +108,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SaveRdpCredentials()
+    private async Task SaveRdpCredentialsAsync()
     {
         if (string.IsNullOrWhiteSpace(RdpNewUsername))
         {
@@ -115,31 +124,64 @@ public sealed partial class SettingsViewModel : ObservableObject
             return;
         }
 
-        // Зберігаємо у Credential Manager
-        _credentials.StoreRdp(RdpNewUsername.Trim(), _rdpNewPassword);
+        var usernameToSave = RdpNewUsername.Trim();
+        var passwordToSave = _rdpNewPassword;
 
-        // Критично: скидаємо прапорець скасування —
-        // без цього RdpMonitorService не відновиться якщо юзер раніше
-        // натиснув Cancel при першому старті програми.
-        _credentials.ResetRdpCancelledFlag();
+        _rdpValidationCts?.Cancel();
+        _rdpValidationCts?.Dispose();
+        _rdpValidationCts = new CancellationTokenSource();
 
-        // Негайно затираємо пароль з пам'яті VM
-        _rdpNewPassword = string.Empty;
+        IsValidatingRdp      = true;
+        RdpValidationResult  = string.Empty;
+        RdpValidationSuccess = false;
 
-        // Публікуємо повідомлення — RdpMonitorService прокинеться і запустить poll
-        _messenger.Send(new CredentialsChangedMessage
+        try
         {
-            Target = CredentialTarget.Rdp,
-            Action = CredentialAction.Saved
-        });
+            var (success, error) = await _rdpValidator
+                .ValidateAsync(usernameToSave, passwordToSave, _rdpValidationCts.Token);
 
-        _messenger.Send(AppLogEntryMessage.Info("Settings",
-            $"RDP credentials збережено для: {RdpNewUsername.Trim()} — запускаємо опитування серверів…"));
-        _messenger.Send(AppLogEntryMessage.Warning("Settings",
-            "Увага: RDP пароль не перевіряється локально. " +
-            "Результат опитування покаже чи credentials коректні."));
-        
-        RefreshCredentialState();
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                RdpValidationSuccess = success;
+                RdpValidationResult  = success
+                    ? "✅ Credentials підтверджено"
+                    : $"❌ {error}";
+            });
+
+            if (!success)
+            {
+                // Не зберігаємо невалідні credentials
+                _messenger.Send(AppLogEntryMessage.Warning("Settings",
+                    $"RDP credentials не збережено: {error}"));
+                return;
+            }
+
+            // Валідація пройшла — зберігаємо і запускаємо poll
+            _credentials.StoreRdp(usernameToSave, passwordToSave);
+            _credentials.ResetRdpCancelledFlag();
+            _rdpNewPassword = string.Empty;
+
+            _messenger.Send(new CredentialsChangedMessage
+            {
+                Target = CredentialTarget.Rdp,
+                Action = CredentialAction.Saved
+            });
+
+            _messenger.Send(AppLogEntryMessage.Success("Settings",
+                $"RDP credentials збережено для: {usernameToSave} — запускаємо опитування серверів…"));
+
+            RefreshCredentialState();
+        }
+        catch (OperationCanceledException)
+        {
+            RdpValidationResult  = string.Empty;
+            RdpValidationSuccess = false;
+        }
+        finally
+        {
+            IsValidatingRdp  = false;
+            passwordToSave   = string.Empty;
+        }
     }
     
     [RelayCommand]
@@ -218,9 +260,9 @@ private async Task SaveZabbixTokenAsync()
 
         if (!string.IsNullOrWhiteSpace(_zabbixUrl))
         {
-            _testCts?.Cancel();
-            _testCts?.Dispose();
-            _testCts = new CancellationTokenSource();
+            _zabbixTestCts?.Cancel();
+            _zabbixTestCts?.Dispose();
+            _zabbixTestCts = new CancellationTokenSource();
 
             IsTestingZabbix   = true;
             ZabbixTestResult  = string.Empty;
@@ -229,7 +271,7 @@ private async Task SaveZabbixTokenAsync()
             try
             {
                 var (success, version, error) = await _zabbixClient
-                    .TestConnectionAsync(_zabbixUrl, tokenToSave, _testCts.Token)
+                    .TestConnectionAsync(_zabbixUrl, tokenToSave, _zabbixTestCts.Token)
                     .ConfigureAwait(false);
 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -300,9 +342,9 @@ private async Task SaveZabbixTokenAsync()
         }
 
         // Скасовуємо попередній тест якщо ще йде
-        _testCts?.Cancel();
-        _testCts?.Dispose();
-        _testCts = new CancellationTokenSource();
+        _zabbixTestCts?.Cancel();
+        _zabbixTestCts?.Dispose();
+        _zabbixTestCts = new CancellationTokenSource();
 
         IsTestingZabbix  = true;
         ZabbixTestResult = string.Empty;
@@ -311,7 +353,7 @@ private async Task SaveZabbixTokenAsync()
         try
         {
             var (success, version, error) = await _zabbixClient
-                .TestConnectionAsync(_zabbixUrl, token, _testCts.Token)
+                .TestConnectionAsync(_zabbixUrl, token, _zabbixTestCts.Token)
                 .ConfigureAwait(false);
 
             // Повертаємось у UI-потік
@@ -350,10 +392,15 @@ private async Task SaveZabbixTokenAsync()
     /// </summary>
     public void CancelPendingTest()
     {
-        _testCts?.Cancel();
-        _testCts?.Dispose();
-        _testCts = null;
-        // Скидаємо спінер якщо тест ще йшов коли юзер закрив Settings
+        _rdpValidationCts?.Cancel();
+        _rdpValidationCts?.Dispose();
+        _rdpValidationCts = null;
+        IsValidatingRdp      = false;
+        RdpValidationResult  = string.Empty;
+
+        _zabbixTestCts?.Cancel();
+        _zabbixTestCts?.Dispose();
+        _zabbixTestCts = null;
         IsTestingZabbix  = false;
         ZabbixTestResult = string.Empty;
     }
