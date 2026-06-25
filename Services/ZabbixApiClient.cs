@@ -48,6 +48,65 @@ public sealed class ZabbixApiClient
         var response = await PostAsync(url, request, ct).ConfigureAwait(false);
         return response?["result"]?.GetValue<string>();
     }
+    
+    // ── Connection test ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Перевіряє доступність Zabbix API і валідність токену.
+    /// Використовує легкий метод apiinfo.version — не потребує авторизації
+    /// для отримання версії, але наступний крок (problem.get) перевірить токен.
+    /// Повертає (true, "Zabbix 6.4.0", null) або (false, null, "повідомлення помилки").
+    /// </summary>
+    public async Task<(bool Success, string? Version, string? Error)> TestConnectionAsync(
+        string url, string token, CancellationToken ct = default)
+    {
+        // Крок 1 — перевіряємо доступність API (без авторизації)
+        try
+        {
+            var versionRequest = BuildRequest("apiinfo.version", new JsonObject());
+            var versionResponse = await PostAsync(url, versionRequest, ct)
+                .ConfigureAwait(false);
+
+            var version = versionResponse?["result"]?.GetValue<string>();
+            if (version is null)
+                return (false, null, "Zabbix API не відповів коректно");
+
+            // Крок 2 — перевіряємо токен через user.checkAuthentication.
+            // Zabbix 6.0+: auth передається ТІЛЬКИ через Bearer заголовок або
+            // поле "token" у params — НЕ через поле "auth" у тілі JSON-RPC.
+            // BuildRequest без третього аргументу = не додає "auth" у тіло.
+            var testRequest = BuildRequest("user.checkAuthentication", new JsonObject
+            {
+                ["token"] = token
+            });
+
+            var testResponse = await PostAsync(url, testRequest, ct, token)
+                .ConfigureAwait(false);
+
+            var errorNode = testResponse?["error"];
+            if (errorNode is not null)
+            {
+                var errorData = errorNode["data"]?.GetValue<string>()
+                    ?? errorNode["message"]?.GetValue<string>()
+                    ?? "Невідома помилка";
+                return (false, version, $"Токен недійсний: {errorData}");
+            }
+
+            return (true, version, null);
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, null, "Перевірку скасовано");
+        }
+        catch (HttpRequestException ex)
+        {
+            return (false, null, $"Не вдалося підключитись: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"Помилка: {ex.Message}");
+        }
+    }
 
     // ── Problem fetch ─────────────────────────────────────────────────────────
 

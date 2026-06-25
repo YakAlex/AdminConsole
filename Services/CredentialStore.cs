@@ -78,6 +78,26 @@ public sealed class CredentialStore
     {
         lock (_lock) UserCancelledRdpPrompt = true;
     }
+    
+    /// <summary>
+    /// Повертає тільки Username без пароля — для відображення у Settings.
+    /// Ніколи не повертає пароль у VM де він не потрібен.
+    /// </summary>
+    public string GetRdpUsername()
+    {
+        lock (_lock) return _rdpUsername ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Скидає прапорець скасування діалогу.
+    /// Критично після збереження credentials через Settings —
+    /// без цього RdpMonitorService вважає що юзер скасував і більше
+    /// не запитуватиме credentials навіть якщо вони вже збережені.
+    /// </summary>
+    public void ResetRdpCancelledFlag()
+    {
+        lock (_lock) UserCancelledRdpPrompt = false;
+    }
 
     /// <summary>
     /// Тимчасові credentials для quser /server:HOSTNAME (аналог cmdkey /add, через CredWrite).
@@ -154,6 +174,32 @@ public sealed class CredentialStore
     public void MarkZabbixCancelled()
     {
         lock (_lock) UserCancelledZabbixPrompt = true;
+    }
+    
+    /// <summary>
+    /// Повертає замаскований токен для відображення у Settings.
+    /// Показує тільки останні 4 символи: "••••••••ab3f"
+    /// Якщо токен порожній — повертає порожній рядок.
+    /// </summary>
+    public string GetZabbixTokenMasked()
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrEmpty(_zabbixToken)) return string.Empty;
+            return _zabbixToken.Length <= 4
+                ? new string('•', _zabbixToken.Length)
+                : $"{"••••••••"}{_zabbixToken[^4..]}";
+        }
+    }
+
+    /// <summary>
+    /// Скидає прапорець скасування Zabbix діалогу.
+    /// Аналогічно ResetRdpCancelledFlag — критично для коректної роботи
+    /// ZabbixPollerService після збереження токену через Settings.
+    /// </summary>
+    public void ResetZabbixCancelledFlag()
+    {
+        lock (_lock) UserCancelledZabbixPrompt = false;
     }
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────
