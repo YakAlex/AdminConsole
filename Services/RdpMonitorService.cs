@@ -32,6 +32,7 @@ public sealed class RdpMonitorService : BackgroundService
 
     private const string LogSource = "RdpMonitor";
     private const int    TimeoutMs = 30_000;
+    private CancellationTokenSource? _wakeUpCts;
 
     // Парсимо вивід quser.
     // Формат WS2008R2 / WS2012+:
@@ -74,10 +75,28 @@ public sealed class RdpMonitorService : BackgroundService
             .AsReadOnly();
 
         _credentials.LoadRdpFromVault();
+        WeakReferenceMessenger.Default.Register<CredentialsChangedMessage>(
+            this, (_, msg) => OnCredentialsChanged(msg));
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
+    
+    private void OnCredentialsChanged(CredentialsChangedMessage msg)
+    {
+        if (msg.Target != CredentialTarget.Rdp) return;
+        if (msg.Action != CredentialAction.Saved) return;
 
+        var cts = Interlocked.Exchange(ref _wakeUpCts, null);
+        if (cts is null) return;
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignored
+        }
+    }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (_terminalServers.Count == 0)
@@ -114,9 +133,28 @@ public sealed class RdpMonitorService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(
-                    TimeSpan.FromSeconds(_settings.RdpPollIntervalSeconds),
-                    stoppingToken).ConfigureAwait(false);
+                using var delayCts = CancellationTokenSource
+                    .CreateLinkedTokenSource(stoppingToken);
+
+                // Передаємо посилання назовні — для OnCredentialsChanged
+                Interlocked.Exchange(ref _wakeUpCts, delayCts);
+
+                try
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(_settings.RdpPollIntervalSeconds),
+                        delayCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                    when (!stoppingToken.IsCancellationRequested)
+                {
+                    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                        "RDP credentials оновлено — запускаємо позачерговий poll."));
+                }
+
+                // Обнуляємо ДО того як using знищить delayCts —
+                // наступна ітерація і OnCredentialsChanged не отримають disposed об'єкт.
+                Interlocked.Exchange(ref _wakeUpCts, null);
 
                 if (stoppingToken.IsCancellationRequested) break;
 
@@ -126,6 +164,11 @@ public sealed class RdpMonitorService : BackgroundService
         catch (OperationCanceledException)
         {
             // Нормальне завершення при StopAsync — ігноруємо.
+        }
+        finally
+        {
+            _wakeUpCts = null;
+            WeakReferenceMessenger.Default.Unregister<CredentialsChangedMessage>(this);
         }
     }
 

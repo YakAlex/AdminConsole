@@ -20,6 +20,7 @@ public sealed class ZabbixPollerService : BackgroundService
     private static readonly int[] WatchedSeverities = [4, 5];
     private const string LogSource = "ZabbixPoller";
     private string? _sessionToken;
+    private CancellationTokenSource? _wakeUpCts;
 
     public ZabbixPollerService(
         IMessenger messenger,
@@ -37,6 +38,25 @@ public sealed class ZabbixPollerService : BackgroundService
         _prompt      = prompt;
 
         _credentials.LoadZabbixFromVault();
+        WeakReferenceMessenger.Default.Register<CredentialsChangedMessage>(
+            this, (_, msg) => OnCredentialsChanged(msg));
+    }
+    
+    private void OnCredentialsChanged(CredentialsChangedMessage msg)
+    {
+        if (msg.Target != CredentialTarget.Zabbix) return;
+        if (msg.Action != CredentialAction.Saved) return;
+
+        var cts = Interlocked.Exchange(ref _wakeUpCts, null);
+        if (cts is null) return;
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignored
+        }
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -74,9 +94,25 @@ public sealed class ZabbixPollerService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(
-                    TimeSpan.FromSeconds(_settings.ZabbixPollIntervalSeconds),
-                    stoppingToken).ConfigureAwait(false);
+                using var delayCts = CancellationTokenSource
+                    .CreateLinkedTokenSource(stoppingToken);
+
+                Interlocked.Exchange(ref _wakeUpCts, delayCts);
+
+                try
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(_settings.ZabbixPollIntervalSeconds),
+                        delayCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                    when (!stoppingToken.IsCancellationRequested)
+                {
+                    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                        "Zabbix credentials оновлено — запускаємо позачерговий poll."));
+                }
+
+                Interlocked.Exchange(ref _wakeUpCts, null);
 
                 if (stoppingToken.IsCancellationRequested) break;
 
@@ -85,7 +121,12 @@ public sealed class ZabbixPollerService : BackgroundService
         }
         catch (OperationCanceledException)
         {
-            // Нормальне завершення при StopAsync — ігноруємо.
+            // Ignored
+        }
+        finally
+        {
+            _wakeUpCts = null;
+            WeakReferenceMessenger.Default.Unregister<CredentialsChangedMessage>(this);
         }
     }
 

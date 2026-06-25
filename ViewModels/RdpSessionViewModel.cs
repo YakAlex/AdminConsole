@@ -8,7 +8,7 @@ using System.Windows;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class RdpSessionViewModel
-    : ObservableObject, IRecipient<RdpSessionsUpdatedMessage>
+    : ObservableObject, IRecipient<RdpSessionsUpdatedMessage>, IRecipient<RdpCredentialsClearedMessage>
 {
     // ── Observable state ─────────────────────────────────────────────────────
 
@@ -26,6 +26,23 @@ public sealed partial class RdpSessionViewModel
     public RdpSessionViewModel(IMessenger messenger)
     {
         messenger.RegisterAll(this);
+    }
+    
+    public void Receive(RdpCredentialsClearedMessage _)
+    {
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            Sessions.Clear();
+            foreach (var s in ServerStatuses)
+                s.Update(new RdpSessionsPayload(
+                    s.ServerName, s.ServerIp,
+                    Sessions: [],
+                    ErrorMessage: "Credentials видалено"));
+
+            ActiveCount       = 0;
+            DisconnectedCount = 0;
+            StatusText        = "RDP credentials видалено — моніторинг призупинено.";
+        });
     }
 
     // ── IRecipient ────────────────────────────────────────────────────────────
