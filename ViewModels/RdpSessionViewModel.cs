@@ -39,10 +39,10 @@ public sealed partial class RdpSessionViewModel
         if (message.Target != CredentialTarget.Rdp) return;
         if (message.Action != CredentialAction.Saved) return;
 
-        // Не через Dispatcher — просто скидаємо прапорець.
-        // Він читається тільки всередині InvokeAsync (UI-потік),
-        // тому запис з будь-якого потоку тут безпечний для bool.
-        _credentialsCleared = false;
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            _credentialsCleared = false;
+        });
     }
 
     public void Receive(RdpCredentialsClearedMessage _)

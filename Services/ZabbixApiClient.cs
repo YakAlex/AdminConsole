@@ -133,7 +133,7 @@ public sealed class ZabbixApiClient
         ["limit"]       = 200
     };
 
-    var request = BuildRequest("problem.get", parameters, auth);
+    var request  = BuildRequest("problem.get", parameters, useApiToken ? null : auth);
     var response = await PostAsync(url, request, ct, useApiToken ? auth : null).ConfigureAwait(false);
     if (response is null) return [];
 
@@ -235,11 +235,25 @@ public sealed class ZabbixApiClient
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
         
         var response = await _http.SendAsync(msg, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
 
         var json = await response.Content
             .ReadAsStringAsync(ct)
             .ConfigureAwait(false);
+
+        if (response.StatusCode is
+            System.Net.HttpStatusCode.Unauthorized or
+            System.Net.HttpStatusCode.Forbidden)
+        {
+            throw new ZabbixPollerService.ZabbixAuthException(
+                $"HTTP {(int)response.StatusCode}: {json}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode}: {json}");
+        }
+
         return JsonNode.Parse(json);
     }
 

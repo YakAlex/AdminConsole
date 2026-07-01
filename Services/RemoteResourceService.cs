@@ -29,7 +29,7 @@ public sealed class RemoteResourceService
         string machineNameOrIp,
         CancellationToken ct = default)
     {
-        bool reachable = await EventLogReader
+        bool reachable = await WinEventLogReader
             .IsReachableAsync(machineNameOrIp, PingTimeoutMs, ct)
             .ConfigureAwait(false);
 
@@ -45,7 +45,7 @@ public sealed class RemoteResourceService
         try
         {
             var snapshot = await Task
-                .Run(() => QueryWmi(machineNameOrIp), ct)
+                .Run(() => QueryWmi(machineNameOrIp, ct), ct)
                 .ConfigureAwait(false);
 
             return RemoteResourceResult.Success(snapshot);
@@ -75,20 +75,27 @@ public sealed class RemoteResourceService
 
     // ── WMI ───────────────────────────────────────────────────────────────────
 
-    private static ResourceSnapshot QueryWmi(string machineName)
+    private static ResourceSnapshot QueryWmi(string machineName, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();  // до підключення
+
         var scope = new ManagementScope(
             $@"\\{machineName}\root\cimv2",
             new ConnectionOptions
             {
-                Timeout = TimeSpan.FromSeconds(WmiTimeoutSeconds),
-                Impersonation = ImpersonationLevel.Impersonate,
+                Timeout          = TimeSpan.FromSeconds(WmiTimeoutSeconds),
+                Impersonation    = ImpersonationLevel.Impersonate,
                 EnablePrivileges = true
             });
 
         scope.Connect();
 
+        ct.ThrowIfCancellationRequested();  // після Connect (може тривати ~2с)
+
         double cpuPercent = QueryCpuPercent(scope);
+
+        ct.ThrowIfCancellationRequested();  // між двома WMI запитами
+
         (double usedGb, double totalGb) = QueryMemory(scope);
 
         double ramPercent = totalGb > 0

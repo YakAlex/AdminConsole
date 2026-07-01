@@ -115,11 +115,12 @@ public sealed class UptimeTrackerService
         {
             SaveToDisk(DateTimeOffset.Now);
         }
-        catch { }
-        finally
+        catch (Exception ex)
         {
-            PublishSnapshot();
+            _logger.LogError(ex, "UptimeTrackerService: не вдалось зберегти інцидент на диск.");
         }
+
+        PublishSnapshot();
     }
 
     // ── Public API для UptimeViewModel ────────────────────────────────────────
@@ -144,11 +145,10 @@ public sealed class UptimeTrackerService
         {
             if (!record.IsResolved && _lastStatus.ContainsKey(record.ServerIp))
                 _lastStatus[record.ServerIp] = PingStatus.Online;
-
             _records.Remove(record);
         }
 
-        SaveToDisk(DateTimeOffset.Now);
+        Task.Run(() => SaveToDisk(DateTimeOffset.Now));
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -156,12 +156,6 @@ public sealed class UptimeTrackerService
             $"впав {record.FellAt:dd.MM HH:mm:ss}."));
     }
 
-    /// <summary>
-    /// Видаляє всі завершені (IsResolved) інциденти поточного місяця.
-    /// Активні інциденти та _lastStatus — не чіпає.
-    /// Для UI використовує PublishSnapshot → ApplySnapshot (один Refresh),
-    /// а не поелементне Remove щоб уникнути 200 подій CollectionChanged.
-    /// </summary>
     public void ClearAllResolved()
     {
         int removed;
@@ -172,7 +166,7 @@ public sealed class UptimeTrackerService
 
         if (removed == 0) return;
 
-        SaveToDisk(DateTimeOffset.Now);
+        Task.Run(() => SaveToDisk(DateTimeOffset.Now));
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,

@@ -100,21 +100,27 @@ public sealed partial class UptimeViewModel
         // Спрацьовує кожні 10 секунд — тільки якщо є активні інциденти,
         // щоб не смикати UI даремно коли всі інциденти завершені.
         _refreshTimer = new System.Threading.Timer(
-            _ => Application.Current?.Dispatcher?.InvokeAsync(() =>
+            _ =>
             {
-                if (ActiveIncidents > 0)
+                if (_disposed) return;
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
-                    var saved = SelectedRecord;
-                    RecordsView.View?.Refresh();
-                    if (saved is not null) SelectedRecord = saved;
-                    // Оновлюємо detail strip — DowntimeRecord не INotifyPropertyChanged,
-                    // тому DurationDisplay у нижній панелі не оновлюється автоматично.
-                    OnPropertyChanged(nameof(SelectedRecord));
-                }
-            }),
-            state:     null,
-            dueTime:   TimeSpan.FromSeconds(10),
-            period:    TimeSpan.FromSeconds(10));
+                    if (_disposed) return;
+                    if (ActiveIncidents > 0)
+                    {
+                        var saved = SelectedRecord;
+                        RecordsView.View?.Refresh();
+                        if (saved is not null && _allRecords.Contains(saved))
+                            SelectedRecord = saved;
+                        else
+                            SelectedRecord = null;
+                        OnPropertyChanged(nameof(SelectedRecord));
+                    }
+                });
+            },
+            state:   null,
+            dueTime: TimeSpan.FromSeconds(10),
+            period:  TimeSpan.FromSeconds(10));
     }
 
     // ── Реакція на зміни фільтрів ────────────────────────────────────────────
@@ -323,9 +329,11 @@ public sealed partial class UptimeViewModel
     }
 
     // ── IDisposable ──────────────────────────────────────────────────────────
+    private volatile bool _disposed;
     public void Dispose()
     {
-        // Зупиняємо таймер щоб не смикати Dispatcher після закриття вікна.
+        if (_disposed) return;
+        _disposed = true;
         _refreshTimer.Dispose();
     }
 }

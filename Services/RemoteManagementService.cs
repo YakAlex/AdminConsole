@@ -138,14 +138,14 @@ public sealed class RemoteManagementService
 
     private static void ExecuteWmiShutdown(string ip, bool isReboot)
     {
-        // Connect to the remote host's WMI namespace.
         var scope = new ManagementScope(
             $@"\\{ip}\root\cimv2",
             new ConnectionOptions
             {
-                Impersonation  = ImpersonationLevel.Impersonate,
-                Authentication = AuthenticationLevel.PacketPrivacy,
-                EnablePrivileges = true
+                Impersonation    = ImpersonationLevel.Impersonate,
+                Authentication   = AuthenticationLevel.PacketPrivacy,
+                EnablePrivileges = true,
+                Timeout          = TimeSpan.FromSeconds(15)
             });
 
         scope.Connect();

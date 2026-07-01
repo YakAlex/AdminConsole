@@ -24,8 +24,20 @@ public sealed class CredentialStore
     private string? _zabbixUsername;
     private readonly object _lock = new();
 
-    public bool UserCancelledRdpPrompt    { get; private set; }
-    public bool UserCancelledZabbixPrompt { get; private set; }
+    private volatile bool _userCancelledRdpPrompt;
+    private volatile bool _userCancelledZabbixPrompt;
+
+    public bool UserCancelledRdpPrompt
+    {
+        get => _userCancelledRdpPrompt;
+        private set => _userCancelledRdpPrompt = value;
+    }
+
+    public bool UserCancelledZabbixPrompt
+    {
+        get => _userCancelledZabbixPrompt;
+        private set => _userCancelledZabbixPrompt = value;
+    }
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
@@ -74,10 +86,8 @@ public sealed class CredentialStore
         DeleteFromVault(RdpTarget);
     }
 
-    public void MarkRdpCancelled()
-    {
-        lock (_lock) UserCancelledRdpPrompt = true;
-    }
+    
+    public void MarkRdpCancelled()    => _userCancelledRdpPrompt    = true;
     
     /// <summary>
     /// Повертає тільки Username без пароля — для відображення у Settings.
@@ -94,10 +104,7 @@ public sealed class CredentialStore
     /// без цього RdpMonitorService вважає що юзер скасував і більше
     /// не запитуватиме credentials навіть якщо вони вже збережені.
     /// </summary>
-    public void ResetRdpCancelledFlag()
-    {
-        lock (_lock) UserCancelledRdpPrompt = false;
-    }
+    public void ResetRdpCancelledFlag() => _userCancelledRdpPrompt  = false;
 
     /// <summary>
     /// Тимчасові credentials для quser /server:HOSTNAME (аналог cmdkey /add, через CredWrite).
@@ -171,10 +178,8 @@ public sealed class CredentialStore
         DeleteFromVault(ZabbixTarget);
     }
 
-    public void MarkZabbixCancelled()
-    {
-        lock (_lock) UserCancelledZabbixPrompt = true;
-    }
+    public void MarkZabbixCancelled() => _userCancelledZabbixPrompt = true;
+
     
     /// <summary>
     /// Повертає замаскований токен для відображення у Settings.
@@ -197,10 +202,7 @@ public sealed class CredentialStore
     /// Аналогічно ResetRdpCancelledFlag — критично для коректної роботи
     /// ZabbixPollerService після збереження токену через Settings.
     /// </summary>
-    public void ResetZabbixCancelledFlag()
-    {
-        lock (_lock) UserCancelledZabbixPrompt = false;
-    }
+    public void ResetZabbixCancelledFlag() => _userCancelledZabbixPrompt = false;
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────
 

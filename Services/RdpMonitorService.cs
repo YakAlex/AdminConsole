@@ -74,7 +74,16 @@ public sealed class RdpMonitorService : BackgroundService
             .ToList()
             .AsReadOnly();
 
-        _credentials.LoadRdpFromVault();
+        try
+        {
+            _credentials.LoadRdpFromVault();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "RdpMonitorService: не вдалось завантажити credentials з Credential Manager.");
+        }
+
         WeakReferenceMessenger.Default.Register<CredentialsChangedMessage>(
             this, (_, msg) => OnCredentialsChanged(msg));
     }

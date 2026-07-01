@@ -256,8 +256,6 @@ private async Task SaveZabbixTokenAsync()
         _messenger.Send(AppLogEntryMessage.Info("Settings",
             "Zabbix API токен збережено — перевіряємо з'єднання…"));
 
-        RefreshCredentialState();
-
         if (!string.IsNullOrWhiteSpace(_zabbixUrl))
         {
             _zabbixTestCts?.Cancel();
@@ -283,12 +281,23 @@ private async Task SaveZabbixTokenAsync()
                 });
 
                 if (success)
+                {
                     _messenger.Send(AppLogEntryMessage.Success("Settings",
                         $"Zabbix {version} — з'єднання успішне, поллер оновлено."));
+                    try
+                    {
+                        await Task.Delay(1500, _zabbixTestCts.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    RefreshCredentialState();
+                }
                 else
+                {
                     _messenger.Send(AppLogEntryMessage.Warning("Settings",
                         $"Токен збережено, тест показав помилку: {error}. " +
                         $"Поллер спробує самостійно."));
+                }
             }
             catch (OperationCanceledException) { }
             finally
@@ -296,8 +305,12 @@ private async Task SaveZabbixTokenAsync()
                 IsTestingZabbix = false;
             }
         }
+        else
+        {
+            RefreshCredentialState();
+        }
     }
-
+        
     [RelayCommand]
     private void ClearZabbixCredentials()
     {

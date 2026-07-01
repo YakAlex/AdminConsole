@@ -94,8 +94,12 @@ public sealed class FileLoggerService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await _signal.WaitAsync(stoppingToken).ConfigureAwait(false);
-            await Task.Delay(200, stoppingToken).ConfigureAwait(false);
+            try
+            {
+                await _signal.WaitAsync(stoppingToken).ConfigureAwait(false);
+                await Task.Delay(200, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { break; }
 
             FlushQueueToFile();
         }

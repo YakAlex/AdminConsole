@@ -59,9 +59,9 @@ public sealed partial class LogsViewModel
             // Сортування від нових до старих — через CollectionViewSource.SortDescriptions.
             _logEntries.Add(vm);
 
-            // Видаляємо найстаріші (кінець несортованої колекції) якщо перевищили ліміт.
-            // RemoveAt(0) = O(n), але спрацьовує рідко (раз на MaxEntries записів).
-            if (_logEntries.Count > MaxEntries)
+            // Видаляємо всі зайві — не тільки один, бо при burst
+            // кілька InvokeAsync можуть одночасно побачити Count > MaxEntries
+            while (_logEntries.Count > MaxEntries)
                 _logEntries.RemoveAt(0);
 
             StatusText = $"{_logEntries.Count} entries — last: {vm.TimeShort}";

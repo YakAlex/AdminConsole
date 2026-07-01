@@ -221,7 +221,7 @@ public partial class App : Application
 
         try
         {
-            _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+            _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

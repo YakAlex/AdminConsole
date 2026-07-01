@@ -288,13 +288,10 @@ public sealed partial class ResourceMonitorViewModel
 
             await _dispatcher.InvokeAsync(() =>
             {
-                if (SelectedServer != server) return; // захист від race при швидкому перемиканні
+                if (SelectedServer != server) return;
 
                 if (!result.IsReachable)
-                {
-                    // EventLog-статус вже повідомить про офлайн — тут просто лишаємо метрики порожніми
                     return;
-                }
 
                 if (!result.IsSuccess || result.Snapshot is null)
                 {
@@ -315,28 +312,18 @@ public sealed partial class ResourceMonitorViewModel
                 RamBarBrush = PickBrush(s.RamPercent);
             });
 
-            // Плануємо наступне оновлення через 5с, поки цей сервер обраний.
-            // 5с (не 3с як для localhost) — WMI значно дорожчий за PerformanceCounter,
-            // не хочемо створювати зайве навантаження на мережу/RPC.
             if (!cts.Token.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false);
-                // Перевіряємо _disposed перед тим як перепланувати —
-                // щоб не стартувати новий WMI-запит після OnExit.
-                if (!_disposed && !cts.Token.IsCancellationRequested && SelectedServer == server)
-                    _ = LoadRemoteResourceAsync(server);
+                await Task.Delay(TimeSpan.FromSeconds(5), cts.Token)
+                    .ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
-            // Очікувано при швидкому перемиканні серверів — таймер просто зупиняється
+            // Очікувано при швидкому перемиканні серверів або закритті програми.
         }
         catch (Exception ex)
         {
-            // Непередбачена помилка — логуємо і гарантовано перезапускаємо loop
-            // через 5 секунд, щоб вкладка не "замерзла" назавжди.
-            // Без цього будь-який некерований виняток (WMI, COM, мережа)
-            // беззвучно зупиняє self-rescheduling і UI більше не оновлюється.
             _logger.LogWarning(ex,
                 "ResourceMonitorViewModel: непередбачена помилка при опитуванні {Server}. " +
                 "Перезапуск через 5с.",
@@ -351,15 +338,26 @@ public sealed partial class ResourceMonitorViewModel
                 }
             });
 
-            // Гарантований перезапуск — якщо сервер ще обраний і не disposed
             if (!_disposed && !cts.Token.IsCancellationRequested)
             {
-                try { await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return; }
-
-                if (!_disposed && !cts.Token.IsCancellationRequested && SelectedServer == server)
-                    _ = LoadRemoteResourceAsync(server);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), cts.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
             }
+        }
+        finally
+        {
+            // Плануємо наступну ітерацію ДО dispose поточного cts.
+            // Новий виклик створить свій CTS через Interlocked.Exchange —
+            // поточний cts до нього вже не має відношення.
+            // Dispose гарантовано незалежно від того чи умова виконалась.
+            if (!_disposed && !cts.Token.IsCancellationRequested && SelectedServer == server)
+                _ = LoadRemoteResourceAsync(server);
+
+            cts.Dispose();
         }
     }
     
