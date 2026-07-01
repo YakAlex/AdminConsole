@@ -16,6 +16,7 @@ public sealed partial class ServerPollStatusViewModel : ObservableObject
     [ObservableProperty] private string _lastPolled  = "—";
     [ObservableProperty] private string _pollStatus  = "Pending";
     [ObservableProperty] private string _statusColor = "#FF607D8B";
+    [ObservableProperty] private bool   _hasError;
 
     public ServerPollStatusViewModel(string name, string ip)
     {
@@ -32,11 +33,13 @@ public sealed partial class ServerPollStatusViewModel : ObservableObject
         {
             PollStatus  = $"Error: {payload.ErrorMessage}";
             StatusColor = "#FFF44336";
+            HasError    = true;
         }
         else
         {
             PollStatus  = $"{payload.Sessions.Count} session(s)";
             StatusColor = "#FF4CAF50";
+            HasError    = false;
         }
     }
 }

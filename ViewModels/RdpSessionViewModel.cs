@@ -103,8 +103,14 @@ public sealed partial class RdpSessionViewModel
             DisconnectedCount = Sessions.Count(s => s.State == RdpSessionState.Disconnected);
 
             int total = Sessions.Count;
-            StatusText = payload.ErrorMessage is not null
-                ? $"Error on {payload.ServerName}: {payload.ErrorMessage}"
+            var errorServers = ServerStatuses
+                .Where(s => s.HasError)
+                .Select(s => s.ServerName)
+                .ToList();
+
+            StatusText = errorServers.Any()
+                ? $"Errors on: {string.Join(", ", errorServers)} — " +
+                  $"{ActiveCount} active, {DisconnectedCount} disconnected"
                 : $"{ActiveCount} active, {DisconnectedCount} disconnected" +
                   $" — {total} total session(s) — " +
                   $"last updated {DateTime.Now:HH:mm:ss}";

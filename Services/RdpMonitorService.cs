@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -34,15 +35,16 @@ public sealed class RdpMonitorService : BackgroundService
     private const int    TimeoutMs = 30_000;
     private CancellationTokenSource? _wakeUpCts;
 
-    // Парсимо вивід quser.
+    private readonly ConcurrentDictionary<string, Dictionary<int, RdpSessionInfo>>
+        _previousSessions = new();
+    private readonly ConcurrentDictionary<string, bool> _firstPollDone = new();
+    
+    // ── Regex ────────────────────────────────────────────────────────────────
     // Формат WS2008R2 / WS2012+:
     //  USERNAME         SESSIONNAME    ID  STATE   IDLE TIME  LOGON TIME
     //  oleynikz         rdp-tcp#0      14  Active          .  11.06.2026 10:24
     //  yakymenko        rdp-tcp#1      15  Active          .  11.06.2026 10:29
     //  disconnecteduser                 3  Disc         1:30  11.06.2026 08:00
-    //
-    // Active: USERNAME SESSIONNAME ID STATE IDLE LOGON_DATE LOGON_TIME  (7+ токенів)
-    // Disc:   USERNAME             ID STATE IDLE LOGON_DATE LOGON_TIME  (6 токенів, [1] — число)
 
     private static readonly Regex ActiveRegex = new(
         @"^(?<user>\S+)\s+(?<session>\S+)\s+(?<id>\d+)\s+Active\s+(?<idle>\S+)\s+(?<logon>.+?)\s*$",
@@ -89,7 +91,7 @@ public sealed class RdpMonitorService : BackgroundService
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
-    
+
     private void OnCredentialsChanged(CredentialsChangedMessage msg)
     {
         if (msg.Target != CredentialTarget.Rdp) return;
@@ -101,11 +103,9 @@ public sealed class RdpMonitorService : BackgroundService
         {
             cts.Cancel();
         }
-        catch (ObjectDisposedException)
-        {
-            // Ignored
-        }
+        catch (ObjectDisposedException) { }
     }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (_terminalServers.Count == 0)
@@ -114,17 +114,13 @@ public sealed class RdpMonitorService : BackgroundService
             return;
         }
 
-        // Fail-fast валідація: quser потребує доменне ім'я, не IP.
-        // IP-адреса як ім'я сервера → RPC over TCP → зазвичай заблоковано.
         foreach (var server in _terminalServers)
         {
             if (System.Net.IPAddress.TryParse(server.Name, out _))
             {
                 _logger.LogWarning(
-                    "RdpMonitorService: сервер '{Name}' має IP-адресу замість доменного імені. " +
-                    "quser /server:IP не працює через RPC — використовуй NetBIOS/DNS ім'я.",
+                    "RdpMonitorService: сервер '{Name}' має IP-адресу замість доменного імені.",
                     server.Name);
-
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"Конфігурація: '{server.Name}' — це IP, а не ім'я. " +
                     $"quser може не працювати. Виправ Name у appsettings.json."));
@@ -135,7 +131,6 @@ public sealed class RdpMonitorService : BackgroundService
             $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
             $"Використовуємо доменні імена для quser."));
 
-        // Перший poll одразу при старті
         await PollAllServersAsync(stoppingToken);
 
         try
@@ -145,7 +140,6 @@ public sealed class RdpMonitorService : BackgroundService
                 using var delayCts = CancellationTokenSource
                     .CreateLinkedTokenSource(stoppingToken);
 
-                // Передаємо посилання назовні — для OnCredentialsChanged
                 Interlocked.Exchange(ref _wakeUpCts, delayCts);
 
                 try
@@ -161,8 +155,6 @@ public sealed class RdpMonitorService : BackgroundService
                         "RDP credentials оновлено — запускаємо позачерговий poll."));
                 }
 
-                // Обнуляємо ДО того як using знищить delayCts —
-                // наступна ітерація і OnCredentialsChanged не отримають disposed об'єкт.
                 Interlocked.Exchange(ref _wakeUpCts, null);
 
                 if (stoppingToken.IsCancellationRequested) break;
@@ -170,10 +162,7 @@ public sealed class RdpMonitorService : BackgroundService
                 await PollAllServersAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Нормальне завершення при StopAsync — ігноруємо.
-        }
+        catch (OperationCanceledException) { }
         finally
         {
             _wakeUpCts = null;
@@ -185,41 +174,29 @@ public sealed class RdpMonitorService : BackgroundService
 
     private async Task PollAllServersAsync(CancellationToken ct)
     {
-        // Якщо юзер скасував діалог — не питаємо знову
         if (!_credentials.HasRdpCredentials && _credentials.UserCancelledRdpPrompt)
             return;
 
-        // Запит credentials якщо відсутні
         if (!_credentials.HasRdpCredentials)
         {
-            bool obtained = await RequestFreshRdpCredentialsAsync(
-                reason: null, ct);
+            bool obtained = await RequestFreshRdpCredentialsAsync(reason: null, ct);
             if (!obtained) return;
         }
 
-        // Паралельне опитування всіх Terminal Servers
         var tasks = _terminalServers.Select(s => PollServerAsync(s, ct));
         await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Запитує нові RDP credentials через діалог.
-    /// reason — причина запиту (null = перший запуск,
-    ///          non-null = зміна пароля / невалідні credentials).
-    /// Повертає true якщо credentials отримано і збережено.
-    /// </summary>
     private async Task<bool> RequestFreshRdpCredentialsAsync(
         string? reason, CancellationToken ct)
     {
         if (reason is not null)
         {
             _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                $"RDP credentials відхилено ({reason}). " +
-                $"Запитуємо нові credentials…"));
+                $"RDP credentials відхилено ({reason}). Запитуємо нові credentials…"));
         }
 
-        var result = await _prompt.PromptAsync(
-            "Terminal Server (DOMAIN\\username)");
+        var result = await _prompt.PromptAsync("Terminal Server (DOMAIN\\username)");
 
         if (result is null)
         {
@@ -241,14 +218,12 @@ public sealed class RdpMonitorService : BackgroundService
     private Task PollServerAsync(ServerEntry server, CancellationToken ct)
         => PollServerOnceAsync(server, ct);
 
-    /// <returns>null — завершено; non-null — причина повторного запиту credentials.</returns>
     private async Task<string?> PollServerOnceAsync(ServerEntry server, CancellationToken ct)
     {
         string hostname = server.Name;
 
         try
         {
-            // Перевіряємо ще раз перед poll — паралельний сервер міг очистити credentials
             if (!_credentials.HasRdpCredentials)
             {
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
@@ -280,20 +255,22 @@ public sealed class RdpMonitorService : BackgroundService
                 allText.Contains("невірн"))
             {
                 _credentials.ClearRdp();
+                LogSessionChanges(server, []);
+                _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"{hostname}: невірний логін або пароль — оновіть credentials в Settings."));
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Невірний логін або пароль — оновіть credentials в Settings")));
-                return null;  // ← НЕ відкриваємо діалог тут
-                //   PollAllServersAsync наступного разу побачить HasRdpCredentials=false
-                //   і запитає credentials через діалог один раз для всіх серверів
+                return null;
             }
 
             if (allText.Contains("access is denied") ||
                 allText.Contains("access denied"))
             {
                 _credentials.ClearRdp();
+                LogSessionChanges(server, []);
+                _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"{hostname}: Access Denied — можливо пароль змінено. Оновіть credentials в Settings."));
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
@@ -317,9 +294,12 @@ public sealed class RdpMonitorService : BackgroundService
 
             if (string.IsNullOrWhiteSpace(output) || exitCode == 1)
             {
-                bool noUsers = allText.Contains("no user")            ||
+                bool noUsers = allText.Contains("no user")           ||
                                allText.Contains("нет пользователей") ||
                                string.IsNullOrWhiteSpace(output);
+
+                LogSessionChanges(server, []);
+                _previousSessions[server.IP] = [];
 
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP,
@@ -329,8 +309,14 @@ public sealed class RdpMonitorService : BackgroundService
             }
 
             var sessions = ParseQuserOutput(output, server.Name, server.IP);
-            _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                $"{hostname}: знайдено {sessions.Count} сесій."));
+            LogSessionChanges(server, sessions);
+            var newSnapshot = new Dictionary<int, RdpSessionInfo>();
+            foreach (var s in sessions)
+            {
+                if (int.TryParse(s.SessionId, out int id))
+                    newSnapshot[id] = s;
+            }
+            _previousSessions[server.IP] = newSnapshot;
             _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                 server.Name, server.IP,
                 Sessions: sessions,
@@ -340,7 +326,8 @@ public sealed class RdpMonitorService : BackgroundService
         catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "RdpMonitorService: помилка при опитуванні {Server}", hostname);
+            _logger.LogWarning(ex,
+                "RdpMonitorService: помилка при опитуванні {Server}", hostname);
             _messenger.Send(AppLogEntryMessage.Error(LogSource,
                 $"{hostname}: {ex.GetType().Name}: {ex.Message}"));
             _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
@@ -351,6 +338,104 @@ public sealed class RdpMonitorService : BackgroundService
         {
             _credentials.ClearQuserSession(hostname);
         }
+    }
+
+    // ── State Diffing ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Порівнює поточний список сесій з попереднім знімком і логує тільки зміни.
+    /// При першому poll для сервера — мовчки заповнює словник без логування,
+    /// щоб не спамити "підключився" для вже існуючих сесій при старті програми.
+    /// </summary>
+    private void LogSessionChanges(ServerEntry server, List<RdpSessionInfo> currentSessions)
+    {
+        // Будуємо поточний знімок з валідними int SessionId
+        var currentSnapshot = new Dictionary<int, RdpSessionInfo>();
+        foreach (var s in currentSessions)
+        {
+            if (int.TryParse(s.SessionId, out int id))
+                currentSnapshot[id] = s;
+        }
+
+        bool isFirst = _firstPollDone.TryAdd(server.IP, true);
+        if (isFirst) return;
+
+        _previousSessions.TryGetValue(server.IP, out var previousSnapshot);
+        previousSnapshot ??= [];
+
+        foreach (var (id, current) in currentSnapshot)
+        {
+            if (!previousSnapshot.TryGetValue(id, out var previous))
+            {
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    $"{current.Username} → connected to {server.Name} " +
+                    $"(session #{id}, logon: {current.LogonTime})"));
+                continue;
+            }
+
+            if (previous.State == RdpSessionState.Active &&
+                current.State  == RdpSessionState.Disconnected)
+            {
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"{current.Username} → session went idle on {server.Name} " +
+                    $"(Active → Disconnected, logon: {current.LogonTime})"));
+            }
+            else if (previous.State == RdpSessionState.Disconnected &&
+                     current.State  == RdpSessionState.Active)
+            {
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    $"{current.Username} → session resumed on {server.Name} " +
+                    $"(Disconnected → Active, logon: {current.LogonTime})"));
+            }
+        }
+
+        foreach (var (id, previous) in previousSnapshot)
+        {
+            if (!currentSnapshot.ContainsKey(id))
+            {
+                string duration = TryCalculateDuration(previous.LogonTime);
+                string durationPart = duration.Length > 0 ? $", duration: {duration}" : string.Empty;
+
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                    $"{previous.Username} → disconnected from {server.Name} " +
+                    $"(session #{id}, was connected since {previous.LogonTime}{durationPart})"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Намагається розрахувати тривалість сесії з рядка LogonTime від quser.
+    /// quser повертає формат "dd.MM.yyyy HH:mm" або "MM/dd/yyyy h:mm AM/PM".
+    /// Повертає порожній рядок якщо розпарсити не вдалось.
+    /// </summary>
+    private static string TryCalculateDuration(string logonTime)
+    {
+        if (string.IsNullOrWhiteSpace(logonTime)) return string.Empty;
+        
+        string[] formats =
+        [
+            "dd.MM.yyyy HH:mm",
+            "d.MM.yyyy H:mm",
+            "MM/dd/yyyy h:mm tt",
+            "M/d/yyyy h:mm tt",
+            "dd.MM.yyyy H:mm",
+        ];
+
+        if (!DateTime.TryParseExact(logonTime.Trim(), formats,
+            System.Globalization.CultureInfo.CurrentCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var logon))
+        {
+            return string.Empty;
+        }
+
+        var duration = DateTime.Now - logon;
+
+        if (duration.TotalDays >= 1)
+            return $"{(int)duration.TotalDays}d {duration.Hours}h {duration.Minutes}m";
+        if (duration.TotalHours >= 1)
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+        return $"{(int)duration.TotalMinutes}m";
     }
 
     // ── quser ────────────────────────────────────────────────────────────────
@@ -391,7 +476,6 @@ public sealed class RdpMonitorService : BackgroundService
 
         p.Start();
 
-        // Читаємо stdout/stderr асинхронно, щоб не блокувати thread-pool
         var outputTask = p.StandardOutput.ReadToEndAsync(cts.Token);
         var errorTask  = p.StandardError.ReadToEndAsync(cts.Token);
 
@@ -404,8 +488,7 @@ public sealed class RdpMonitorService : BackgroundService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            // Спрацював наш таймаут, а не зовнішня зупинка сервісу
-            try { p.Kill(entireProcessTree: true); } catch { /* ігноруємо */ }
+            try { p.Kill(entireProcessTree: true); } catch { }
             string partial = "";
             try { partial = await outputTask.ConfigureAwait(false); } catch { }
             return (partial, "Timeout: сервер не відповів за 30 секунд", -1);
@@ -414,17 +497,6 @@ public sealed class RdpMonitorService : BackgroundService
 
     // ── Парсер виводу quser ──────────────────────────────────────────────────
 
-    /// <summary>
-    /// Парсить вивід "quser /server:HOSTNAME".
-    ///
-    /// Формат виводу (реальний приклад з WS2008R2):
-    ///  USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
-    ///  oleynikz              rdp-tcp#0          14  Active          .  11.06.2026 10:24
-    ///  yakymenko             rdp-tcp#1          15  Active          .  11.06.2026 10:29
-    ///
-    /// Disconnected сесія (немає SESSIONNAME):
-    ///  someuser                                  3  Disc         1:30  10.06.2026 08:00
-    /// </summary>
     private List<RdpSessionInfo> ParseQuserOutput(
         string raw, string serverName, string serverIp)
     {
@@ -436,7 +508,7 @@ public sealed class RdpMonitorService : BackgroundService
             string normalized = line.Trim().TrimStart('>').Trim();
 
             if (string.IsNullOrWhiteSpace(normalized))                                    continue;
-            if (normalized.StartsWith("USERNAME", StringComparison.OrdinalIgnoreCase))    continue;
+            if (normalized.StartsWith("USERNAME",    StringComparison.OrdinalIgnoreCase)) continue;
             if (normalized.StartsWith("SESSIONNAME", StringComparison.OrdinalIgnoreCase)) continue;
 
             try
@@ -472,10 +544,10 @@ public sealed class RdpMonitorService : BackgroundService
             }
             catch (RegexMatchTimeoutException)
             {
-                // Аномально довгий рядок — пропускаємо, не падаємо
                 _logger.LogWarning(
                     "RdpMonitorService: regex timeout on line from {Server}: {Line}",
-                    serverName, normalized.Length > 120 ? normalized[..120] + "…" : normalized);
+                    serverName,
+                    normalized.Length > 120 ? normalized[..120] + "…" : normalized);
             }
         }
 

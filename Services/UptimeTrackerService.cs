@@ -148,7 +148,7 @@ public sealed class UptimeTrackerService
             _records.Remove(record);
         }
 
-        Task.Run(() => SaveToDisk(DateTimeOffset.Now));
+        _ = Task.Run(() => SaveToDisk(DateTimeOffset.Now));
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -166,7 +166,7 @@ public sealed class UptimeTrackerService
 
         if (removed == 0) return;
 
-        Task.Run(() => SaveToDisk(DateTimeOffset.Now));
+        _ = Task.Run(() => SaveToDisk(DateTimeOffset.Now));
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
