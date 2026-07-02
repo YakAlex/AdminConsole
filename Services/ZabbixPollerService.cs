@@ -278,9 +278,7 @@ public sealed class ZabbixPollerService : BackgroundService
             {
                 _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
 
-                // Перевіряємо чи токен у сховищі змінився поки запит летів до Zabbix.
-                // Якщо змінився — юзер встиг зберегти новий токен через Settings.
-                // Не очищаємо credentials і просто йдемо на нову ітерацію з новим токеном.
+                // Перевіряємо чи токен змінився поки запит летів
                 var (_, currentTokenInVault) = _credentials.GetZabbix();
                 if (useApiToken
                     && !string.IsNullOrWhiteSpace(currentTokenInVault)
@@ -291,13 +289,14 @@ public sealed class ZabbixPollerService : BackgroundService
                     continue;
                 }
 
-                // Токен не змінився — помилка реальна, очищаємо і запитуємо новий.
-                _credentials.ClearZabbix();
+                // НЕ видаляємо токен — фоновий сервіс не має права стирати credentials.
+                // Тільки юзер може видалити токен через Settings.
+                // Просто повідомляємо і призупиняємо poll.
                 _sessionToken = null;
 
                 _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
                     Problems: [],
-                    ErrorMessage: "Токен відхилено — потрібна повторна авторизація",
+                    ErrorMessage: "Токен відхилено Zabbix — перевірте токен у Settings",
                     FetchedAt: DateTimeOffset.Now)));
 
                 authRetries++;
@@ -309,22 +308,10 @@ public sealed class ZabbixPollerService : BackgroundService
                     return;
                 }
 
-                using var dialogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                dialogCts.CancelAfter(TimeSpan.FromMinutes(5));
-
-                bool obtained = await RequestFreshZabbixTokenAsync(
-                    reason: ex.Message,
-                    ct: dialogCts.Token).ConfigureAwait(false);
-
-                if (!obtained)
-                {
-                    _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                        "Новий токен не отримано — oпитування призупинено до перезапуску або зміни в налаштуваннях."));
-                    return;
-                }
-
-                _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                    $"Новий токен отримано через діалог (спроба {authRetries}/{MaxAuthRetries}) — перевіряємо..."));
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"Zabbix: токен відхилено (спроба {authRetries}/{MaxAuthRetries}). " +
+                    $"Оновіть токен у Settings."));
+                return;
             }
             catch (Exception ex)
             {

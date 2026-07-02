@@ -245,8 +245,6 @@ private async Task SaveZabbixTokenAsync()
         _credentials.StoreZabbixToken(tokenToSave);
         _credentials.ResetZabbixCancelledFlag();
 
-        // Надсилаємо ОДРАЗУ після збереження — незалежно від результату тесту
-        // і від того чи юзер закриє Settings під час тесту.
         _messenger.Send(new CredentialsChangedMessage
         {
             Target = CredentialTarget.Zabbix,
@@ -256,6 +254,8 @@ private async Task SaveZabbixTokenAsync()
         _messenger.Send(AppLogEntryMessage.Info("Settings",
             "Zabbix API токен збережено — перевіряємо з'єднання…"));
 
+        HasZabbixCredentials = _credentials.HasZabbixCredentials;
+        ZabbixTokenMasked    = _credentials.GetZabbixTokenMasked();
         if (!string.IsNullOrWhiteSpace(_zabbixUrl))
         {
             _zabbixTestCts?.Cancel();

@@ -133,7 +133,7 @@ public sealed class ZabbixApiClient
         ["limit"]       = 200
     };
 
-    var request  = BuildRequest("problem.get", parameters, useApiToken ? null : auth);
+    var request  = BuildRequest("problem.get", parameters, auth);
     var response = await PostAsync(url, request, ct, useApiToken ? auth : null).ConfigureAwait(false);
     if (response is null) return [];
 
