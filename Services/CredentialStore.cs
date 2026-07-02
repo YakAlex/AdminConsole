@@ -72,8 +72,8 @@ public sealed class CredentialStore
             _rdpUsername           = username;
             _rdpPassword           = password;
             UserCancelledRdpPrompt = false;
+            WriteToVault(RdpTarget, username, password);
         }
-        WriteToVault(RdpTarget, username, password);
     }
 
     public void ClearRdp()
@@ -82,8 +82,8 @@ public sealed class CredentialStore
         {
             _rdpUsername = null;
             _rdpPassword = null;
+            DeleteFromVault(RdpTarget);
         }
-        DeleteFromVault(RdpTarget);
     }
 
     
@@ -153,8 +153,8 @@ public sealed class CredentialStore
             _zabbixUsername           = string.Empty;
             _zabbixToken              = apiToken;
             UserCancelledZabbixPrompt = false;
+            WriteToVault(ZabbixTarget, string.Empty, apiToken);
         }
-        WriteToVault(ZabbixTarget, string.Empty, apiToken);
     }
 
     public void StoreZabbixCredentials(string username, string password)
@@ -164,8 +164,8 @@ public sealed class CredentialStore
             _zabbixUsername           = username;
             _zabbixToken              = password;
             UserCancelledZabbixPrompt = false;
+            WriteToVault(ZabbixTarget, username, password);
         }
-        WriteToVault(ZabbixTarget, username, password);
     }
 
     public void ClearZabbix()
@@ -174,8 +174,8 @@ public sealed class CredentialStore
         {
             _zabbixUsername = null;
             _zabbixToken    = null;
+            DeleteFromVault(ZabbixTarget);
         }
-        DeleteFromVault(ZabbixTarget);
     }
 
     public void MarkZabbixCancelled() => _userCancelledZabbixPrompt = true;

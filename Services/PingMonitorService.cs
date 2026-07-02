@@ -131,28 +131,32 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
 
     private async Task RunRecoveryLoopAsync(int intervalSec, CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(intervalSec),
-                ct).ConfigureAwait(false);
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(intervalSec),
+                    ct).ConfigureAwait(false);
 
-            if (ct.IsCancellationRequested) break;
-            
-            var offlineServers = _servers
-                .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
-                            && st == PingStatus.Offline)
-                .ToList();
+                if (ct.IsCancellationRequested) break;
 
-            if (offlineServers.Count == 0) continue;
+                var offlineServers = _servers
+                    .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
+                                && st == PingStatus.Offline)
+                    .ToList();
 
-            _logger.LogDebug(
-                "Recovery loop: pinging {Count} offline server(s).",
-                offlineServers.Count);
+                if (offlineServers.Count == 0) continue;
 
-            await PingServersAsync(offlineServers, _recoveryThrottle, ct)
-                .ConfigureAwait(false);
+                _logger.LogDebug(
+                    "Recovery loop: pinging {Count} offline server(s).",
+                    offlineServers.Count);
+
+                await PingServersAsync(offlineServers, _recoveryThrottle, ct)
+                    .ConfigureAwait(false);
+            }
         }
+        catch (OperationCanceledException) { }
     }
     
     // ── Guard для циклів ──────────────────────────────────────────────────────

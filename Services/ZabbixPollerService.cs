@@ -223,7 +223,6 @@ public sealed class ZabbixPollerService : BackgroundService
 
             if (_sessionToken is null)
             {
-                _credentials.ClearZabbix();
                 _messenger.Send(AppLogEntryMessage.Error(LogSource,
                     "Zabbix login failed — credentials видалено."));
             }
