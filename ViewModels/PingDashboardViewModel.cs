@@ -15,6 +15,7 @@ public sealed partial class PingDashboardViewModel
     : ObservableObject, IRecipient<PingBatchResultMessage>
 {
     public ObservableCollection<PingResultViewModel> Servers { get; } = [];
+    private readonly Dictionary<string, PingResultViewModel> _byIp = new();
     public CollectionViewSource GroupedServers { get; } = new();
 
     [ObservableProperty] private string              _summaryText   = "Initialising…";
@@ -42,6 +43,8 @@ public sealed partial class PingDashboardViewModel
                 entry.Name, entry.IP, entry.Group, entry.Type,
                 _remoteMgmt, _dialog));
         }
+        foreach (var s in Servers)
+            _byIp[s.IP] = s;
 
         TotalCount = Servers.Count;
 
@@ -52,18 +55,16 @@ public sealed partial class PingDashboardViewModel
         messenger.RegisterAll(this);
         UpdateSummary();
     }
-
+    
     public void Receive(PingBatchResultMessage message)
     {
         var results = message.Value.Results;
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Один прохід по всіх результатах — один Dispatcher call,
-            // одне перемальовування UI після всіх оновлень
             foreach (var result in results)
             {
-                var row = Servers.FirstOrDefault(s => s.IP == result.IP);
-                row?.ApplyResult(result);
+                if (_byIp.TryGetValue(result.IP, out var row))
+                    row.ApplyResult(result);
             }
             UpdateSummary();
         });

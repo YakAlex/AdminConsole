@@ -70,12 +70,16 @@ public sealed partial class RdpSessionViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Якщо credentials видалено і нові ще не збережено —
-            // ігноруємо будь-які повідомлення (і успішні і з помилками від старого poll).
-            // Як тільки юзер збереже нові credentials — Receive(CredentialsChangedMessage)
-            // скине _credentialsCleared до того як прийде перший результат нового poll.
             if (_credentialsCleared)
                 return;
+
+            // Запам'ятовуємо виділену сесію по ключу (ServerIp+SessionId),
+            // щоб відновити виділення після пересворення рядків нижче —
+            // об'єкти RdpSessionRowViewModel readonly, тому "diff на місці"
+            // тут не робимо, лише зберігаємо/відновлюємо SelectedSession.
+            var selectedKey = SelectedSession is { } sel
+                ? (sel.ServerIp, sel.SessionId)
+                : ((string, string)?)null;
 
             var toRemove = Sessions
                 .Where(s => s.ServerIp == payload.ServerIp)
@@ -86,6 +90,12 @@ public sealed partial class RdpSessionViewModel
 
             foreach (var session in payload.Sessions)
                 Sessions.Add(new RdpSessionRowViewModel(session));
+
+            if (selectedKey is { } key)
+            {
+                SelectedSession = Sessions.FirstOrDefault(
+                    s => s.ServerIp == key.Item1 && s.SessionId == key.Item2);
+            }
 
             var statusRow = ServerStatuses
                 .FirstOrDefault(s => s.ServerIp == payload.ServerIp);
