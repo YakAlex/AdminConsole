@@ -243,93 +243,91 @@ public sealed class ZabbixPollerService : BackgroundService
     // ── Poll ─────────────────────────────────────────────────────────────────
 
    private const int MaxAuthRetries = 3;
+    private int _consecutiveAuthFailures = 0;
+
     private async Task PollAsync(CancellationToken ct)
     {
-        int authRetries = 0;
-        while (true)
+        bool useApiToken = _credentials.ZabbixUsesApiToken;
+
+        var (_, tokenUsedForRequest) = _credentials.GetZabbix();
+        string auth = useApiToken ? tokenUsedForRequest : _sessionToken ?? string.Empty;
+
+        try
         {
-            bool useApiToken = _credentials.ZabbixUsesApiToken;
+            var problems = await _client.GetActiveProblemsAsync(
+                _settings.ZabbixUrl, auth, useApiToken,
+                WatchedSeverities, ct).ConfigureAwait(false);
 
-            // Запам'ятовуємо токен з яким робимо запит —
-            // щоб після помилки порівняти з поточним у сховищі
-            // (Optimistic Concurrency патерн).
-            var (_, tokenUsedForRequest) = _credentials.GetZabbix();
-            string auth = useApiToken ? tokenUsedForRequest : _sessionToken ?? string.Empty;
+            _consecutiveAuthFailures = 0;
 
-            try
-            {
-                var problems = await _client.GetActiveProblemsAsync(
-                    _settings.ZabbixUrl, auth, useApiToken,
-                    WatchedSeverities, ct).ConfigureAwait(false);
+            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                Problems: problems,
+                ErrorMessage: null,
+                FetchedAt: DateTimeOffset.Now)));
 
-                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                    Problems: problems,
-                    ErrorMessage: null,
-                    FetchedAt: DateTimeOffset.Now)));
-
-                return;
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-            catch (ZabbixAuthException ex)
-            {
-                _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
-
-                // Перевіряємо чи токен змінився поки запит летів
-                var (_, currentTokenInVault) = _credentials.GetZabbix();
-                if (useApiToken
-                    && !string.IsNullOrWhiteSpace(currentTokenInVault)
-                    && currentTokenInVault != tokenUsedForRequest)
-                {
-                    _logger.LogInformation(
-                        "Zabbix: токен оновлено під час запиту — ігноруємо помилку старого токена.");
-                    continue;
-                }
-
-                // НЕ видаляємо токен — фоновий сервіс не має права стирати credentials.
-                // Тільки юзер може видалити токен через Settings.
-                // Просто повідомляємо і призупиняємо poll.
-                _sessionToken = null;
-
-                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                    Problems: [],
-                    ErrorMessage: "Токен відхилено Zabbix — перевірте токен у Settings",
-                    FetchedAt: DateTimeOffset.Now)));
-
-                authRetries++;
-                if (authRetries >= MaxAuthRetries)
-                {
-                    _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                        $"Zabbix: {MaxAuthRetries} спроби авторизації невдалі — poll призупинено. " +
-                        $"Оновіть токен у Settings."));
-                    return;
-                }
-
-                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"Zabbix: токен відхилено (спроба {authRetries}/{MaxAuthRetries}). " +
-                    $"Оновіть токен у Settings."));
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "ZabbixPollerService: poll failed.");
-                _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                    $"Zabbix poll failed: {ex.Message}"));
-
-                _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
-                    Problems: null,
-                    ErrorMessage: $"Помилка зв'язку: {ex.Message}",
-                    FetchedAt: DateTimeOffset.Now)));
-
-                if (!useApiToken && ex is not System.Net.Http.HttpRequestException)
-                    await AuthenticateAsync(ct).ConfigureAwait(false);
-
-                return;
-            }
+            return;
         }
-    } 
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ZabbixAuthException ex)
+        {
+            _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
+
+            var (_, currentTokenInVault) = _credentials.GetZabbix();
+            if (useApiToken
+                && !string.IsNullOrWhiteSpace(currentTokenInVault)
+                && currentTokenInVault != tokenUsedForRequest)
+            {
+                _logger.LogInformation(
+                    "Zabbix: токен оновлено під час запиту — ігноруємо помилку старого токена.");
+                _consecutiveAuthFailures = 0;
+                return;
+            }
+
+            // НЕ видаляємо токен — фоновий сервіс не має права стирати credentials.
+            // Тільки юзер може видалити токен через Settings.
+            // Просто повідомляємо і призупиняємо poll.
+            _sessionToken = null;
+            _consecutiveAuthFailures++;
+
+            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                Problems: [],
+                ErrorMessage: "Токен відхилено Zabbix — перевірте токен у Settings",
+                FetchedAt: DateTimeOffset.Now)));
+
+            if (_consecutiveAuthFailures >= MaxAuthRetries)
+            {
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"Zabbix: {MaxAuthRetries} послідовні цикли опитування з невалідним токеном. " +
+                    $"Оновіть токен у Settings."));
+            }
+            else
+            {
+                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                    $"Zabbix: токен відхилено (цикл {_consecutiveAuthFailures}/{MaxAuthRetries}). " +
+                    $"Оновіть токен у Settings."));
+            }
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ZabbixPollerService: poll failed.");
+            _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                $"Zabbix poll failed: {ex.Message}"));
+
+            _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
+                Problems: null,
+                ErrorMessage: $"Помилка зв'язку: {ex.Message}",
+                FetchedAt: DateTimeOffset.Now)));
+
+            if (!useApiToken && ex is not System.Net.Http.HttpRequestException)
+                await AuthenticateAsync(ct).ConfigureAwait(false);
+
+            return;
+        }
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 

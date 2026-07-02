@@ -254,7 +254,6 @@ public sealed class RdpMonitorService : BackgroundService
                 allText.Contains("неверн")        ||
                 allText.Contains("невірн"))
             {
-                _credentials.ClearRdp();
                 LogSessionChanges(server, []);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
@@ -268,7 +267,6 @@ public sealed class RdpMonitorService : BackgroundService
             if (allText.Contains("access is denied") ||
                 allText.Contains("access denied"))
             {
-                _credentials.ClearRdp();
                 LogSessionChanges(server, []);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,

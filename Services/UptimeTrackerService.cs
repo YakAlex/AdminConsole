@@ -62,6 +62,8 @@ public sealed class UptimeTrackerService
 
     // ── IRecipient ────────────────────────────────────────────────────────────
 
+    private volatile bool _saveScheduled;
+
     public void Receive(PingBatchResultMessage message)
     {
         bool changed = false;
@@ -111,16 +113,40 @@ public sealed class UptimeTrackerService
             }
         }
         if (!changed) return;
-        try
-        {
-            SaveToDisk(DateTimeOffset.Now);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UptimeTrackerService: не вдалось зберегти інцидент на диск.");
-        }
 
+        ScheduleSave();
         PublishSnapshot();
+    }
+
+    /// <summary>
+    /// Відкладає SaveToDisk на 500мс і об'єднує кілька змін підряд
+    /// (наприклад, кілька серверів впали в одному batch) в один запис на диск,
+    /// замість File.Move на кожен окремий Receive.
+    /// </summary>
+    private void ScheduleSave()
+    {
+        if (_saveScheduled) return;
+        _saveScheduled = true;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+
+                // Скидаємо прапорець ДО старту запису — будь-яка подія,
+                // що прийде під час SaveToDisk, знову поставить true
+                // і запустить новий цикл накопичення, а не загубиться.
+                _saveScheduled = false;
+
+                SaveToDisk(DateTimeOffset.Now);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UptimeTrackerService: не вдалось зберегти інцидент на диск.");
+                _saveScheduled = false;
+            }
+        });
     }
 
     // ── Public API для UptimeViewModel ────────────────────────────────────────

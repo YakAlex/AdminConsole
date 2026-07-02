@@ -50,7 +50,11 @@ public sealed class UserSettingsService
         {
             Directory.CreateDirectory(SettingsDir); // ідемпотентно
             var json = JsonSerializer.Serialize(Current, JsonOptions);
-            File.WriteAllText(SettingsPath, json);
+
+            var tempPath = SettingsPath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, SettingsPath, overwrite: true);
+
             _logger.LogDebug("UserSettings saved to {Path}", SettingsPath);
         }
         catch (Exception ex)

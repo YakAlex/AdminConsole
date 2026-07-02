@@ -84,8 +84,7 @@ public sealed class FileLoggerService
     public void Receive(AppLogEntryMessage message)
     {
         _queue.Enqueue(message.Value);
-        if (_signal.CurrentCount == 0)
-            _signal.Release();
+        _signal.Release();
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
