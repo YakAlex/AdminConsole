@@ -16,6 +16,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
     private readonly ILogger<PingMonitorService> _logger;
     private readonly MonitoringSettings          _settings;
     private readonly IReadOnlyList<ServerEntry>  _servers;
+    private readonly MaintenanceService _maintenance;
 
     // ── Стан статусів ────────────────────────────────────────────────────────
 
@@ -45,12 +46,34 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         IMessenger                   messenger,
         ILogger<PingMonitorService>  logger,
         IOptions<MonitoringSettings> settings,
-        IOptions<List<ServerEntry>>  servers)
+        IOptions<List<ServerEntry>>  servers,
+        MaintenanceService           maintenance)
     {
         _messenger = messenger;
         _logger    = logger;
         _settings  = settings.Value;
         _servers   = servers.Value.AsReadOnly();
+        _maintenance = maintenance;
+        _messenger.Register<MaintenanceChangedMessage>(
+            this, (_, msg) => OnMaintenanceChanged(msg));
+    }
+
+    private void OnMaintenanceChanged(MaintenanceChangedMessage msg)
+    {
+        if (msg.Action != MaintenanceAction.Ended) return;
+
+        // Скидаємо previousStatus для зачеплених серверів на Unknown —
+        // наступний цикл пінгу сприйме поточний Offline (якщо сервер
+        // не встиг піднятись вчасно) як "перехід з Unknown", що вже
+        // існуючою гілкою коду генерує Warning — без окремої логіки
+        // "примусового алерту".
+        var affected = msg.Window.TargetGroup is not null
+            ? _servers.Where(s => s.Group.Equals(msg.Window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase))
+            : _servers.Where(s => s.IP == msg.Window.ServerIp);
+
+        foreach (var s in affected)
+            _previousStatus[s.IP] = PingStatus.Unknown;
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -276,12 +299,20 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
                     }
                     else if (status == PingStatus.Offline)
                     {
-                        if (prev is PingStatus.Unknown or PingStatus.Checking)
-                            _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                                $"{server.Name} ({server.IP}) недоступний при старті."));
-                        else
-                            _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                                $"{server.Name} ({server.IP}) went OFFLINE."));
+                        bool underMaintenance = _maintenance.IsUnderMaintenance(server.IP, server.Group);
+
+                        if (!underMaintenance)
+                        {
+                            if (prev is PingStatus.Unknown or PingStatus.Checking)
+                                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                                    $"{server.Name} ({server.IP}) недоступний при старті."));
+                            else
+                                _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                                    $"{server.Name} ({server.IP}) went OFFLINE."));
+                        }
+                        // Під maintenance — жодного Warning/Error, але статус
+                        // все одно оновлюється (PingResult нижче), UI покаже
+                        // Offline + бейдж 🔧 замість тривоги.
                     }
                     // Checking/Unknown → Online: тихо, без логу — не спам при старті.
                 }

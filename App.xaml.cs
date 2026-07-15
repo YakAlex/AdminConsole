@@ -126,6 +126,8 @@ public partial class App : Application
         services.AddHostedService<ZabbixPollerService>();
         services.AddSingleton<UptimeTrackerService>();
         services.AddHostedService(sp => sp.GetRequiredService<UptimeTrackerService>());
+        services.AddSingleton<MaintenanceService>();
+        services.AddHostedService(sp => sp.GetRequiredService<MaintenanceService>());
         services.AddSingleton<RemoteEventLogService>();
         services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();

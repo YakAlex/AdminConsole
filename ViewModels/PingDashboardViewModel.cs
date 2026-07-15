@@ -28,20 +28,24 @@ public sealed partial class PingDashboardViewModel
     private readonly RemoteManagementService _remoteMgmt;
     private readonly IDialogService          _dialog;
 
+    private readonly MaintenanceService _maintenance;
+
     public PingDashboardViewModel(
         IMessenger messenger,
         IOptions<List<ServerEntry>> serversOptions,
         RemoteManagementService remoteMgmt,
-        IDialogService dialog)
+        IDialogService dialog,
+        MaintenanceService maintenance)
     {
-        _remoteMgmt = remoteMgmt;
-        _dialog     = dialog;
+        _remoteMgmt  = remoteMgmt;
+        _dialog      = dialog;
+        _maintenance = maintenance;
 
         foreach (var entry in serversOptions.Value)
         {
             Servers.Add(new PingResultViewModel(
                 entry.Name, entry.IP, entry.Group, entry.Type,
-                _remoteMgmt, _dialog));
+                _remoteMgmt, _dialog, _maintenance, messenger));
         }
         foreach (var s in Servers)
             _byIp[s.IP] = s;

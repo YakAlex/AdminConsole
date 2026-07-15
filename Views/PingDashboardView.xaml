@@ -262,11 +262,29 @@
                                     Foreground="{Binding Status, Converter={StaticResource StatusToColor}}"
                                     FontSize="12" FontWeight="Medium"
                                     Margin="8,0,0,0" VerticalAlignment="Center" />
+
+                                <materialDesign:PackIcon
+                                    Kind="Wrench"
+                                    Width="13" Height="13"
+                                    Foreground="#FFFFC107"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    ToolTip="{Binding MaintenanceTooltip}">
+                                    <materialDesign:PackIcon.Style>
+                                        <Style TargetType="materialDesign:PackIcon">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUnderMaintenance}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </materialDesign:PackIcon.Style>
+                                </materialDesign:PackIcon>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-
                 <!-- Name -->
                 <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*">
                     <DataGridTextColumn.ElementStyle>
@@ -424,7 +442,30 @@
                                         Width="16" Height="16"
                                         Foreground="#FF80CBC4" />
                                 </Button>
-
+                                
+                                <Button
+                                    Style="{StaticResource ActionIconButton}"
+                                    Command="{Binding ToggleMaintenanceCommand}"
+                                    ToolTip="{Binding MaintenanceTooltip}"
+                                    Margin="2,0">
+                                    <Button.Content>
+                                        <materialDesign:PackIcon
+                                            Kind="Wrench"
+                                            Width="16" Height="16">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#FF80CBC4" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUnderMaintenance}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FFFFC107" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                    </Button.Content>
+                                </Button>
+                                
                                 <!-- Restart (тільки Windows) -->
                                 <Button
                                     Command="{Binding RemoteRestartCommand}"

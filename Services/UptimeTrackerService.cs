@@ -15,10 +15,14 @@ namespace AdminConsole.Services;
 /// Публікує UptimeUpdatedMessage при кожній зміні.
 /// </summary>
 public sealed class UptimeTrackerService
-    : BackgroundService, IRecipient<PingBatchResultMessage>, IDisposable
+    : BackgroundService,
+        IRecipient<PingBatchResultMessage>,
+        IRecipient<MaintenanceChangedMessage>,
+        IDisposable
 {
     private readonly IMessenger                   _messenger;
     private readonly ILogger<UptimeTrackerService> _logger;
+    private readonly MaintenanceService _maintenance;
 
     // Поточний статус кожного IP (для визначення переходів)
     private readonly Dictionary<string, PingStatus> _lastStatus = new();
@@ -43,11 +47,53 @@ public sealed class UptimeTrackerService
 
     public UptimeTrackerService(
         IMessenger                    messenger,
-        ILogger<UptimeTrackerService> logger)
+        ILogger<UptimeTrackerService> logger,
+        MaintenanceService            maintenance)
     {
         _messenger = messenger;
         _logger    = logger;
+        _maintenance = maintenance;
         _messenger.RegisterAll(this);
+    }
+
+    // ── IRecipient<MaintenanceChangedMessage> ───────────────────────────────
+
+    public void Receive(MaintenanceChangedMessage message)
+    {
+        if (message.Action != MaintenanceAction.Started) return;
+
+        var window = message.Window;
+        bool changed = false;
+
+        lock (_lock)
+        {
+            var affected = window.TargetGroup is not null
+                ? _records.Where(r => r.ServerGroup.Equals(window.TargetGroup,
+                    StringComparison.OrdinalIgnoreCase) && !r.IsResolved)
+                : _records.Where(r => r.ServerIp == window.ServerIp && !r.IsResolved);
+
+            foreach (var record in affected)
+            {
+                record.RecoveredAt        = DateTimeOffset.Now;
+                record.ClosedByMaintenance = true;
+                changed = true;
+
+                // previousStatus теж треба скинути, інакше коли maintenance
+                // закінчиться і PingMonitor пришле Online — тут спрацює гілка
+                // "Online && prev == Offline" і трекер спробує "закрити"
+                // вже закритий інцидент (не критично, FirstOrDefault(!IsResolved)
+                // просто нічого не знайде — але для чистоти стану:
+                _lastStatus[record.ServerIp] = PingStatus.Unknown;
+            }
+        }
+
+        if (!changed) return;
+
+        ScheduleSave();
+        PublishSnapshot();
+
+        _messenger.Send(AppLogEntryMessage.Info(LogSource,
+            $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."));
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -82,7 +128,8 @@ public sealed class UptimeTrackerService
 
                 if (result.Status == PingStatus.Offline
                     && prev != PingStatus.Offline
-                    && prev is not PingStatus.Unknown and not PingStatus.Checking)
+                    && prev is not PingStatus.Unknown and not PingStatus.Checking
+                    && !_maintenance.IsUnderMaintenance(result.IP, result.Group))
                 {
                     var record = new DowntimeRecord
                     {

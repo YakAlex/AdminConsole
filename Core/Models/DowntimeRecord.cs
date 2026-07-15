@@ -9,6 +9,14 @@ public sealed class DowntimeRecord
     public DateTimeOffset  FellAt       { get; init; }
     public DateTimeOffset? RecoveredAt  { get; set;  }
 
+    /// <summary>
+    /// true — інцидент закрито не тому що сервер реально відновився,
+    /// а тому що адміністратор увімкнув Maintenance Mode поки інцидент
+    /// був відкритий. Дозволяє відрізняти "справжні" даунтайми від
+    /// перерваних вручну при розрахунку SLA-звітів.
+    /// </summary>
+    public bool ClosedByMaintenance { get; set; }
+
     [JsonIgnore]
     public TimeSpan Duration => RecoveredAt.HasValue
         ? RecoveredAt.Value - FellAt
@@ -23,11 +31,13 @@ public sealed class DowntimeRecord
         get
         {
             var d = Duration;
-            if (d.TotalHours >= 1)
-                return $"{(int)d.TotalHours}г {d.Minutes:D2}хв";
-            if (d.TotalMinutes >= 1)
-                return $"{(int)d.TotalMinutes}хв {d.Seconds:D2}с";
-            return $"{d.Seconds}с";
+            string baseText = d.TotalHours >= 1
+                ? $"{(int)d.TotalHours}г {d.Minutes:D2}хв"
+                : d.TotalMinutes >= 1
+                    ? $"{(int)d.TotalMinutes}хв {d.Seconds:D2}с"
+                    : $"{d.Seconds}с";
+
+            return ClosedByMaintenance ? $"{baseText} (maintenance)" : baseText;
         }
     }
 }
