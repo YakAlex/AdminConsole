@@ -274,7 +274,6 @@ public sealed class ZabbixPollerService : BackgroundService
         catch (ZabbixAuthException ex)
         {
             _logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
-
             var (_, currentTokenInVault) = _credentials.GetZabbix();
             if (useApiToken
                 && !string.IsNullOrWhiteSpace(currentTokenInVault)
@@ -292,22 +291,27 @@ public sealed class ZabbixPollerService : BackgroundService
             _sessionToken = null;
             _consecutiveAuthFailures++;
 
+            // ex.Message містить точну причину від Zabbix API (наприклад,
+            // "Zabbix відхилив токен (code=-32500): API token expired.") —
+            // раніше ця деталь губилась і йшла лише в _logger.LogWarning
+            // (консоль/Debug Output), а в UI-логи (AppLogEntryMessage) летів
+            // тільки узагальнений текст. Тепер прокидаємо причину в обидва місця.
             _messenger.Send(new ZabbixProblemsUpdatedMessage(new ZabbixProblemsPayload(
                 Problems: [],
-                ErrorMessage: "Токен відхилено Zabbix — перевірте токен у Settings",
+                ErrorMessage: $"Токен відхилено Zabbix: {ex.Message}",
                 FetchedAt: DateTimeOffset.Now)));
 
             if (_consecutiveAuthFailures >= MaxAuthRetries)
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"Zabbix: {MaxAuthRetries} послідовні цикли опитування з невалідним токеном. " +
-                    $"Оновіть токен у Settings."));
+                    $"Причина: {ex.Message} Оновіть токен у Settings."));
             }
             else
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"Zabbix: токен відхилено (цикл {_consecutiveAuthFailures}/{MaxAuthRetries}). " +
-                    $"Оновіть токен у Settings."));
+                    $"Причина: {ex.Message} Оновіть токен у Settings."));
             }
             return;
         }

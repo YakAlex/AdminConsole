@@ -22,6 +22,15 @@ public partial class App : Application
         try
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+            }
+            catch
+            {
+                // Ignored
+            }
 
             // Глобальний обробник необроблених винятків з UI-потоку.
             // Критично для async void OnStartup — виняток що виникне після
