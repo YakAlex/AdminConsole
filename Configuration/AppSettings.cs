@@ -16,6 +16,14 @@ public sealed class MonitoringSettings
     public int    ZabbixPollIntervalSeconds        { get; init; } = 60;
     public int    RdpPollIntervalSeconds           { get; init; } = 120;
     public int    LocalResourcePollIntervalSeconds { get; init; } = 3;
+    /// <summary>
+    /// Мінімальна тривалість (у секундах) даунтайму, щоб він потрапив
+    /// у DowntimeRecord і зберігся на диск. Коротші "миготіння"
+    /// (наприклад, одиничний втрачений ping-пакет через мережеву затримку)
+    /// відкидаються при відновленні і не рахуються як SLA-інцидент.
+    /// 0 — вимкнути фільтр (записувати все, як раніше).
+    /// </summary>
+    public int MinIncidentDurationSeconds { get; init; } = 10;
 }
 
 /// <summary>

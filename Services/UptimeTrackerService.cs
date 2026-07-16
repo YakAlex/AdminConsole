@@ -1,5 +1,7 @@
 ﻿using AdminConsole.Core.Messages;
 using AdminConsole.Core.Models;
+using AdminConsole.Configuration;
+using Microsoft.Extensions.Options;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,13 +25,26 @@ public sealed class UptimeTrackerService
     private readonly IMessenger                   _messenger;
     private readonly ILogger<UptimeTrackerService> _logger;
     private readonly MaintenanceService _maintenance;
+    private readonly MonitoringSettings _settings;
 
-    // Поточний статус кожного IP (для визначення переходів)
+    /// Поточний статус кожного IP (для визначення переходів)
     private readonly Dictionary<string, PingStatus> _lastStatus = new();
 
     // Всі інциденти в пам'яті (поточна сесія + завантажені з диску)
     private readonly List<DowntimeRecord> _records = new();
     private readonly object               _lock    = new();
+
+    /// <summary>
+    /// Сервери, які зараз Offline, але ще не "визріли" до MinIncidentDurationSeconds.
+    /// Живе виключно в пам'яті — жодного DowntimeRecord, жодного SaveToDisk,
+    /// жодного PublishSnapshot, поки інцидент не підтвердиться і не буде
+    /// перенесений у _records. Дозволяє повністю уникнути зайвого I/O та
+    /// UI-мерехтіння для коротких мережевих "миготінь".
+    /// </summary>
+    private readonly Dictionary<string, PendingOffline> _pendingOffline = new();
+
+    private readonly record struct PendingOffline(
+        DateTimeOffset FellAt, string ServerName, string Group);
     
     private readonly object               _saveLock = new();
 
@@ -48,11 +63,13 @@ public sealed class UptimeTrackerService
     public UptimeTrackerService(
         IMessenger                    messenger,
         ILogger<UptimeTrackerService> logger,
-        MaintenanceService            maintenance)
+        MaintenanceService            maintenance,
+        IOptions<MonitoringSettings>  settings)
     {
         _messenger = messenger;
         _logger    = logger;
         _maintenance = maintenance;
+        _settings  = settings.Value;
         _messenger.RegisterAll(this);
     }
 
@@ -78,13 +95,22 @@ public sealed class UptimeTrackerService
                 record.ClosedByMaintenance = true;
                 changed = true;
 
-                // previousStatus теж треба скинути, інакше коли maintenance
-                // закінчиться і PingMonitor пришле Online — тут спрацює гілка
-                // "Online && prev == Offline" і трекер спробує "закрити"
-                // вже закритий інцидент (не критично, FirstOrDefault(!IsResolved)
-                // просто нічого не знайде — але для чистоти стану:
                 _lastStatus[record.ServerIp] = PingStatus.Unknown;
             }
+
+            // Прибираємо pending-записи (ще не промоутовані в DowntimeRecord) —
+            // інакше вони можуть "визріти" вже після Maintenance зі старим
+            // FellAt, що передував самому вікну обслуговування.
+            var pendingKeysToRemove = window.TargetGroup is not null
+                ? _pendingOffline.Where(kv => kv.Value.Group.Equals(
+                        window.TargetGroup, StringComparison.OrdinalIgnoreCase))
+                    .Select(kv => kv.Key).ToList()
+                : (_pendingOffline.ContainsKey(window.ServerIp!)
+                    ? [window.ServerIp!]
+                    : []);
+
+            foreach (var key in pendingKeysToRemove)
+                _pendingOffline.Remove(key);
         }
 
         if (!changed) return;
@@ -113,7 +139,7 @@ public sealed class UptimeTrackerService
     public void Receive(PingBatchResultMessage message)
     {
         bool changed = false;
-        
+
         lock (_lock)
         {
             foreach (var result in message.Value.Results)
@@ -126,33 +152,57 @@ public sealed class UptimeTrackerService
 
                 _lastStatus.TryGetValue(result.IP, out var prev);
 
-                if (result.Status == PingStatus.Offline
-                    && prev != PingStatus.Offline
-                    && prev is not PingStatus.Unknown and not PingStatus.Checking
-                    && !_maintenance.IsUnderMaintenance(result.IP, result.Group))
+                if (result.Status == PingStatus.Offline)
                 {
-                    var record = new DowntimeRecord
-                    {
-                        ServerName  = result.Name,
-                        ServerIp    = result.IP,
-                        ServerGroup = result.Group,
-                        FellAt      = DateTimeOffset.Now
-                    };
+                    bool underMaintenance = _maintenance.IsUnderMaintenance(result.IP, result.Group);
 
-                    _records.Insert(0, record);
-                    changed = true;
-                    
+                    if (prev != PingStatus.Offline
+                        && prev is not PingStatus.Unknown and not PingStatus.Checking
+                        && !underMaintenance)
+                    {
+                        // Свіже падіння — НЕ пишемо DowntimeRecord одразу.
+                        // Кладемо в pending і чекаємо MinIncidentDurationSeconds,
+                        // перш ніж це стане "офіційним" інцидентом.
+                        _pendingOffline[result.IP] =
+                            new PendingOffline(DateTimeOffset.Now, result.Name, result.Group);
+                    }
+                    else if (!underMaintenance &&
+                             _pendingOffline.TryGetValue(result.IP, out var pending))
+                    {
+                        // Сервер досі Offline — перевіряємо чи вже минув поріг.
+                        var elapsed = DateTimeOffset.Now - pending.FellAt;
+                        if (_settings.MinIncidentDurationSeconds <= 0
+                            || elapsed.TotalSeconds >= _settings.MinIncidentDurationSeconds)
+                        {
+                            // Інцидент "визрів" — тільки тепер створюємо запис,
+                            // пишемо на диск і показуємо в UI. FellAt лишається
+                            // справжнім часом падіння, а не моментом промоції.
+                            _records.Insert(0, new DowntimeRecord
+                            {
+                                ServerName  = pending.ServerName,
+                                ServerIp    = result.IP,
+                                ServerGroup = pending.Group,
+                                FellAt      = pending.FellAt
+                            });
+                            _pendingOffline.Remove(result.IP);
+                            changed = true;
+                        }
+                    }
                 }
-                else if (result.Status == PingStatus.Online
-                         && prev == PingStatus.Offline)
+                else if (result.Status == PingStatus.Online && prev == PingStatus.Offline)
                 {
-                    var open = _records.FirstOrDefault(
-                        r => r.ServerIp == result.IP && !r.IsResolved);
-
-                    if (open is not null)
+                    // Якщо інцидент ще був лише Pending (не встиг визріти) —
+                    // прибираємо його БЕЗ жодного звернення до диска чи UI.
+                    if (!_pendingOffline.Remove(result.IP))
                     {
-                        open.RecoveredAt = DateTimeOffset.Now;
-                        changed = true;
+                        var open = _records.FirstOrDefault(
+                            r => r.ServerIp == result.IP && !r.IsResolved);
+
+                        if (open is not null)
+                        {
+                            open.RecoveredAt = DateTimeOffset.Now;
+                            changed = true;
+                        }
                     }
                 }
 
