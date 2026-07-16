@@ -286,7 +286,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <!-- Name -->
-                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*">
+                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="120">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -297,7 +297,7 @@
                 </DataGridTextColumn>
 
                 <!-- IP -->
-                <DataGridTextColumn Header="IP ADDRESS" Binding="{Binding IP}" Width="150">
+                <DataGridTextColumn Header="IP ADDRESS" Binding="{Binding IP}" Width="130">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -309,7 +309,7 @@
                 </DataGridTextColumn>
 
                 <!-- Group -->
-                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="160">
+                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="140">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
@@ -319,7 +319,7 @@
                 </DataGridTextColumn>
 
                 <!-- Latency -->
-                <DataGridTemplateColumn Header="LATENCY" Width="110" SortMemberPath="LatencyMs">
+                <DataGridTemplateColumn Header="LATENCY" Width="75" SortMemberPath="LatencyMs">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <TextBlock Text="{Binding LatencyDisplay}"
