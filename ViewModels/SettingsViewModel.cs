@@ -12,11 +12,24 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ZabbixApiClient  _zabbixClient;
     private readonly RdpCredentialValidator _rdpValidator;
     private readonly IMessenger       _messenger;
+    private readonly UserSettingsService _userSettings;
     private readonly string           _zabbixUrl;
 
     // ── Загальні ─────────────────────────────────────────────────────────────
 
     [ObservableProperty] private bool _closeToTray;
+
+    /// <summary>
+    /// Перемикач RDP-моніторингу. На відміну від CloseToTray —
+    /// застосовується МІТТЄВО (через OnRdpMonitoringEnabledChanged нижче),
+    /// а не лише при закритті Settings overlay.
+    /// </summary>
+    [ObservableProperty] private bool _rdpMonitoringEnabled;
+
+    /// <summary>
+    /// Перемикач Zabbix-моніторингу. Поведінка аналогічна RdpMonitoringEnabled.
+    /// </summary>
+    [ObservableProperty] private bool _zabbixMonitoringEnabled;
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
@@ -53,15 +66,64 @@ public sealed partial class SettingsViewModel : ObservableObject
         ZabbixApiClient  zabbixClient,
         IMessenger       messenger,
         RdpCredentialValidator rdpValidator,
+        UserSettingsService userSettings,
         Microsoft.Extensions.Options.IOptions<Configuration.MonitoringSettings> settings)
     {
         _credentials  = credentials;
         _zabbixClient = zabbixClient;
         _rdpValidator = rdpValidator;
         _messenger    = messenger;
+        _userSettings = userSettings;
         _zabbixUrl    = settings.Value.ZabbixUrl;
 
         RefreshCredentialState();
+
+        // Важливо: присвоюємо бекінг-поля НАПРЯМУ, а НЕ через публічні
+        // властивості — щоб НЕ спрацювати OnXxxChanged (і зайвий Save())
+        // під час ініціалізації відповідно даними з минулої сесії.
+        _rdpMonitoringEnabled    = _userSettings.Current.RdpMonitoringEnabled;
+        _zabbixMonitoringEnabled = _userSettings.Current.ZabbixMonitoringEnabled;
+
+        // EDGE-CASE #3 (холодний старт): публікуємо початковий стан безумовно (і для
+        // true, і для false) для RdpSessionViewModel/ZabbixViewModel. Це важливо
+        // саме для випадку "моніторинг був вимкнений у минулій сесії":
+        // без цього явного Send() ViewModels залишились б у стані "enabled" (дефолт)
+        // аж до першого poll, показуючи порожній/завислий UI замість заглушки "вимкнено".
+        // На цей момент RdpSessionViewModel/ZabbixViewModel вже зареєстровані
+        // (створюються раніше за параметром в конструкторі MainViewModel), а самі
+        // RdpMonitorService/ZabbixPollerService — ще ні (стартують пізніше, в host.StartAsync()),
+        // тому цей Send до них не дойде — і не потрібно: вони самі прочитають
+        // UserSettingsService.Current напряму на своєму першому циклі (Pull).
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp,    _rdpMonitoringEnabled));
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, _zabbixMonitoringEnabled));
+    }
+
+    // ── Перемикачі моніторингу (RDP / Zabbix) ───────────────────
+
+    /// <summary>
+    /// Викликається автоматично (CommunityToolkit.Mvvm) при зміні RdpMonitoringEnabled
+    /// ЧЕРЕЗ БІНДІНГ з UI (тобто перемикнув користувач), а НЕ при ініціалізації
+    /// в конструкторі (там поле встановлюється напряму, без цього хука).
+    ///
+    /// НЕ логує подію самостійно — єдиним джерелом логу є
+    /// RdpMonitorService.EvaluateMonitoringToggle(), який сам виявить транзицію після
+    /// пробудження (едге-сасе #2). Два окремі логи на одну дію були б дублюванням.
+    /// </summary>
+    partial void OnRdpMonitoringEnabledChanged(bool value)
+    {
+        _userSettings.Current.RdpMonitoringEnabled = value;
+        _userSettings.Save();
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp, value));
+    }
+
+    /// <summary>
+    /// Аналогічно OnRdpMonitoringEnabledChanged — див. коментар вище.
+    /// </summary>
+    partial void OnZabbixMonitoringEnabledChanged(bool value)
+    {
+        _userSettings.Current.ZabbixMonitoringEnabled = value;
+        _userSettings.Save();
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, value));
     }
 
     // ── Ініціалізація стану ───────────────────────────────────────────────────

@@ -30,10 +30,16 @@ public sealed class RdpMonitorService : BackgroundService
     private readonly IReadOnlyList<ServerEntry> _terminalServers;
     private readonly CredentialStore            _credentials;
     private readonly ICredentialPrompt          _prompt;
+    private readonly UserSettingsService         _userSettings;
 
     private const string LogSource = "RdpMonitor";
     private const int    TimeoutMs = 30_000;
     private CancellationTokenSource? _wakeUpCts;
+
+    // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
+    // Дозволяє логувати і слати MonitoringToggledMessage лише на РЕАЛЬНІЙ
+    // зміні стану, а не на кожному циклі опитування (anti-spam, edge-case #2).
+    private bool? _monitoringWasEnabled;
 
     private readonly ConcurrentDictionary<string, Dictionary<int, RdpSessionInfo>>
         _previousSessions = new();
@@ -62,13 +68,15 @@ public sealed class RdpMonitorService : BackgroundService
         IOptions<MonitoringSettings> settings,
         IOptions<List<ServerEntry>> servers,
         CredentialStore credentials,
-        ICredentialPrompt prompt)
+        ICredentialPrompt prompt,
+        UserSettingsService userSettings)
     {
-        _messenger   = messenger;
-        _logger      = logger;
-        _settings    = settings.Value;
-        _credentials = credentials;
-        _prompt      = prompt;
+        _messenger    = messenger;
+        _logger       = logger;
+        _settings     = settings.Value;
+        _credentials  = credentials;
+        _prompt       = prompt;
+        _userSettings = userSettings;
 
         _terminalServers = servers.Value
             .Where(s => s.Group.Equals("Terminal Servers",
@@ -88,6 +96,8 @@ public sealed class RdpMonitorService : BackgroundService
 
         WeakReferenceMessenger.Default.Register<CredentialsChangedMessage>(
             this, (_, msg) => OnCredentialsChanged(msg));
+        WeakReferenceMessenger.Default.Register<MonitoringToggledMessage>(
+            this, (_, msg) => OnMonitoringToggled(msg));
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -104,6 +114,58 @@ public sealed class RdpMonitorService : BackgroundService
             cts.Cancel();
         }
         catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>
+    /// Реагує на перемикання RDP-моніторингу в Settings.
+    /// НЕ довіряє полю Enabled з повідомлення — це лише сигнал "прокинься
+    /// і перевір UserSettingsService.Current самостійно" (Pull, edge-case #2).
+    /// Слугує для миттєвого відновлення опитування одразу після увімкнення,
+    /// замість очікування до RdpPollIntervalSeconds.
+    /// </summary>
+    private void OnMonitoringToggled(MonitoringToggledMessage msg)
+    {
+        if (msg.Service != MonitoredService.Rdp) return;
+
+        var cts = Interlocked.Exchange(ref _wakeUpCts, null);
+        if (cts is null) return;
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>
+    /// Перевіряє поточний стан RdpMonitoringEnabled і, лише при РЕАЛЬНІЙ
+    /// зміні відносно попередньої перевірки, логує подію та шле
+    /// MonitoringToggledMessage для синхронізації UI (edge-case #2 і #3).
+    /// Виклик — щоразу перед credential-логікою (edge-case #1).
+    /// </summary>
+    private bool EvaluateMonitoringToggle()
+    {
+        bool enabled = _userSettings.Current.RdpMonitoringEnabled;
+
+        if (_monitoringWasEnabled == enabled)
+            return enabled; // стан не змінився — тиша, без спаму логів
+
+        bool isColdStart = _monitoringWasEnabled is null;
+        _monitoringWasEnabled = enabled;
+
+        if (!enabled)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                "RDP моніторинг вимкнено в Settings."));
+            _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp, false));
+        }
+        else if (!isColdStart)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                "RDP моніторинг увімкнено — відновлюємо опитування."));
+            _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp, true));
+        }
+
+        return enabled;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -127,12 +189,21 @@ public sealed class RdpMonitorService : BackgroundService
             }
         }
 
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
-            $"Використовуємо доменні імена для quser."));
+        // EDGE-CASE #1 (додатково): перевіряємо toggle ОДИН раз тут, щоб не логувати
+        // "RDP monitor запущено", якщо моніторинг насправді вимкнено з минулої
+        // сесії (без цього логи виглядали б як "запущено" відразу за "вимкнено").
+        // Сам повторний виклик всередині PollAllServersAsync — ідемпотентний,
+        // другого логу/повідомлення не буде, бо стан вже не зміниться.
+        bool rdpMonitoringEnabled = EvaluateMonitoringToggle();
+
+        if (rdpMonitoringEnabled)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
+                $"Використовуємо доменні імена для quser."));
+        }
 
         await PollAllServersAsync(stoppingToken);
-
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -151,8 +222,11 @@ public sealed class RdpMonitorService : BackgroundService
                 catch (OperationCanceledException)
                     when (!stoppingToken.IsCancellationRequested)
                 {
+                    // Важливо: це пробудження може прийти як від CredentialsChangedMessage,
+                    // так і від MonitoringToggledMessage (edge-case #2) — тому текст логу
+                    // НЕ каже конкретно про credentials, щоб не вводити в оману.
                     _messenger.Send(AppLogEntryMessage.Info(LogSource,
-                        "RDP credentials оновлено — запускаємо позачерговий poll."));
+                        "RDP: отримано сигнал пробудження — запускаємо позачерговий poll."));
                 }
 
                 Interlocked.Exchange(ref _wakeUpCts, null);
@@ -167,6 +241,7 @@ public sealed class RdpMonitorService : BackgroundService
         {
             _wakeUpCts = null;
             WeakReferenceMessenger.Default.Unregister<CredentialsChangedMessage>(this);
+            WeakReferenceMessenger.Default.Unregister<MonitoringToggledMessage>(this);
         }
     }
 
@@ -174,6 +249,12 @@ public sealed class RdpMonitorService : BackgroundService
 
     private async Task PollAllServersAsync(CancellationToken ct)
     {
+        // EDGE-CASE #1: перевірка toggle — НАЙПЕРШИЙ рядок, ЩЕ ДО будь-якого
+        // звернення до CredentialStore чи ICredentialPrompt. Якщо RDP-моніторинг
+        // вимкнено — застосунок НІКОЛИ не запитає credentials, навіть якщо вони відсутні.
+        if (!EvaluateMonitoringToggle())
+            return;
+
         if (!_credentials.HasRdpCredentials && _credentials.UserCancelledRdpPrompt)
             return;
 

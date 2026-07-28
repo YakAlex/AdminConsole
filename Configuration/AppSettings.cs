@@ -38,4 +38,18 @@ public sealed class UserSettings
     /// false — натискання хрестика закриває програму повністю.
     /// </summary>
     public bool CloseToTray { get; set; } = true;
+    
+    /// <summary>
+    /// true  — RdpMonitorService опитує Terminal Servers.
+    /// false — сервіс не робить quser-запитів і не запитує RDP credentials,
+    ///         навіть якщо вони відсутні (перевіряється ДО credential-логіки).
+    /// </summary>
+    public bool RdpMonitoringEnabled { get; set; } = true;
+
+    /// <summary>
+    /// true  — ZabbixPollerService опитує Zabbix API.
+    /// false — сервіс не робить запитів і не запитує Zabbix токен,
+    ///         навіть якщо він відсутній (перевіряється ДО credential-логіки).
+    /// </summary>
+    public bool ZabbixMonitoringEnabled { get; set; } = true;
 }

@@ -11,7 +11,8 @@ public sealed partial class RdpSessionViewModel
     : ObservableObject,
       IRecipient<RdpSessionsUpdatedMessage>,
       IRecipient<RdpCredentialsClearedMessage>,
-      IRecipient<CredentialsChangedMessage>       // ← додаємо новий інтерфейс
+      IRecipient<CredentialsChangedMessage>,      // ← додаємо новий інтерфейс
+      IRecipient<MonitoringToggledMessage>        // ← edge-case #3: UI-заглушка при вимкненому моніторингу
 {
     public ObservableCollection<RdpSessionRowViewModel> Sessions { get; } = [];
     public ObservableCollection<ServerPollStatusViewModel> ServerStatuses { get; } = [];
@@ -20,6 +21,12 @@ public sealed partial class RdpSessionViewModel
     [ObservableProperty] private string _statusText = "Waiting for first poll…";
     [ObservableProperty] private int    _activeCount;
     [ObservableProperty] private int    _disconnectedCount;
+
+    /// <summary>
+    /// true — RDP-моніторинг вимкнено в Settings. XAML повинен сховати
+    /// таблицю сесій і показати заглушку "Моніторинг вимкнено" (edge-case #3).
+    /// </summary>
+    [ObservableProperty] private bool _isMonitoringDisabled;
 
     // Встановлюється при видаленні credentials — блокує успішні повідомлення
     // що лежали в черзі диспетчера до видалення.
@@ -42,6 +49,36 @@ public sealed partial class RdpSessionViewModel
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
             _credentialsCleared = false;
+        });
+    }
+
+    /// <summary>
+    /// Edge-case #3: синхронізує IsMonitoringDisabled на основі перемиканняв Settings.
+    /// Спрацьовує двічі: на реальне перемикання користувачем та один раз на
+    /// холодному старті (SettingsViewModel конструктор).
+    /// </summary>
+    public void Receive(MonitoringToggledMessage message)
+    {
+        if (message.Service != MonitoredService.Rdp) return;
+
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            IsMonitoringDisabled = !message.Value;
+
+            if (!message.Value)
+            {
+                // Моніторинг вимкнено — чистимо застарілі дані, щоб під
+                // заглушкою не лишались застарілі сесії.
+                Sessions.Clear();
+                ServerStatuses.Clear();
+                ActiveCount       = 0;
+                DisconnectedCount = 0;
+                StatusText        = "RDP моніторинг вимкнено в Settings.";
+            }
+            else
+            {
+                StatusText = "Waiting for first poll…";
+            }
         });
     }
 
@@ -71,6 +108,11 @@ public sealed partial class RdpSessionViewModel
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
             if (_credentialsCleared)
+                return;
+
+            // Захист від запізнілих повідомлень в черзі диспетчера,
+            // які могли надійти тільки що після вимкнення (edge-case #3).
+            if (IsMonitoringDisabled)
                 return;
 
             // Запам'ятовуємо виділену сесію по ключу (ServerIp+SessionId),
