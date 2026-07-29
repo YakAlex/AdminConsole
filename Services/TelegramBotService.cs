@@ -381,6 +381,9 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             case "🔧 Обслуговування":
                 await SendMaintenanceListAsync(client, chatId, ct);
                 return;
+            case "🏓 Пінг":
+                await SendPingNowAsync(client, chatId, ct);
+                return;
             case "👥 Користувачі":
                 if (_access.IsPrimaryAdmin(chatId))
                     await SendUsersListAsync(client, chatId, ct);
@@ -397,6 +400,9 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
                 break;
             case "/rdp":
                 await SendRdpPickerAsync(client, chatId, ct);
+                break;
+            case "/ping":
+                await SendPingNowAsync(client, chatId, ct);
                 break;
             case "/users":
                 if (_access.IsPrimaryAdmin(chatId))
@@ -575,7 +581,7 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         {
             new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
             new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
-            new KeyboardButton[] { "🔧 Обслуговування" }
+            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" }
         };
 
         // Пункт плану 2: "Для Primary Admin додатково: [ 👥 Користувачі ]" —
@@ -591,7 +597,8 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
     {
         string help = "Доступні команди:\n" +
                       "/status — загальний огляд\n" +
-                      "/rdp — RDP-сесії по серверах\n";
+                      "/rdp — RDP-сесії по серверах\n" +
+                      "/ping — пінгувати всі сервери прямо зараз (реальний час)\n";
         if (_access.IsPrimaryAdmin(chatId))
             help += "/users — керування доступом (тільки Primary Admin)\n";
 
@@ -607,7 +614,68 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
     private async Task EditWithStatusAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct)
         => await client.EditMessageText(chatId, messageId, BuildStatusText(),
             replyMarkup: BuildStatusKeyboard(), cancellationToken: ct);
+    
+    // ── /ping — пряме опитування всіх серверів у реальному часі ──────────────
 
+    private async Task SendPingNowAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
+    {
+        var placeholder = await client.SendMessage(chatId, "🏓 Пінгую всі сервери…", cancellationToken: ct);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        IReadOnlyList<PingResult> results;
+        try
+        {
+            results = await _pingMonitor.PingAllNowAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "TelegramBotService: помилка виконання /ping.");
+            await client.EditMessageText(chatId, placeholder.MessageId,
+                "❌ Помилка під час пінгування серверів.", cancellationToken: ct);
+            return;
+        }
+        sw.Stop();
+
+        var lines = results
+            .GroupBy(r => r.Group)
+            .OrderBy(g => g.Key)
+            .SelectMany(BuildGroupLines)
+            .ToList();
+
+        int online  = results.Count(r => r.Status == PingStatus.Online);
+        int offline = results.Count(r => r.Status == PingStatus.Offline);
+
+        string header = $"🏓 Результат пінгу ({results.Count} серв., {sw.Elapsed.TotalSeconds:F1}с)\n" +
+                         $"✅ {online} online   🔴 {offline} offline\n\n";
+
+        var pages = TelegramTextChunker.BuildPages(lines, header);
+        _pagedScreens[chatId] = new TelegramPagedScreen("ping", pages);
+
+        await client.EditMessageText(chatId, placeholder.MessageId, pages[0],
+            replyMarkup: BuildPaginationKeyboard("ping", 0, pages.Count),
+            cancellationToken: ct);
+    }
+
+    /// <summary>Форматує групу серверів з заголовком-назвою групи і статусом/latency кожного.</summary>
+    private static IEnumerable<string> BuildGroupLines(IGrouping<string, PingResult> group)
+    {
+        yield return $"— {group.Key} —";
+        foreach (var r in group.OrderBy(x => x.Name))
+        {
+            string icon = r.Status switch
+            {
+                PingStatus.Online  => "✅",
+                PingStatus.Offline => "🔴",
+                _                  => "⏳"
+            };
+            string latency = r.Status == PingStatus.Online && r.LatencyMs is not null
+                ? $" — {r.LatencyMs} мс"
+                : string.Empty;
+
+            yield return $"{icon} {r.Name} ({r.IP}){latency}";
+        }
+    }
+    
     private string BuildStatusText()
     {
         // Критика #3: пряме звернення до GetSnapshot(), а не лише до Push-кешу —

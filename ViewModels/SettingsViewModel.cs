@@ -336,12 +336,10 @@ public sealed partial class SettingsViewModel :
         RefreshTelegramState();
     }
 
-    [RelayCommand]
-    private void ApproveTelegramRequest(int id)
-    {
-        _telegramAccess.Approve(id);
-        RefreshTelegramState();
-    }
+    // Approve — свідомо ВІДСУТНІЙ тут. Дозвіл нового користувача (не Primary Admin)
+    // можливий лише через inline-кнопку "✅ Дозволити" безпосередньо в Telegram —
+    // так Primary Admin підтверджує особу саме в тому каналі, звідки прийшов запит.
+    // З WPF можна тільки відхилити (Deny) — це "запобіжник", а не спосіб надання доступу.
 
     [RelayCommand]
     private void DenyTelegramRequest(int id)

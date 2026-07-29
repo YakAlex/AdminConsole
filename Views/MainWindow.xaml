@@ -1213,15 +1213,17 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel>
-                                    <TextBlock Text="Запити на доступ" Foreground="#FF80CBC4"
-                                               FontSize="12" FontWeight="SemiBold" Margin="0,0,0,8"/>
+<TextBlock Text="Запити на доступ" Foreground="#FF80CBC4"
+                                               FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Дозволити можна лише в Telegram. Тут — тільки відхилити."
+                                               Foreground="#66FFFFFF" FontSize="11" FontStyle="Italic"
+                                               Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <ItemsControl ItemsSource="{Binding Settings.TelegramPendingRequests}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid Margin="0,0,0,6">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" VerticalAlignment="Center"
@@ -1230,25 +1232,13 @@
                                                         <Run Text=" (" Foreground="#66FFFFFF"/><Run Text="{Binding ChatId, Mode=OneWay}" Foreground="#66FFFFFF"/><Run Text=")" Foreground="#66FFFFFF"/>
                                                     </TextBlock>
                                                     <Button Grid.Column="1" Margin="6,0,0,0" Padding="8,3" Cursor="Hand"
-                                                            Command="{Binding DataContext.Settings.ApproveTelegramRequestCommand,
-                                                                RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding Id}">
-                                                        <Button.Template>
-                                                            <ControlTemplate TargetType="Button">
-                                                                <Border Background="#224CAF50" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                                    <TextBlock Text="✅" FontSize="12"/>
-                                                                </Border>
-                                                            </ControlTemplate>
-                                                        </Button.Template>
-                                                    </Button>
-                                                    <Button Grid.Column="2" Margin="6,0,0,0" Padding="8,3" Cursor="Hand"
                                                             Command="{Binding DataContext.Settings.DenyTelegramRequestCommand,
                                                                 RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                             CommandParameter="{Binding Id}">
                                                         <Button.Template>
                                                             <ControlTemplate TargetType="Button">
                                                                 <Border Background="#22F44336" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                                    <TextBlock Text="❌" FontSize="12"/>
+                                                                    <TextBlock Text="❌ Відхилити" Foreground="#FFEF5350" FontSize="11"/>
                                                                 </Border>
                                                             </ControlTemplate>
                                                         </Button.Template>

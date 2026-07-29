@@ -359,6 +359,37 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
     /// </summary>
     public IReadOnlyDictionary<string, PingStatus> GetSnapshot()
         => _previousStatus.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+    /// <summary>
+    /// Пінгує ВСІ сервери прямо зараз, поза звичайним циклом
+    /// (для команди /ping бота — "живий" запит на вимогу).
+    /// Перевикористовує ту саму PingSingleServerAsync — тобто:
+    ///  - оновлює _previousStatus (той самий стан, що бачить UI);
+    ///  - шле ті самі Warning/Error/Success логи при зміні статусу;
+    ///  - шле PingBatchResultMessage — UI Ping Dashboard оновиться теж.
+    /// Ділить throttle з основним циклом (_mainThrottle) — жодного
+    /// окремого "паралельного" навантаження на мережу понад заплановане.
+    /// </summary>
+    public async Task<IReadOnlyList<PingResult>> PingAllNowAsync(CancellationToken ct)
+    {
+        var bag = new ConcurrentBag<PingResult>();
+
+        var tasks = _servers.Select(s => PingSingleServerAsync(s, _mainThrottle, bag, ct));
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        var results = bag.ToArray();
+        if (results.Length > 0)
+        {
+            _messenger.Send(new PingBatchResultMessage(new PingBatchPayload(
+                Results:          results,
+                CycleCompletedAt: DateTimeOffset.Now)));
+        }
+
+        return results
+            .OrderBy(r => r.Group)
+            .ThenBy(r => r.Name)
+            .ToList();
+    }
     
     // ── IDisposable ───────────────────────────────────────────────────────────
 
