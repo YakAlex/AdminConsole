@@ -1,18 +1,32 @@
-﻿using AdminConsole.Core.Messages;
+﻿using System.Collections.ObjectModel;
+using AdminConsole.Core.Messages;
+using AdminConsole.Core.Models;
 using AdminConsole.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Telegram.Bot;
 
 namespace AdminConsole.ViewModels;
 
-public sealed partial class SettingsViewModel : ObservableObject
+/// <summary>
+/// Проста VM-обгортка pending-запиту для біндингу в XAML —
+/// ObservableObject не потрібен, список повністю перебудовується
+/// при кожному RefreshTelegramState().
+/// </summary>
+public sealed record TelegramPendingRequestVm(int Id, long ChatId, string Username, DateTimeOffset RequestedAt);
+
+public sealed partial class SettingsViewModel :
+    ObservableObject,
+    IRecipient<TelegramAccessRequestMessage>,
+    IRecipient<TelegramAccessChangedMessage>
 {
     private readonly CredentialStore  _credentials;
     private readonly ZabbixApiClient  _zabbixClient;
     private readonly RdpCredentialValidator _rdpValidator;
     private readonly IMessenger       _messenger;
     private readonly UserSettingsService _userSettings;
+    private readonly TelegramAccessControlService _telegramAccess;
     private readonly string           _zabbixUrl;
 
     // ── Загальні ─────────────────────────────────────────────────────────────
@@ -55,9 +69,31 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool   _isTestingZabbix;
     [ObservableProperty] private string _zabbixTestResult     = string.Empty;
     [ObservableProperty] private bool   _zabbixTestSuccess;
+    
+    // ── Telegram ──────────────────────────────────────────────────────────────
 
+    [ObservableProperty] private string _telegramTokenMasked   = string.Empty;
+    [ObservableProperty] private bool   _hasTelegramCredentials;
+    [ObservableProperty] private bool   _isTelegramEditMode;
+    [ObservableProperty] private string _telegramNewToken      = string.Empty;
+    [ObservableProperty] private bool   _isTestingTelegram;
+    [ObservableProperty] private string _telegramTestResult    = string.Empty;
+    [ObservableProperty] private bool   _telegramTestSuccess;
+
+    /// <summary>true — Primary Admin вже прив'язаний (chat_id збережено).</summary>
+    [ObservableProperty] private bool   _telegramAdminClaimed;
+    [ObservableProperty] private long?  _telegramPrimaryAdminChatId;
+
+    /// <summary>Код показується після натискання "Згенерувати" — лише в пам'яті.</summary>
+    [ObservableProperty] private string _telegramClaimCode     = string.Empty;
+    [ObservableProperty] private bool   _telegramClaimCodeVisible;
+
+    public ObservableCollection<TelegramPendingRequestVm> TelegramPendingRequests { get; } = new();
+    public ObservableCollection<long> TelegramAllowedUsers { get; } = new();
+    
     private CancellationTokenSource? _rdpValidationCts;
     private CancellationTokenSource? _zabbixTestCts;
+    private CancellationTokenSource? _telegramTestCts;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -67,14 +103,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         IMessenger       messenger,
         RdpCredentialValidator rdpValidator,
         UserSettingsService userSettings,
+        TelegramAccessControlService telegramAccess,
         Microsoft.Extensions.Options.IOptions<Configuration.MonitoringSettings> settings)
     {
-        _credentials  = credentials;
-        _zabbixClient = zabbixClient;
-        _rdpValidator = rdpValidator;
-        _messenger    = messenger;
-        _userSettings = userSettings;
-        _zabbixUrl    = settings.Value.ZabbixUrl;
+        _credentials    = credentials;
+        _zabbixClient   = zabbixClient;
+        _rdpValidator   = rdpValidator;
+        _messenger      = messenger;
+        _userSettings   = userSettings;
+        _telegramAccess = telegramAccess;
+        _zabbixUrl      = settings.Value.ZabbixUrl;
+        _messenger.RegisterAll(this);
 
         RefreshCredentialState();
 
@@ -148,7 +187,182 @@ public sealed partial class SettingsViewModel : ObservableObject
         RdpValidationSuccess = false;
         ZabbixNewToken   = string.Empty;
         ZabbixTestResult = string.Empty;
+
+        RefreshTelegramState();
     }
+
+    // ── Telegram ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Оновлює весь Telegram-блок: токен, статус Primary Admin, pending-запити,
+    /// список дозволених користувачів. Викликається при відкритті Settings
+    /// і при кожному TelegramAccessRequestMessage/TelegramAccessChangedMessage.
+    /// </summary>
+    public void RefreshTelegramState()
+    {
+        HasTelegramCredentials = _credentials.HasTelegramCredentials;
+        TelegramTokenMasked    = _credentials.GetTelegramTokenMasked();
+        IsTelegramEditMode     = false;
+        TelegramNewToken       = string.Empty;
+        TelegramTestResult     = string.Empty;
+
+        TelegramAdminClaimed        = _telegramAccess.IsPrimaryAdminClaimed;
+        TelegramPrimaryAdminChatId  = _telegramAccess.PrimaryAdminChatId;
+
+        TelegramPendingRequests.Clear();
+        foreach (var p in _telegramAccess.GetAllPending())
+            TelegramPendingRequests.Add(new TelegramPendingRequestVm(p.Id, p.ChatId, p.Username, p.RequestedAt));
+
+        TelegramAllowedUsers.Clear();
+        foreach (var chatId in _telegramAccess.GetAllowedChatIds())
+            TelegramAllowedUsers.Add(chatId);
+    }
+
+    [RelayCommand]
+    private void EnterTelegramEditMode()
+    {
+        TelegramNewToken   = string.Empty;
+        TelegramTestResult = string.Empty;
+        IsTelegramEditMode = true;
+    }
+
+    [RelayCommand]
+    private void CancelTelegramEdit()
+    {
+        TelegramNewToken   = string.Empty;
+        TelegramTestResult = string.Empty;
+        IsTelegramEditMode = false;
+    }
+
+    [RelayCommand]
+    private async Task SaveTelegramTokenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TelegramNewToken))
+        {
+            _messenger.Send(AppLogEntryMessage.Warning("Settings",
+                "Telegram: токен не може бути порожнім."));
+            return;
+        }
+
+        var tokenToSave = TelegramNewToken.Trim();
+
+        _telegramTestCts?.Cancel();
+        _telegramTestCts?.Dispose();
+        _telegramTestCts = new CancellationTokenSource();
+
+        IsTestingTelegram  = true;
+        TelegramTestResult = string.Empty;
+        TelegramTestSuccess = false;
+
+        try
+        {
+            var client = new TelegramBotClient(tokenToSave);
+            var me     = await client.GetMe(_telegramTestCts.Token);
+
+            TelegramTestSuccess = true;
+            TelegramTestResult  = $"✅ @{me.Username} — токен дійсний";
+
+            _credentials.StoreTelegramToken(tokenToSave);
+
+            _messenger.Send(new CredentialsChangedMessage
+            {
+                Target = CredentialTarget.Telegram,
+                Action = CredentialAction.Saved
+            });
+
+            _messenger.Send(AppLogEntryMessage.Success("Settings",
+                $"Telegram bot токен збережено: @{me.Username} — перезапускаємо полінг…"));
+
+            await Task.Delay(1200, _telegramTestCts.Token);
+            RefreshTelegramState();
+        }
+        catch (OperationCanceledException)
+        {
+            // Юзер закрив Settings поки тест йшов — ігноруємо
+        }
+        catch (Exception ex)
+        {
+            TelegramTestSuccess = false;
+            TelegramTestResult  = $"❌ {ex.Message}";
+            _messenger.Send(AppLogEntryMessage.Warning("Settings",
+                $"Telegram: токен не збережено — {ex.Message}"));
+        }
+        finally
+        {
+            IsTestingTelegram = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearTelegramCredentials()
+    {
+        _credentials.ClearTelegram();
+
+        _messenger.Send(new CredentialsChangedMessage
+        {
+            Target = CredentialTarget.Telegram,
+            Action = CredentialAction.Cleared
+        });
+
+        _messenger.Send(AppLogEntryMessage.Warning("Settings",
+            "Telegram bot токен видалено. Полінг зупинено."));
+
+        RefreshTelegramState();
+    }
+
+    /// <summary>
+    /// "Згенерувати код прив'язки адміна" — доступно, лише поки
+    /// Primary Admin ще не прив'язаний (перевіряється і в UI, і в сервісі).
+    /// </summary>
+    [RelayCommand]
+    private void GenerateTelegramClaimCode()
+    {
+        if (_telegramAccess.IsPrimaryAdminClaimed) return;
+
+        TelegramClaimCode        = _telegramAccess.GenerateClaimCode();
+        TelegramClaimCodeVisible = true;
+
+        _messenger.Send(AppLogEntryMessage.Info("Settings",
+            "Код прив'язки Telegram Primary Admin згенеровано (дійсний 10 хв)."));
+    }
+
+    /// <summary>Скидання прив'язки — виключно вручну, з підтвердженням у XAML (Command + confirm-діалог).</summary>
+    [RelayCommand]
+    private void ResetTelegramPrimaryAdmin()
+    {
+        _telegramAccess.ResetPrimaryAdmin();
+        TelegramClaimCodeVisible = false;
+        TelegramClaimCode        = string.Empty;
+        RefreshTelegramState();
+    }
+
+    [RelayCommand]
+    private void ApproveTelegramRequest(int id)
+    {
+        _telegramAccess.Approve(id);
+        RefreshTelegramState();
+    }
+
+    [RelayCommand]
+    private void DenyTelegramRequest(int id)
+    {
+        _telegramAccess.Deny(id);
+        RefreshTelegramState();
+    }
+
+    [RelayCommand]
+    private void RevokeTelegramUser(long chatId)
+    {
+        _telegramAccess.Revoke(chatId);
+        RefreshTelegramState();
+    }
+
+    // IRecipient — живе оновлення, якщо approve/deny/revoke прийшли з Telegram
+    void IRecipient<TelegramAccessRequestMessage>.Receive(TelegramAccessRequestMessage message)
+        => System.Windows.Application.Current.Dispatcher.Invoke(RefreshTelegramState);
+
+    void IRecipient<TelegramAccessChangedMessage>.Receive(TelegramAccessChangedMessage message)
+        => System.Windows.Application.Current.Dispatcher.Invoke(RefreshTelegramState);
 
     // ── RDP команди ───────────────────────────────────────────────────────────
 
@@ -472,12 +686,18 @@ private async Task SaveZabbixTokenAsync()
         _rdpValidationCts = null;
         IsValidatingRdp      = false;
         RdpValidationResult  = string.Empty;
-
+        
         _zabbixTestCts?.Cancel();
         _zabbixTestCts?.Dispose();
         _zabbixTestCts = null;
         IsTestingZabbix  = false;
         ZabbixTestResult = string.Empty;
+
+        _telegramTestCts?.Cancel();
+        _telegramTestCts?.Dispose();
+        _telegramTestCts = null;
+        IsTestingTelegram  = false;
+        TelegramTestResult = string.Empty;
     }
 
     /// <summary>
@@ -489,5 +709,7 @@ private async Task SaveZabbixTokenAsync()
         CancelPendingTest();
         _rdpNewPassword = string.Empty;
         ZabbixNewToken  = string.Empty;
+        TelegramNewToken = string.Empty;
+        _messenger.UnregisterAll(this);
     }
 }

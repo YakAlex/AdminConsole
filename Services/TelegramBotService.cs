@@ -28,6 +28,12 @@ namespace AdminConsole.Services;
 ///  #4 Перевірка актуальності pending-запиту в кожному callback + AnswerCallbackQuery
 ///  #5 CancellationTokenSource з await старого таска перед створенням нового клієнта
 /// </summary>
+
+/// <summary>
+/// Один "екран" пагінації: ключ екрану (щоб не плутати Офлайн з Інцидентами
+/// при stale callback) + вже побудовані сторінки + заголовок для перебудови.
+/// </summary>
+internal sealed record TelegramPagedScreen(string ScreenKey, IReadOnlyList<string> Pages);
 public sealed class TelegramBotService 
     : BackgroundService,
       IRecipient<PingBatchResultMessage>,
@@ -44,12 +50,22 @@ public sealed class TelegramBotService
     private readonly UptimeTrackerService                _uptimeTracker;
     private readonly MaintenanceService                  _maintenance;
     private readonly IReadOnlyList<ServerEntry>          _terminalServers;
-
+    private readonly IReadOnlyList<ServerEntry>          _allServers;
+    
     private const string LogSource = "TelegramBot";
 
-    // ── Push-кеші (критика #2 — thread-safe колекції) ───────────────────────
+    // ── Push-кеші
     private readonly ConcurrentDictionary<string, PingStatus>          _pingCache = new();
     private readonly ConcurrentDictionary<string, RdpSessionsPayload>  _rdpCache  = new();
+    
+    /// <summary>
+    /// Кеш побудованих сторінок для пагінації (Офлайн/Інциденти/Обслуговування).
+    /// Ключ — chat_id (одна активна "навігація" на користувача одночасно —
+    /// цього достатньо, бо reply-кнопки відкривають новий екран синхронно).
+    /// Значення скидається при перезапуску процесу — це нормально,
+    /// callback просто попросить користувача відкрити екран заново.
+    /// </summary>
+    private readonly ConcurrentDictionary<long, TelegramPagedScreen> _pagedScreens = new();
     
     /// <summary>
     /// Ключі вже відомих ВІДКРИТИХ інцидентів (ServerIp + FellAt — унікально
@@ -89,6 +105,7 @@ public sealed class TelegramBotService
         _rdpMonitor     = rdpMonitor;
         _uptimeTracker  = uptimeTracker;
         _maintenance    = maintenance;
+        _allServers = servers.Value.ToList().AsReadOnly();
 
         _terminalServers = servers.Value
             .Where(s => s.Group.Equals("Terminal Servers", StringComparison.OrdinalIgnoreCase))
@@ -347,6 +364,28 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             await client.SendMessage(chatId, "⏳ Забагато запитів, зачекайте хвилину.", cancellationToken: ct);
             return;
         }
+        switch (text)
+        {
+            case "📊 Статус":
+                await SendStatusAsync(client, chatId, ct);
+                return;
+            case "🔴 Офлайн":
+                await SendOfflineListAsync(client, chatId, ct);
+                return;
+            case "⏱ Інциденти":
+                await SendIncidentsListAsync(client, chatId, ct);
+                return;
+            case "🖥 RDP":
+                await SendRdpPickerAsync(client, chatId, ct);
+                return;
+            case "🔧 Обслуговування":
+                await SendMaintenanceListAsync(client, chatId, ct);
+                return;
+            case "👥 Користувачі":
+                if (_access.IsPrimaryAdmin(chatId))
+                    await SendUsersListAsync(client, chatId, ct);
+                return;
+        }
 
         switch (text.Split(' ')[0].ToLowerInvariant())
         {
@@ -507,16 +546,46 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             _access.Revoke(targetChatId);
             await client.EditMessageText(chatId, messageId, $"🚫 Доступ для chat_id={targetChatId} відкликано.", cancellationToken: ct);
         }
+        else if (data.StartsWith("page:"))
+        {
+            // Формат: page:<screenKey>:<pageIndex>
+            var parts = data.Split(':');
+            string screenKey = parts[1];
+            int    pageIndex = int.Parse(parts[2]);
+
+            if (!_pagedScreens.TryGetValue(chatId, out var screen) || screen.ScreenKey != screenKey)
+            {
+                await client.EditMessageText(chatId, messageId,
+                    "⚠️ Список застарів, відкрийте екран знову через меню.", cancellationToken: ct);
+                return;
+            }
+
+            pageIndex = Math.Clamp(pageIndex, 0, screen.Pages.Count - 1);
+            await client.EditMessageText(chatId, messageId, screen.Pages[pageIndex],
+                replyMarkup: BuildPaginationKeyboard(screenKey, pageIndex, screen.Pages.Count),
+                cancellationToken: ct);
+        }
     }
 
     // ── Побудова відповідей ───────────────────────────────────────────────────
 
-    private static ReplyKeyboardMarkup BuildMainMenu(long chatId) => new(new[]
+    private ReplyKeyboardMarkup BuildMainMenu(long chatId)
     {
-        new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
-        new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
-        new KeyboardButton[] { "🔧 Обслуговування" }
-    }) { ResizeKeyboard = true };
+        var rows = new List<KeyboardButton[]>
+        {
+            new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
+            new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
+            new KeyboardButton[] { "🔧 Обслуговування" }
+        };
+
+        // Пункт плану 2: "Для Primary Admin додатково: [ 👥 Користувачі ]" —
+        // ряд додається лише для Primary Admin, звичайні AllowedChatIds
+        // його не бачать (і, відповідно, не побачать /users чи callback revoke).
+        if (_access.IsPrimaryAdmin(chatId))
+            rows.Add(new KeyboardButton[] { "👥 Користувачі" });
+
+        return new ReplyKeyboardMarkup(rows) { ResizeKeyboard = true };
+    }
 
     private async Task SendHelpAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
@@ -633,6 +702,97 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
         await client.SendMessage(chatId, "👥 Дозволені користувачі:",
             replyMarkup: new InlineKeyboardMarkup(rows), cancellationToken: ct);
+    }
+    
+    // ── Офлайн / Інциденти / Обслуговування (з пагінацією)
+
+    private async Task SendOfflineListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
+    {
+        // Критика #3: живий знімок напряму з сервісу, не з push-кешу.
+        var snapshot = _pingMonitor.GetSnapshot();
+
+        var lines = _allServers
+            .Where(s => snapshot.TryGetValue(s.IP, out var status) && status == PingStatus.Offline)
+            .Select(s => $"🔴 {s.Name} ({s.IP}) — {s.Group}")
+            .ToList();
+
+        if (lines.Count == 0)
+            lines.Add("Немає офлайн-серверів. ✅");
+
+        await SendPagedScreenAsync(client, chatId, screenKey: "offline", header: "🔴 Офлайн-сервери:\n", lines, ct);
+    }
+
+    private async Task SendIncidentsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
+    {
+        var openIncidents = _uptimeTracker.GetSnapshot()
+            .Where(r => !r.IsResolved)
+            .OrderByDescending(r => r.FellAt)
+            .ToList();
+
+        var lines = openIncidents
+            .Select(r => $"⏱ {r.ServerName} ({r.ServerIp})\n   Впав: {r.FellAt:dd.MM HH:mm} — триває {r.DurationDisplay}")
+            .ToList();
+
+        if (lines.Count == 0)
+            lines.Add("Відкритих інцидентів немає. ✅");
+
+        await SendPagedScreenAsync(client, chatId, screenKey: "incidents", header: "⏱ Відкриті інциденти:\n", lines, ct);
+    }
+
+    private async Task SendMaintenanceListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
+    {
+        var windows = _maintenance.GetActiveWindows()
+            .OrderBy(w => w.To)
+            .ToList();
+
+        var lines = windows
+            .Select(w => $"🔧 {w.DisplayName}\n" +
+                         $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "без причини" : w.Reason)}\n" +
+                         $"   до {w.To.ToLocalTime():dd.MM HH:mm}")
+            .ToList();
+
+        if (lines.Count == 0)
+            lines.Add("Активних вікон обслуговування немає.");
+
+        await SendPagedScreenAsync(client, chatId, screenKey: "maintenance", header: "🔧 Обслуговування:\n", lines, ct);
+    }
+
+    /// <summary>
+    /// Спільна логіка для трьох екранів вище: будує сторінки через
+    /// TelegramTextChunker (критика #2 — ліміт 4096 символів), кладе їх
+    /// у _pagedScreens для подальшої навігації і відправляє першу сторінку.
+    /// </summary>
+    private async Task SendPagedScreenAsync(
+        ITelegramBotClient client, long chatId, string screenKey, string header,
+        List<string> lines, CancellationToken ct)
+    {
+        var pages = TelegramTextChunker.BuildPages(lines, header);
+        _pagedScreens[chatId] = new TelegramPagedScreen(screenKey, pages);
+
+        await client.SendMessage(chatId, pages[0],
+            replyMarkup: BuildPaginationKeyboard(screenKey, 0, pages.Count),
+            cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// "◀ Назад" / "Далі ▶" — показуються лише коли є куди гортати.
+    /// Критика #1: callback_data короткий ("page:offline:3"), навіть
+    /// для довгих екранів завжди в межах 64 байт.
+    /// </summary>
+    private static InlineKeyboardMarkup BuildPaginationKeyboard(string screenKey, int pageIndex, int pageCount)
+    {
+        if (pageCount <= 1)
+            return new InlineKeyboardMarkup(Array.Empty<InlineKeyboardButton[]>());
+
+        var row = new List<InlineKeyboardButton>();
+
+        if (pageIndex > 0)
+            row.Add(InlineKeyboardButton.WithCallbackData("◀ Назад", $"page:{screenKey}:{pageIndex - 1}"));
+
+        if (pageIndex < pageCount - 1)
+            row.Add(InlineKeyboardButton.WithCallbackData("Далі ▶", $"page:{screenKey}:{pageIndex + 1}"));
+
+        return new InlineKeyboardMarkup(new[] { row.ToArray() });
     }
     
     public override void Dispose()

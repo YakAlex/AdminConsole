@@ -907,6 +907,407 @@
                             <!-- Роздільник -->
                             <Border Height="1" Background="#1AFFFFFF" Margin="0,12,0,12"/>
 
+                            <!-- ══ Telegram Bot ═════════════════════════════════════════════ -->
+                            <TextBlock Text="Telegram Bot" Foreground="#FF80CBC4"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Margin="0,0,0,8"/>
+
+                            <!-- Токен -->
+                            <Border Background="#1AFFFFFF" CornerRadius="6"
+                                    Padding="14,10" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Foreground="#FFECEFF1" FontSize="13"
+                                                       Visibility="{Binding Settings.HasTelegramCredentials,
+                                                           Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Run Text="Токен: " Foreground="#FF80CBC4"/>
+                                                <Run Text="{Binding Settings.TelegramTokenMasked, Mode=OneWay}"
+                                                     FontFamily="Consolas, Courier New" FontWeight="SemiBold"/>
+                                            </TextBlock>
+                                            <TextBlock Text="Не налаштовано" Foreground="#66FFFFFF"
+                                                       FontSize="13" FontStyle="Italic">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Settings.HasTelegramCredentials}"
+                                                                         Value="False">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <Button Grid.Column="1"
+                                                Command="{Binding Settings.EnterTelegramEditModeCommand}"
+                                                Margin="8,0,4,0" Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.IsTelegramEditMode}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#2280CBC4"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Змінити" Foreground="#FF80CBC4" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+
+                                        <Button Grid.Column="2"
+                                                Command="{Binding Settings.ClearTelegramCredentialsCommand}"
+                                                Padding="10,4" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.HasTelegramCredentials}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#22F44336"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Очистити" Foreground="#FFEF5350" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#44F44336"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+
+                                    <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.IsTelegramEditMode}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+
+                                        <TextBox Text="{Binding Settings.TelegramNewToken,
+                                                     UpdateSourceTrigger=PropertyChanged}"
+                                                 Foreground="White" Background="#22FFFFFF"
+                                                 BorderBrush="#44FFFFFF" BorderThickness="1"
+                                                 Padding="8,6" FontSize="12" Margin="0,0,0,8"
+                                                 FontFamily="Consolas, Courier New"
+                                                 materialDesign:HintAssist.Hint="Bot Token (з @BotFather)"
+                                                 materialDesign:HintAssist.Foreground="#66FFFFFF"/>
+
+                                        <TextBlock Text="{Binding Settings.TelegramTestResult, Mode=OneWay}"
+                                                   FontSize="12" Margin="0,0,0,8"
+                                                   TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#FFEF5350"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.TelegramTestSuccess}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FF4CAF50"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Settings.TelegramTestResult}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Command="{Binding Settings.SaveTelegramTokenCommand}"
+                                                    Margin="0,0,8,0" Padding="12,6" Cursor="Hand"
+                                                    IsEnabled="{Binding Settings.IsTestingTelegram,
+                                                        Converter={StaticResource InverseBoolConverter}}">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#2280CBC4"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Foreground="#FF80CBC4"
+                                                                       FontSize="12" FontWeight="SemiBold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="Зберегти і перевірити"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Settings.IsTestingTelegram}" Value="True">
+                                                                                <Setter Property="Text" Value="Перевіряємо…"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsEnabled" Value="False">
+                                                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+
+                                            <Button Command="{Binding Settings.CancelTelegramEditCommand}"
+                                                    Padding="12,6" Cursor="Hand">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bd" Background="#1AFFFFFF"
+                                                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                            <TextBlock Text="Скасувати" Foreground="#88FFFFFF" FontSize="12"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="#2AFFFFFF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Primary Admin claim-код -->
+                            <Border Background="#1AFFFFFF" CornerRadius="6"
+                                    Padding="14,10" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock FontSize="13" Foreground="#FFECEFF1" Margin="0,0,0,8">
+                                        <Run Text="Primary Admin: "/>
+                                        <Run Text="{Binding Settings.TelegramPrimaryAdminChatId, Mode=OneWay,
+                                             TargetNullValue='не прив’язаний'}" FontWeight="SemiBold"/>
+                                    </TextBlock>
+
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Command="{Binding Settings.GenerateTelegramClaimCodeCommand}"
+                                                Margin="0,0,8,0" Padding="12,6" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.TelegramAdminClaimed}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#2280CBC4"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Згенерувати код прив'язки" Foreground="#FF80CBC4" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#4480CBC4"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+
+                                        <Button Command="{Binding Settings.ResetTelegramPrimaryAdminCommand}"
+                                                Padding="12,6" Cursor="Hand">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Settings.TelegramAdminClaimed}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Background="#22F44336"
+                                                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                        <TextBlock Text="Скинути прив'язку" Foreground="#FFEF5350" FontSize="12"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#44F44336"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <Border Background="#22000000" CornerRadius="4"
+                                            Padding="10,8" Margin="0,10,0,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.TelegramClaimCodeVisible}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <TextBlock Text="Код (дійсний 10 хв), надішліть боту:"
+                                                       Foreground="#66FFFFFF" FontSize="11"/>
+                                            <TextBlock Text="{Binding Settings.TelegramClaimCode}"
+                                                       Foreground="#FF80CBC4" FontSize="20"
+                                                       FontFamily="Consolas, Courier New"
+                                                       FontWeight="Bold" Margin="0,4,0,0"/>
+                                            <TextBlock Foreground="#66FFFFFF" FontSize="11" Margin="0,4,0,0">
+                                                <Run Text="/claim_admin "/><Run Text="{Binding Settings.TelegramClaimCode, Mode=OneWay}" FontFamily="Consolas, Courier New"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Pending-запити (backup-канал до inline-кнопок у Telegram) -->
+                            <Border Background="#1AFFFFFF" CornerRadius="6"
+                                    Padding="14,10" Margin="0,0,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Settings.TelegramPendingRequests.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel>
+                                    <TextBlock Text="Запити на доступ" Foreground="#FF80CBC4"
+                                               FontSize="12" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                    <ItemsControl ItemsSource="{Binding Settings.TelegramPendingRequests}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                                               Foreground="#FFECEFF1" FontSize="12">
+                                                        <Run Text="@"/><Run Text="{Binding Username, Mode=OneWay}"/>
+                                                        <Run Text=" (" Foreground="#66FFFFFF"/><Run Text="{Binding ChatId, Mode=OneWay}" Foreground="#66FFFFFF"/><Run Text=")" Foreground="#66FFFFFF"/>
+                                                    </TextBlock>
+                                                    <Button Grid.Column="1" Margin="6,0,0,0" Padding="8,3" Cursor="Hand"
+                                                            Command="{Binding DataContext.Settings.ApproveTelegramRequestCommand,
+                                                                RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Id}">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="#224CAF50" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                                    <TextBlock Text="✅" FontSize="12"/>
+                                                                </Border>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                    <Button Grid.Column="2" Margin="6,0,0,0" Padding="8,3" Cursor="Hand"
+                                                            Command="{Binding DataContext.Settings.DenyTelegramRequestCommand,
+                                                                RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding Id}">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="#22F44336" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                                    <TextBlock Text="❌" FontSize="12"/>
+                                                                </Border>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Дозволені користувачі -->
+                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="14,10">
+                                <StackPanel>
+                                    <TextBlock Text="Дозволені користувачі" Foreground="#FF80CBC4"
+                                               FontSize="12" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Немає" Foreground="#66FFFFFF" FontSize="12" FontStyle="Italic">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.TelegramAllowedUsers.Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <ItemsControl ItemsSource="{Binding Settings.TelegramAllowedUsers}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Mode=OneWay}"
+                                                               Foreground="#FFECEFF1" FontSize="12" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="1" Padding="8,3" Cursor="Hand"
+                                                            Command="{Binding DataContext.Settings.RevokeTelegramUserCommand,
+                                                                RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="#22F44336" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                                    <TextBlock Text="🚫 Відкликати" Foreground="#FFEF5350" FontSize="11"/>
+                                                                </Border>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Роздільник -->
+                            <Border Height="1" Background="#1AFFFFFF" Margin="0,12,0,12"/>
                             <!-- ══ Застарілий заголовок, див. нижче — залишено лише як коментар ══════════════════════════════════════ -->
                             <!-- ══ Моніторинг сервісів ══ -->
                             <TextBlock Text="Моніторинг сервісів" Foreground="#FF80CBC4"
