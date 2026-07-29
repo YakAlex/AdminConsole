@@ -225,7 +225,7 @@
             <DataGrid.Columns>
 
                 <!-- Status -->
-                <DataGridTemplateColumn Header="STATUS" Width="85" SortMemberPath="Status">
+                <DataGridTemplateColumn Header="STATUS" Width="95" SortMemberPath="Status">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -286,7 +286,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <!-- Name -->
-                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="120">
+                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="130">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -309,7 +309,7 @@
                 </DataGridTextColumn>
 
                 <!-- Group -->
-                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="140">
+                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="145">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FF90A4AE" />

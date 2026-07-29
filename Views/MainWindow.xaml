@@ -13,6 +13,7 @@
     Title="Admin Console"
     Height="820" Width="1280"
     MinHeight="600" MinWidth="900"
+    WindowState="Maximized"
     WindowStartupLocation="CenterScreen"
     TextElement.FontFamily="{materialDesign:MaterialDesignFont}"
     TextElement.FontSize="13"
@@ -238,7 +239,7 @@
                                Foreground="#FFECEFF1" FontSize="11"
                                Margin="6,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" Text="Admin Console v1.0"
+                <TextBlock DockPanel.Dock="Right" Text="Admin Console v2.2"
                            Foreground="#44FFFFFF" FontSize="11"
                            VerticalAlignment="Center" HorizontalAlignment="Right" />
             </DockPanel>
