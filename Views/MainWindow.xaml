@@ -1275,12 +1275,15 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{Binding Mode=OneWay}"
-                                                               Foreground="#FFECEFF1" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                                                               Foreground="#FFECEFF1" FontSize="12">
+                                                        <Run Text="@"/><Run Text="{Binding Username, Mode=OneWay}"/>
+                                                        <Run Text=" (" Foreground="#66FFFFFF"/><Run Text="{Binding ChatId, Mode=OneWay}" Foreground="#66FFFFFF"/><Run Text=")" Foreground="#66FFFFFF"/>
+                                                    </TextBlock>
                                                     <Button Grid.Column="1" Padding="8,3" Cursor="Hand"
                                                             Command="{Binding DataContext.Settings.RevokeTelegramUserCommand,
                                                                 RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            CommandParameter="{Binding}">
+                                                            CommandParameter="{Binding ChatId}">
                                                         <Button.Template>
                                                             <ControlTemplate TargetType="Button">
                                                                 <Border Background="#22F44336" CornerRadius="4" Padding="{TemplateBinding Padding}">

@@ -416,6 +416,7 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     private async Task HandleStartAsync(ITelegramBotClient client, long chatId, string username, CancellationToken ct)
     {
+        _access.RefreshUsername(chatId, username);
         if (_access.IsAllowed(chatId))
         {
             await client.SendMessage(chatId, "Ви вже маєте доступ. /help — список команд.",
@@ -756,17 +757,18 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     private async Task SendUsersListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
-        var ids = _access.GetAllowedChatIds();
-        if (ids.Count == 0)
+        var users = _access.GetAllowedUsers();
+
+        if (users.Count == 0)
         {
-            await client.SendMessage(chatId, "Дозволених користувачів немає.", cancellationToken: ct);
+            await client.SendMessage(chatId, "👥 Дозволених користувачів немає.", cancellationToken: ct);
             return;
         }
 
-        var rows = ids.Select(id => new[]
-        {
-            InlineKeyboardButton.WithCallbackData($"🚫 {id}", $"revoke:{id}")
-        }).ToArray();
+        var rows = users
+            .Select(u => new[] { InlineKeyboardButton.WithCallbackData(
+                $"🚫 @{u.Username} ({u.ChatId})", $"revoke:{u.ChatId}") })
+            .ToArray();
 
         await client.SendMessage(chatId, "👥 Дозволені користувачі:",
             replyMarkup: new InlineKeyboardMarkup(rows), cancellationToken: ct);

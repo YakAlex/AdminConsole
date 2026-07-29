@@ -89,7 +89,7 @@ public sealed partial class SettingsViewModel :
     [ObservableProperty] private bool   _telegramClaimCodeVisible;
 
     public ObservableCollection<TelegramPendingRequestVm> TelegramPendingRequests { get; } = new();
-    public ObservableCollection<long> TelegramAllowedUsers { get; } = new();
+    public ObservableCollection<TelegramAllowedUser> TelegramAllowedUsers { get; } = new();
     
     private CancellationTokenSource? _rdpValidationCts;
     private CancellationTokenSource? _zabbixTestCts;
@@ -214,8 +214,8 @@ public sealed partial class SettingsViewModel :
             TelegramPendingRequests.Add(new TelegramPendingRequestVm(p.Id, p.ChatId, p.Username, p.RequestedAt));
 
         TelegramAllowedUsers.Clear();
-        foreach (var chatId in _telegramAccess.GetAllowedChatIds())
-            TelegramAllowedUsers.Add(chatId);
+        foreach (var user in _telegramAccess.GetAllowedUsers())
+            TelegramAllowedUsers.Add(user);
     }
 
     [RelayCommand]

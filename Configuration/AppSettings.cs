@@ -64,4 +64,13 @@ public sealed class UserSettings
     /// доступ до бота (окрім самого Primary Admin — той завжди має повний доступ).
     /// </summary>
     public List<long> TelegramAllowedChatIds { get; set; } = new();
+
+    /// <summary>
+    /// chat_id → останній відомий Telegram username (без @), для показу
+    /// в списку "Дозволені користувачі" в WPF/боті — той самий вигляд,
+    /// що й у запиті на approve ("@username (chat_id=...)").
+    /// Оновлюється при approve і при кожному /start вже дозволеного
+    /// користувача (username міг змінитись відтоді).
+    /// </summary>
+    public Dictionary<long, string> TelegramUsernames { get; set; } = new();
 }

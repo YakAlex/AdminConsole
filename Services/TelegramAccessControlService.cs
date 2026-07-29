@@ -7,6 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace AdminConsole.Services;
 
+/// <summary>Пара chat_id + username для відображення в списку дозволених користувачів.</summary>
+public sealed record TelegramAllowedUser(long ChatId, string Username);
+
 /// <summary>
 /// Централізована перевірка доступу до Telegram-бота: Primary Admin,
 /// approval-флоу для інших користувачів, rate limiting.
@@ -123,12 +126,27 @@ public sealed class TelegramAccessControlService
     public IReadOnlyList<long> GetAllowedChatIds() =>
         _userSettings.Current.TelegramAllowedChatIds.ToList();
 
+    /// <summary>
+    /// Список дозволених користувачів разом з username — для показу
+    /// в WPF Settings і в боті ("👥 Користувачі"), у тому ж вигляді,
+    /// що й запити на approve ("@username (chat_id=...)").
+    /// Якщо username з якоїсь причини невідомий (старі записи до цієї фічі,
+    /// або approve стався ще до додавання username-трекінгу) — показуємо
+    /// "невідомо", а не падаємо чи ховаємо запис.
+    /// </summary>
+    public IReadOnlyList<TelegramAllowedUser> GetAllowedUsers() =>
+        _userSettings.Current.TelegramAllowedChatIds
+            .Select(chatId => new TelegramAllowedUser(
+                chatId,
+                _userSettings.Current.TelegramUsernames.TryGetValue(chatId, out var u) ? u : "невідомо"))
+            .ToList();
+
     /// <summary>Відкликає доступ. Доступно лише виклику від Primary Admin (перевіряє викликач).</summary>
     public bool Revoke(long chatId)
     {
         bool removed = _userSettings.Current.TelegramAllowedChatIds.Remove(chatId);
         if (!removed) return false;
-
+        _userSettings.Current.TelegramUsernames.Remove(chatId);
         _userSettings.Save();
         _messenger.Send(AppLogEntryMessage.Info(LogSource, $"Telegram доступ відкликано: chat_id={chatId}."));
         _messenger.Send(new TelegramAccessChangedMessage
@@ -180,6 +198,7 @@ public sealed class TelegramAccessControlService
         var list = _userSettings.Current.TelegramAllowedChatIds;
         if (!list.Contains(request.ChatId))
             list.Add(request.ChatId);
+        _userSettings.Current.TelegramUsernames[request.ChatId] = request.Username;
         _userSettings.Save();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -225,5 +244,20 @@ public sealed class TelegramAccessControlService
 
         queue.Enqueue(now);
         return true;
+    }
+    
+    /// <summary>
+    /// Оновлює збережений username для вже дозволеного chat_id — викликається
+    /// при кожному /start, щоб список "Дозволені користувачі" не застарівав,
+    /// якщо людина змінила username в Telegram після approve.
+    /// </summary>
+    public void RefreshUsername(long chatId, string username)
+    {
+        if (!IsAllowed(chatId)) return;
+        if (_userSettings.Current.TelegramUsernames.TryGetValue(chatId, out var existing)
+            && existing == username) return;
+
+        _userSettings.Current.TelegramUsernames[chatId] = username;
+        _userSettings.Save();
     }
 }
