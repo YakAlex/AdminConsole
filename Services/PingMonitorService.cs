@@ -347,7 +347,19 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
             Results:          initialResults,
             CycleCompletedAt: DateTimeOffset.Now)));
     }
+    
+    // ── Public API для TelegramBotService
 
+    /// <summary>
+    /// Живий знімок поточного статусу всіх серверів прямо зараз.
+    /// ConcurrentDictionary вже є єдиним джерелом правди (_previousStatus),
+    /// тому це тонкий read-only метод без додаткової синхронізації.
+    /// Дозволяє боту відповідати коректно навіть у перші секунди після старту,
+    /// не покладаючись лише на PingBatchResultMessage (який ще міг не прийти).
+    /// </summary>
+    public IReadOnlyDictionary<string, PingStatus> GetSnapshot()
+        => _previousStatus.ToDictionary(kv => kv.Key, kv => kv.Value);
+    
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     public override void Dispose()

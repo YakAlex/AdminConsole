@@ -119,7 +119,8 @@ public partial class App : Application
             client.Timeout = TimeSpan.FromSeconds(30);
         });
 
-        services.AddHostedService<PingMonitorService>();
+        services.AddSingleton<PingMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService>());
         services.AddHostedService<ResourceMonitorService>();
 
         // EventLogService реєструємо як Singleton (а не лише AddHostedService),
@@ -132,7 +133,11 @@ public partial class App : Application
 
         services.AddHostedService<FileLoggerService>();
         services.AddHostedService<RdpMonitorService>();
+        services.AddSingleton<RdpMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<RdpMonitorService>());
         services.AddHostedService<ZabbixPollerService>();
+        services.AddSingleton<TelegramAccessControlService>();
+        services.AddHostedService<TelegramBotService>();
         services.AddSingleton<UptimeTrackerService>();
         services.AddHostedService(sp => sp.GetRequiredService<UptimeTrackerService>());
         services.AddSingleton<MaintenanceService>();

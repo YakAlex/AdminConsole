@@ -83,6 +83,17 @@ public sealed class MaintenanceService : BackgroundService
 
         return null;
     }
+    
+    /// <summary>
+    /// Усі активні вікна обслуговування прямо зараз. Публічний read-only
+    /// знімок — потрібен TelegramBotService для команди/кнопки "Обслуговування",
+    /// без потреби окремо кешувати стан через messenger.
+    /// </summary>
+    public IReadOnlyList<MaintenanceWindow> GetActiveWindows()
+    {
+        var now = DateTimeOffset.Now;
+        return _windows.Values.Where(w => w.IsActiveAt(now)).ToList();
+    }
 
     // ── Push API — викликається з UI ────────────────────────────────────────
 

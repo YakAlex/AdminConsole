@@ -52,4 +52,16 @@ public sealed class UserSettings
     ///         навіть якщо він відсутній (перевіряється ДО credential-логіки).
     /// </summary>
     public bool ZabbixMonitoringEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Chat ID Primary Admin в Telegram. Встановлюється один раз через
+    /// /claim_admin з кодом, згенерованим у Settings. Null = ще не прив'язано.
+    /// </summary>
+    public long? TelegramPrimaryAdminChatId { get; set; }
+
+    /// <summary>
+    /// Список chat_id користувачів, яким Primary Admin дозволив read-only
+    /// доступ до бота (окрім самого Primary Admin — той завжди має повний доступ).
+    /// </summary>
+    public List<long> TelegramAllowedChatIds { get; set; } = new();
 }

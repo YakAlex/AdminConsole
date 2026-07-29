@@ -22,11 +22,13 @@ public sealed class CredentialStore
     private string? _rdpPassword;
     private string? _zabbixToken;
     private string? _zabbixUsername;
+    private const string TelegramTarget = "AdminConsole/Telegram";
+    private string? _telegramToken;
     private readonly object _lock = new();
 
     private volatile bool _userCancelledRdpPrompt;
     private volatile bool _userCancelledZabbixPrompt;
-
+    
     public bool UserCancelledRdpPrompt
     {
         get => _userCancelledRdpPrompt;
@@ -211,6 +213,57 @@ public sealed class CredentialStore
     /// ZabbixPollerService після збереження токену через Settings.
     /// </summary>
     public void ResetZabbixCancelledFlag() => _userCancelledZabbixPrompt = false;
+    
+    // ── Telegram ─────────────────────────────────────────────────────────────
+
+    public bool HasTelegramCredentials
+    {
+        get { lock (_lock) return !string.IsNullOrWhiteSpace(_telegramToken); }
+    }
+
+    public string GetTelegramToken()
+    {
+        lock (_lock) return _telegramToken ?? string.Empty;
+    }
+
+    public void LoadTelegramFromVault()
+    {
+        var cred = ReadFromVault(TelegramTarget);
+        if (cred is not null)
+        {
+            lock (_lock) _telegramToken = cred.Value.Password;
+        }
+    }
+
+    public void StoreTelegramToken(string botToken)
+    {
+        lock (_lock)
+        {
+            _telegramToken = botToken;
+            WriteToVault(TelegramTarget, string.Empty, botToken);
+        }
+    }
+
+    public void ClearTelegram()
+    {
+        lock (_lock)
+        {
+            _telegramToken = null;
+            DeleteFromVault(TelegramTarget);
+        }
+    }
+
+    /// <summary>Маскований токен для показу в Settings — той самий підхід, що й Zabbix.</summary>
+    public string GetTelegramTokenMasked()
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrEmpty(_telegramToken)) return string.Empty;
+            return _telegramToken.Length <= 4
+                ? new string('•', _telegramToken.Length)
+                : $"{"••••••••"}{_telegramToken[^4..]}";
+        }
+    }
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────
 

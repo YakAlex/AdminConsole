@@ -632,4 +632,17 @@ public sealed class RdpMonitorService : BackgroundService
 
         return results;
     }
+    
+    // ── Public API для TelegramBotService
+
+    /// <summary>
+    /// Живий знімок поточних RDP-сесій по кожному terminal-серверу (ключ — IP).
+    /// _previousSessions вже ConcurrentDictionary — безпечно читати з будь-якого
+    /// потоку. Значення копіюємо (.ToList()) щоб викликач не тримав посилання
+    /// на внутрішній Dictionary, який поллер може оновити паралельно.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<RdpSessionInfo>> GetSnapshot()
+        => _previousSessions.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<RdpSessionInfo>)kv.Value.Values.ToList());
 }
