@@ -231,6 +231,7 @@ public sealed class TelegramAccessControlService
         }
 
         PurgeExpiredPending();
+        PurgeExpiredThrottleState();
 
         // Верхня межа кількості одночасних pending — захист від атаки
         // "багато різних chat_id" (на відміну від кулдауну Плану B,
@@ -262,6 +263,35 @@ public sealed class TelegramAccessControlService
         {
             if (request.RequestedAt < cutoff)
                 _pending.TryRemove(id, out _);
+        }
+    }
+
+    /// <summary>
+    /// Прибирає протерміновані записи з cooldown/rate-limit словників.
+    /// Без цього _requestCooldownUntil, _pingCooldownUntil і _rateLimits
+    /// ростуть необмежено для кожного нового chat_id, що написав боту —
+    /// на відміну від _pending, який обмежений MaxPendingRequests.
+    /// Викликається разом з PurgeExpiredPending (той самий "дешево часто" підхід).
+    /// </summary>
+    private void PurgeExpiredThrottleState()
+    {
+        var now = DateTimeOffset.Now;
+
+        foreach (var (chatId, until) in _requestCooldownUntil)
+            if (until <= now)
+                _requestCooldownUntil.TryRemove(chatId, out _);
+
+        foreach (var (chatId, until) in _pingCooldownUntil)
+            if (until <= now)
+                _pingCooldownUntil.TryRemove(chatId, out _);
+
+        foreach (var (chatId, queue) in _rateLimits)
+        {
+            if (queue.IsEmpty ||
+                (queue.TryPeek(out var oldest) && now - oldest > RateLimitWindow))
+            {
+                _rateLimits.TryRemove(chatId, out _);
+            }
         }
     }
     

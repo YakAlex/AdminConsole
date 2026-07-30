@@ -204,6 +204,17 @@ public partial class App : Application
         try
         {
             _host.Services
+                .GetRequiredService<MainWindow>()
+                .DisposeTrayIcon();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] TrayIcon dispose error: {ex.Message}");
+        }
+
+        try
+        {
+            _host.Services
                 .GetRequiredService<ResourceMonitorViewModel>()
                 .Dispose();
         }

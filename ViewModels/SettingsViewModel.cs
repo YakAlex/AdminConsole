@@ -454,7 +454,6 @@ public sealed partial class SettingsViewModel :
         finally
         {
             IsValidatingRdp  = false;
-            passwordToSave   = string.Empty;
         }
     }
     

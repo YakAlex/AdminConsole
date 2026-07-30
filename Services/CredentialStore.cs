@@ -85,11 +85,14 @@ public sealed class CredentialStore
             _rdpUsername = null;
             _rdpPassword = null;
             DeleteFromVault(RdpTarget);
+
+            // Скидаємо прапорець скасування — інакше після автоматичного ClearRdp
+            // (напр. через logon failure у RdpMonitorService) поллер думатиме,
+            // що юзер уже "скасував" запит credentials, і більше сам їх не попросить.
+            // Перенесено всередину lock для консистентності з рештою методів
+            // (StoreRdp встановлює прапорець так само всередині lock).
+            _userCancelledRdpPrompt = false;
         }
-        // Скидаємо прапорець скасування — інакше після автоматичного ClearRdp
-        // (напр. через logon failure у RdpMonitorService) поллер думатиме,
-        // що юзер уже "скасував" запит credentials, і більше сам їх не попросить.
-        _userCancelledRdpPrompt = false;
     }
 
     
@@ -181,11 +184,12 @@ public sealed class CredentialStore
             _zabbixUsername = null;
             _zabbixToken    = null;
             DeleteFromVault(ZabbixTarget);
+
+            // Скидаємо прапорець скасування — інакше після автоматичного ClearZabbix
+            // поллер думатиме, що юзер уже "скасував" запит токена,
+            // і більше сам його не попросить.
+            _userCancelledZabbixPrompt = false;
         }
-        // Скидаємо прапорець скасування — інакше після автоматичного ClearZabbix
-        // поллер думатиме, що юзер уже "скасував" запит токена,
-        // і більше сам його не попросить.
-        _userCancelledZabbixPrompt = false;
     }
 
     public void MarkZabbixCancelled() => _userCancelledZabbixPrompt = true;

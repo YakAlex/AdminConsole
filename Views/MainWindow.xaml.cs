@@ -148,6 +148,18 @@ public partial class MainWindow : Window, ICredentialPrompt
             _trayIcon.ToolTipText = text;
     }
 
+    /// <summary>
+    /// Явно звільняє нативну іконку в треї. Викликається з App.OnExit()
+    /// для будь-якого шляху завершення програми (не лише через пункт
+    /// меню трею "Вийти") — без цього іконка може лишитись "осиротілою"
+    /// у треї до перезапуску explorer.exe.
+    /// </summary>
+    public void DisposeTrayIcon()
+    {
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+    }
+
     private void RestoreWindow()
     {
         Show();

@@ -299,7 +299,7 @@ public sealed class RdpMonitorService : BackgroundService
     private Task PollServerAsync(ServerEntry server, CancellationToken ct)
         => PollServerOnceAsync(server, ct);
 
-    private async Task<string?> PollServerOnceAsync(ServerEntry server, CancellationToken ct)
+    private async Task PollServerOnceAsync(ServerEntry server, CancellationToken ct)
     {
         string hostname = server.Name;
 
@@ -310,7 +310,7 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Credentials недоступні — оновіть в Settings")));
-                return null;
+                return;
             }
 
             var (user, pass) = _credentials.GetRdp();
@@ -322,7 +322,7 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Помилка реєстрації credentials")));
-                return null;
+                return;
             }
 
             var (output, error, exitCode) = await RunQuserAsync(hostname, ct)
@@ -342,7 +342,7 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Невірний логін або пароль — оновіть credentials в Settings")));
-                return null;
+                return;
             }
 
             if (allText.Contains("access is denied") ||
@@ -355,7 +355,7 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "Access Denied — оновіть credentials в Settings")));
-                return null;
+                return;
             }
 
             if (allText.Contains("rpc server is unavailable") ||
@@ -368,7 +368,7 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                     server.Name, server.IP, Sessions: [],
                     ErrorMessage: "RPC недоступний — перевір ім'я сервера")));
-                return null;
+                return;
             }
 
             if (string.IsNullOrWhiteSpace(output) || exitCode == 1)
@@ -384,7 +384,7 @@ public sealed class RdpMonitorService : BackgroundService
                     server.Name, server.IP,
                     Sessions: [],
                     ErrorMessage: noUsers ? null : $"Порожня відповідь (exit {exitCode})")));
-                return null;
+                return;
             }
 
             var sessions = ParseQuserOutput(output, server.Name, server.IP);
@@ -400,9 +400,9 @@ public sealed class RdpMonitorService : BackgroundService
                 server.Name, server.IP,
                 Sessions: sessions,
                 ErrorMessage: null)));
-            return null;
+            return;
         }
-        catch (OperationCanceledException) { return null; }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
@@ -411,7 +411,6 @@ public sealed class RdpMonitorService : BackgroundService
                 $"{hostname}: {ex.GetType().Name}: {ex.Message}"));
             _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
                 server.Name, server.IP, Sessions: [], ErrorMessage: ex.Message)));
-            return null;
         }
         finally
         {

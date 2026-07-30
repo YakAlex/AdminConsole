@@ -1,4 +1,5 @@
 ﻿namespace AdminConsole.Core.Models;
+using System.Text.Json.Serialization;
 
 /// <summary>
 /// Планове вікно обслуговування для сервера або групи серверів.
@@ -28,6 +29,7 @@ public sealed class MaintenanceWindow
     public bool IsActiveAt(DateTimeOffset now) => now >= From && now <= To;
 
     /// <summary>Ключ для зберігання/пошуку в MaintenanceService.</summary>
+    [JsonIgnore]
     public string Key => TargetGroup is not null
         ? $"group:{TargetGroup}"
         : ServerIp ?? throw new InvalidOperationException(

@@ -777,8 +777,11 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             : sessions.Select(s => $"{s.Username} — {s.State} (logon: {s.LogonTime})").ToList();
 
         var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Сесії:\n");
+        _pagedScreens[chatId] = new TelegramPagedScreen("rdp_direct", pages);
 
-        await client.SendMessage(chatId, pages[0], cancellationToken: ct);
+        await client.SendMessage(chatId, pages[0],
+            replyMarkup: BuildPaginationKeyboard("rdp_direct", 0, pages.Count),
+            cancellationToken: ct);
     }
 
     private async Task EditWithRdpPickerAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct)
