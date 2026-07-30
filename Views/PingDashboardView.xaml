@@ -286,7 +286,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <!-- Name -->
-                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="130">
+                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="135">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -378,8 +378,29 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 
-                <!-- ══ ACTIONS column (new in Phase 5) ══ -->
+                <!-- ACTIONS -->
                 <DataGridTemplateColumn Header="ACTIONS" Width="Auto">
+
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="Background"
+                                    Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow},
+                                                     Path=Background}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="DataGridCell">
+                                        <Border Padding="12,0"
+                                                Background="{TemplateBinding Background}"
+                                                BorderThickness="0">
+                                            <ContentPresenter VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
+
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <StackPanel

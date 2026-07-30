@@ -17,6 +17,11 @@
     WindowStartupLocation="CenterScreen"
     TextElement.FontFamily="{materialDesign:MaterialDesignFont}"
     TextElement.FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="Grayscale"
+    TextOptions.TextHintingMode="Fixed"
+    UseLayoutRounding="True"
+    SnapsToDevicePixels="True"
     FontFamily="{materialDesign:MaterialDesignFont}"
     d:DataContext="{d:DesignInstance viewModels:MainViewModel,
                    IsDesignTimeCreatable=False}"
