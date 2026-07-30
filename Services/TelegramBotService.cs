@@ -445,10 +445,19 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
         if (result.Request is null)
         {
-            int minutesLeft = (int)Math.Ceiling(result.CooldownRemaining!.Value.TotalMinutes);
-            await client.SendMessage(chatId,
-                $"⏳ Ваш попередній запит було відхилено. Спробуйте ще раз через {minutesLeft} хв.",
-                cancellationToken: ct);
+            if (result.CooldownRemaining is { } cooldown)
+            {
+                int minutesLeft = (int)Math.Ceiling(cooldown.TotalMinutes);
+                await client.SendMessage(chatId,
+                    $"⏳ Ваш попередній запит було відхилено. Спробуйте ще раз через {minutesLeft} хв.",
+                    cancellationToken: ct);
+            }
+            else
+            {
+                await client.SendMessage(chatId,
+                    "⏳ Забагато очікуючих запитів доступу зараз. Спробуйте пізніше.",
+                    cancellationToken: ct);
+            }
             return;
         }
 
@@ -639,6 +648,14 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     private async Task SendPingNowAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
+        if (!_access.TryConsumePingCooldown(chatId, out var remaining))
+        {
+            await client.SendMessage(chatId,
+                $"⏳ Зачекайте ще {Math.Ceiling(remaining.TotalSeconds)}с перед наступним пінгом.",
+                cancellationToken: ct);
+            return;
+        }
+
         var placeholder = await client.SendMessage(chatId, "🏓 Пінгую всі сервери…", cancellationToken: ct);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();

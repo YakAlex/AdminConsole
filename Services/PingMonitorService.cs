@@ -33,6 +33,21 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
     // Не ділимо з основним — recovery не блокується основним циклом
     // навіть якщо всі 10 слотів зайняті.
     private readonly SemaphoreSlim _recoveryThrottle = new(5);
+    
+    /// <summary>
+    /// Per-IP замок: якщо /ping (on-demand з Telegram) і фоновий цикл
+    /// (main/recovery loop) намагаються опитати ОДИН і той самий сервер
+    /// одночасно — без цього замка обидва виклики незалежно читають/пишуть
+    /// _previousStatus[ip] через GetOrAdd+TryUpdate (CAS), що НЕ пошкоджує
+    /// сам словник, але може подвоїти або загубити один із Warning/Error
+    /// логів про перехід статусу через інтерлівінг двох перевірок стану.
+    /// Серіалізуємо саме на рівні "один сервер" — різні сервери й далі
+    /// пінгуються повністю паралельно між собою.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _perServerLocks = new();
+
+    private SemaphoreSlim GetServerLock(string ip) =>
+        _perServerLocks.GetOrAdd(ip, _ => new SemaphoreSlim(1, 1));
 
     // ── Константи ────────────────────────────────────────────────────────────
 
@@ -250,10 +265,19 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         CancellationToken ct)
     {
         var acquired = false;
+        var serverLock = GetServerLock(server.IP);
+        var serverLockAcquired = false;
         try
         {
             await throttle.WaitAsync(ct).ConfigureAwait(false);
             acquired = true;  // слот захоплено — тепер Release() безпечний
+
+            // Серіалізація саме для цього IP — якщо цей сервер уже
+            // пінгується іншим викликом (main loop / recovery loop / /ping),
+            // чекаємо на його завершення перед тим, як читати/писати
+            // _previousStatus[ip] і слати транзиційні логи.
+            await serverLock.WaitAsync(ct).ConfigureAwait(false);
+            serverLockAcquired = true;
 
             PingStatus status;
             long?      latencyMs = null;
@@ -325,6 +349,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         catch (OperationCanceledException) { }
         finally
         {
+            if (serverLockAcquired) serverLock.Release();
             if (acquired) throttle.Release();
         }
     }
@@ -398,6 +423,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         // Обидва SemaphoreSlim містять внутрішній WaitHandle — звільняємо обидва.
         _mainThrottle.Dispose();
         _recoveryThrottle.Dispose();
+        foreach (var l in _perServerLocks.Values) l.Dispose();
         base.Dispose();
     }
 }

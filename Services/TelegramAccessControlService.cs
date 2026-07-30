@@ -30,6 +30,23 @@ public sealed class TelegramAccessControlService
     private readonly ConcurrentDictionary<int, TelegramPendingRequest> _pending = new();
     private int _nextPendingId;
 
+    /// <summary>
+    /// TTL для pending-запитів — якщо Primary Admin ігнорує запит довше
+    /// цього часу, він автоматично прибирається (як мовчазний "timeout",
+    /// не Deny — кулдауну з Плану B тут НЕ ставимо, бо адмін просто
+    /// не встиг відреагувати, це не свідома відмова).
+    /// </summary>
+    private static readonly TimeSpan PendingRequestTtl = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// Верхня межа одночасних pending-запитів. Захист від сценарію, коли
+    /// атакуючий створює запити з БАГАТЬОХ різних chat_id (не одного й того
+    /// самого — той випадок уже покритий кулдауном Плану B) — понад цю
+    /// межу нові /start від НОВИХ chat_id тихо відхиляються без push адміну,
+    /// поки старі pending не буде оброблено або не спливе TTL.
+    /// </summary>
+    private const int MaxPendingRequests = 50;
+
     //Кулдаун на повторний запит після Deny/Revoke ────────────────
 
     /// <summary>
@@ -52,6 +69,10 @@ public sealed class TelegramAccessControlService
     private readonly ConcurrentDictionary<long, ConcurrentQueue<DateTimeOffset>> _rateLimits = new();
     private const int    RateLimitMaxActions = 10;
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+
+    // ── Окремий, суворіший throttle для /ping ────────────────────────────────
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _pingCooldownUntil = new();
+    private static readonly TimeSpan PingCooldown = TimeSpan.FromSeconds(20);
     
     /// <summary>
     /// Результат спроби зареєструвати pending-запит:
@@ -75,10 +96,11 @@ public sealed class TelegramAccessControlService
 
     // ── Primary Admin claim-флоу ─────────────────────────────────────────────
 
-    public bool IsPrimaryAdminClaimed => _userSettings.Current.TelegramPrimaryAdminChatId is not null;
+    public bool IsPrimaryAdminClaimed =>
+        _userSettings.ReadTelegramState(s => s.TelegramPrimaryAdminChatId is not null);
 
     public bool IsPrimaryAdmin(long chatId) =>
-        _userSettings.Current.TelegramPrimaryAdminChatId == chatId;
+        _userSettings.ReadTelegramState(s => s.TelegramPrimaryAdminChatId == chatId);
     
     /// <summary>
     /// Поточний chat_id Primary Admin, якщо вже прив'язаний. Потрібен
@@ -86,8 +108,8 @@ public sealed class TelegramAccessControlService
     /// "новий запит доступу від @username" — без цього бот не знав би,
     /// в який чат писати approve/deny-кнопки.
     /// </summary>
-    public long? PrimaryAdminChatId => _userSettings.Current.TelegramPrimaryAdminChatId;
-
+    public long? PrimaryAdminChatId =>
+        _userSettings.ReadTelegramState(s => s.TelegramPrimaryAdminChatId);
     /// <summary>
     /// Генерує 6-значний код, дійсний 10 хв. Викликається з SettingsViewModel
     /// (кнопка "Згенерувати код прив'язки адміна"). Лише в пам'яті — код
@@ -121,8 +143,7 @@ public sealed class TelegramAccessControlService
             _claimCode = null; // одноразовий — гасимо одразу після використання
         }
 
-        _userSettings.Current.TelegramPrimaryAdminChatId = chatId;
-        _userSettings.Save();
+        _userSettings.MutateTelegramState(s => s.TelegramPrimaryAdminChatId = chatId);
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
             $"Telegram Primary Admin прив'язано: chat_id={chatId}."));
@@ -133,8 +154,7 @@ public sealed class TelegramAccessControlService
     /// <summary>Скидання прив'язки — виключно вручну з WPF Settings.</summary>
     public void ResetPrimaryAdmin()
     {
-        _userSettings.Current.TelegramPrimaryAdminChatId = null;
-        _userSettings.Save();
+        _userSettings.MutateTelegramState(s => s.TelegramPrimaryAdminChatId = null);
         _messenger.Send(AppLogEntryMessage.Warning(LogSource,
             "Telegram Primary Admin відв'язано вручну з Settings."));
     }
@@ -142,10 +162,11 @@ public sealed class TelegramAccessControlService
     // ── Доступ read-only користувачів ────────────────────────────────────────
 
     public bool IsAllowed(long chatId) =>
-        IsPrimaryAdmin(chatId) || _userSettings.Current.TelegramAllowedChatIds.Contains(chatId);
+        IsPrimaryAdmin(chatId) ||
+        _userSettings.ReadTelegramState(s => s.TelegramAllowedChatIds.Contains(chatId));
 
     public IReadOnlyList<long> GetAllowedChatIds() =>
-        _userSettings.Current.TelegramAllowedChatIds.ToList();
+        _userSettings.ReadTelegramState(s => s.TelegramAllowedChatIds.ToList());
 
     /// <summary>
     /// Список дозволених користувачів разом з username — для показу
@@ -156,20 +177,24 @@ public sealed class TelegramAccessControlService
     /// "невідомо", а не падаємо чи ховаємо запис.
     /// </summary>
     public IReadOnlyList<TelegramAllowedUser> GetAllowedUsers() =>
-        _userSettings.Current.TelegramAllowedChatIds
+        _userSettings.ReadTelegramState(s => s.TelegramAllowedChatIds
             .Select(chatId => new TelegramAllowedUser(
                 chatId,
-                _userSettings.Current.TelegramUsernames.TryGetValue(chatId, out var u) ? u : "невідомо"))
-            .ToList();
+                s.TelegramUsernames.TryGetValue(chatId, out var u) ? u : "невідомо"))
+            .ToList());
 
     /// <summary>Відкликає доступ. Доступно лише виклику від Primary Admin (перевіряє викликач).</summary>
     public bool Revoke(long chatId)
     {
-        bool removed = _userSettings.Current.TelegramAllowedChatIds.Remove(chatId);
-        if (!removed) return false;
+        bool removed = false;
 
-        _userSettings.Current.TelegramUsernames.Remove(chatId);
-        _userSettings.Save();
+        _userSettings.MutateTelegramState(s =>
+        {
+            removed = s.TelegramAllowedChatIds.Remove(chatId);
+            if (removed) s.TelegramUsernames.Remove(chatId);
+        });
+
+        if (!removed) return false;
         _requestCooldownUntil[chatId] = DateTimeOffset.Now.Add(RequestCooldown);
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -205,6 +230,19 @@ public sealed class TelegramAccessControlService
             _requestCooldownUntil.TryRemove(chatId, out _);
         }
 
+        PurgeExpiredPending();
+
+        // Верхня межа кількості одночасних pending — захист від атаки
+        // "багато різних chat_id" (на відміну від кулдауну Плану B,
+        // який захищає лише від ПОВТОРНОГО запиту з ОДНОГО й того ж chat_id).
+        if (_pending.Count >= MaxPendingRequests)
+        {
+            _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                $"Досягнуто ліміту pending-запитів ({MaxPendingRequests}). " +
+                $"Новий запит від chat_id={chatId} відхилено без реєстрації."));
+            return new PendingRequestResult(null, null);
+        }
+
         int id = Interlocked.Increment(ref _nextPendingId);
         var request = new TelegramPendingRequest(id, chatId, username, DateTimeOffset.Now);
         _pending[id] = request;
@@ -215,11 +253,26 @@ public sealed class TelegramAccessControlService
 
         return new PendingRequestResult(request, null);
     }
-
+    
+    /// <summary>Прибирає протерміновані (TTL) pending-запити. Дешево викликати часто.</summary>
+    private void PurgeExpiredPending()
+    {
+        var cutoff = DateTimeOffset.Now - PendingRequestTtl;
+        foreach (var (id, request) in _pending)
+        {
+            if (request.RequestedAt < cutoff)
+                _pending.TryRemove(id, out _);
+        }
+    }
+    
     public TelegramPendingRequest? TryGetPending(int id) =>
         _pending.TryGetValue(id, out var r) ? r : null;
 
-    public IReadOnlyList<TelegramPendingRequest> GetAllPending() => _pending.Values.ToList();
+    public IReadOnlyList<TelegramPendingRequest> GetAllPending()
+    {
+        PurgeExpiredPending();
+        return _pending.Values.ToList();
+    }
 
     /// <summary>
     /// Критика #4 (stale callbacks): якщо запиту вже немає в _pending
@@ -230,11 +283,13 @@ public sealed class TelegramAccessControlService
     {
         if (!_pending.TryRemove(id, out var request)) return false;
 
-        var list = _userSettings.Current.TelegramAllowedChatIds;
-        if (!list.Contains(request.ChatId))
-            list.Add(request.ChatId);
-        _userSettings.Current.TelegramUsernames[request.ChatId] = request.Username;
-        _userSettings.Save();
+        _userSettings.MutateTelegramState(s =>
+        {
+            if (!s.TelegramAllowedChatIds.Contains(request.ChatId))
+                s.TelegramAllowedChatIds.Add(request.ChatId);
+
+            s.TelegramUsernames[request.ChatId] = request.Username;
+        });
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
             $"Доступ дозволено: @{request.Username} (chat_id={request.ChatId})."));
@@ -285,6 +340,25 @@ public sealed class TelegramAccessControlService
     }
     
     /// <summary>
+    /// true — /ping дозволено зараз, кулдаун оновлено.
+    /// false — ще зарано, виклик заблокований.
+    /// </summary>
+    public bool TryConsumePingCooldown(long chatId, out TimeSpan remaining)
+    {
+        var now = DateTimeOffset.Now;
+
+        if (_pingCooldownUntil.TryGetValue(chatId, out var until) && until > now)
+        {
+            remaining = until - now;
+            return false;
+        }
+
+        _pingCooldownUntil[chatId] = now.Add(PingCooldown);
+        remaining = TimeSpan.Zero;
+        return true;
+    }
+    
+    /// <summary>
     /// Оновлює збережений username для вже дозволеного chat_id — викликається
     /// при кожному /start, щоб список "Дозволені користувачі" не застарівав,
     /// якщо людина змінила username в Telegram після approve.
@@ -292,10 +366,13 @@ public sealed class TelegramAccessControlService
     public void RefreshUsername(long chatId, string username)
     {
         if (!IsAllowed(chatId)) return;
-        if (_userSettings.Current.TelegramUsernames.TryGetValue(chatId, out var existing)
-            && existing == username) return;
 
-        _userSettings.Current.TelegramUsernames[chatId] = username;
-        _userSettings.Save();
+        _userSettings.MutateTelegramState(s =>
+        {
+            if (s.TelegramUsernames.TryGetValue(chatId, out var existing) && existing == username)
+                return;
+
+            s.TelegramUsernames[chatId] = username;
+        });
     }
 }
