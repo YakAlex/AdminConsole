@@ -339,6 +339,19 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         string username = message.From?.Username ?? message.From?.FirstName ?? "unknown";
         string text     = message.Text!.Trim();
 
+        // rate-limit перевіряється ПЕРШИМ, до будь-якої іншої логіки —
+        // включно з /start і /claim_admin. Раніше ліміт рахувався лише ПІСЛЯ
+        // IsAllowed(chatId), тобто саме анонімні/відхилені/відкликані
+        // користувачі (найбільш імовірне джерело спаму) не мали жодного
+        // обмеження. Неавторизованим — мовчки ігноруємо, щоб не заохочувати
+        // повторні спроби відповіддю; авторизованим — та сама відповідь, що й раніше.
+        if (!_access.CheckRateLimit(chatId))
+        {
+            if (_access.IsAllowed(chatId))
+                await client.SendMessage(chatId, "⏳ Забагато запитів, зачекайте хвилину.", cancellationToken: ct);
+            return;
+        }
+
         // /start і /claim_admin обробляються ДО access-check — це вхідні точки для НЕавторизованих
         if (text.StartsWith("/start", StringComparison.OrdinalIgnoreCase))
         {
@@ -359,11 +372,6 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             return; // мовчки ігноруємо
         }
 
-        if (!_access.CheckRateLimit(chatId))
-        {
-            await client.SendMessage(chatId, "⏳ Забагато запитів, зачекайте хвилину.", cancellationToken: ct);
-            return;
-        }
         switch (text)
         {
             case "📊 Статус":
@@ -433,7 +441,18 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             return;
         }
 
-        var request = _access.RegisterPendingRequest(chatId, username);
+        var result = _access.RegisterPendingRequest(chatId, username);
+
+        if (result.Request is null)
+        {
+            int minutesLeft = (int)Math.Ceiling(result.CooldownRemaining!.Value.TotalMinutes);
+            await client.SendMessage(chatId,
+                $"⏳ Ваш попередній запит було відхилено. Спробуйте ще раз через {minutesLeft} хв.",
+                cancellationToken: ct);
+            return;
+        }
+
+        var request = result.Request;
         await client.SendMessage(chatId, "Запит на доступ надіслано адміністратору. Очікуйте підтвердження.",
             cancellationToken: ct);
 
@@ -480,6 +499,12 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         int  messageId = query.Message.MessageId;
         string data   = query.Data ?? string.Empty;
 
+        if (!_access.CheckRateLimit(chatId))
+        {
+            await client.AnswerCallbackQuery(query.Id, "Забагато запитів.", cancellationToken: ct);
+            return;
+        }
+
         // Approve/Deny доступні лише Primary Admin, незалежно від AllowedChatIds
         if (data.StartsWith("approve:") || data.StartsWith("deny:"))
         {
@@ -514,12 +539,6 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         if (!_access.IsAllowed(chatId))
         {
             await client.AnswerCallbackQuery(query.Id, "Немає доступу.", cancellationToken: ct);
-            return;
-        }
-
-        if (!_access.CheckRateLimit(chatId))
-        {
-            await client.AnswerCallbackQuery(query.Id, "Забагато запитів.", cancellationToken: ct);
             return;
         }
 

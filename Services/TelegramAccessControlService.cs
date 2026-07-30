@@ -30,6 +30,17 @@ public sealed class TelegramAccessControlService
     private readonly ConcurrentDictionary<int, TelegramPendingRequest> _pending = new();
     private int _nextPendingId;
 
+    //Кулдаун на повторний запит після Deny/Revoke ────────────────
+
+    /// <summary>
+    /// chat_id → момент, до якого повторний /start НЕ створює новий
+    /// pending-запит і НЕ шле push адміну. Заповнюється при Deny і при
+    /// Revoke — обидва сценарії дозволяли раніше миттєво "перезапитати"
+    /// доступ і засипати Primary Admin новими сповіщеннями без обмежень.
+    /// </summary>
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _requestCooldownUntil = new();
+    private static readonly TimeSpan RequestCooldown = TimeSpan.FromMinutes(15);
+
     // ── Claim-код для Primary Admin ─────────────────────────────────────────
 
     private string?         _claimCode;
@@ -41,6 +52,16 @@ public sealed class TelegramAccessControlService
     private readonly ConcurrentDictionary<long, ConcurrentQueue<DateTimeOffset>> _rateLimits = new();
     private const int    RateLimitMaxActions = 10;
     private static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(1);
+    
+    /// <summary>
+    /// Результат спроби зареєструвати pending-запит:
+    ///  - Request заповнено   → запит створено (або вже існував — дедуп).
+    ///  - Request == null     → chat_id ще в кулдауні після Deny/Revoke;
+    ///                          CooldownRemaining підказує, скільки ще чекати.
+    /// </summary>
+    public readonly record struct PendingRequestResult(
+        TelegramPendingRequest? Request,
+        TimeSpan?               CooldownRemaining);
 
     public TelegramAccessControlService(
         UserSettingsService                  userSettings,
@@ -146,9 +167,14 @@ public sealed class TelegramAccessControlService
     {
         bool removed = _userSettings.Current.TelegramAllowedChatIds.Remove(chatId);
         if (!removed) return false;
+
         _userSettings.Current.TelegramUsernames.Remove(chatId);
         _userSettings.Save();
-        _messenger.Send(AppLogEntryMessage.Info(LogSource, $"Telegram доступ відкликано: chat_id={chatId}."));
+        _requestCooldownUntil[chatId] = DateTimeOffset.Now.Add(RequestCooldown);
+
+        _messenger.Send(AppLogEntryMessage.Info(LogSource,
+            $"Telegram доступ відкликано: chat_id={chatId}. " +
+            $"Кулдаун на повторний запит: {RequestCooldown.TotalMinutes} хв."));
         _messenger.Send(new TelegramAccessChangedMessage
         {
             Action = TelegramAccessAction.Revoked,
@@ -163,12 +189,21 @@ public sealed class TelegramAccessControlService
     /// Реєструє новий /start від неавторизованого chat_id. Повертає
     /// short-ID pending-запиту (для approve:&lt;id&gt;/deny:&lt;id&gt; callback_data).
     /// </summary>
-    public TelegramPendingRequest RegisterPendingRequest(long chatId, string username)
+    public PendingRequestResult RegisterPendingRequest(long chatId, string username)
     {
         // Якщо запит від цього chat_id вже є в pending — не дублюємо,
         // повертаємо існуючий (людина могла кілька разів натиснути /start).
         var existing = _pending.Values.FirstOrDefault(p => p.ChatId == chatId);
-        if (existing is not null) return existing;
+        if (existing is not null) return new PendingRequestResult(existing, null);
+
+        if (_requestCooldownUntil.TryGetValue(chatId, out var until))
+        {
+            var remaining = until - DateTimeOffset.Now;
+            if (remaining > TimeSpan.Zero)
+                return new PendingRequestResult(null, remaining);
+
+            _requestCooldownUntil.TryRemove(chatId, out _);
+        }
 
         int id = Interlocked.Increment(ref _nextPendingId);
         var request = new TelegramPendingRequest(id, chatId, username, DateTimeOffset.Now);
@@ -178,7 +213,7 @@ public sealed class TelegramAccessControlService
             $"Новий запит доступу: @{username} (chat_id={chatId})."));
         _messenger.Send(new TelegramAccessRequestMessage { Request = request });
 
-        return request;
+        return new PendingRequestResult(request, null);
     }
 
     public TelegramPendingRequest? TryGetPending(int id) =>
@@ -216,8 +251,11 @@ public sealed class TelegramAccessControlService
     {
         if (!_pending.TryRemove(id, out var request)) return false;
 
+        _requestCooldownUntil[request.ChatId] = DateTimeOffset.Now.Add(RequestCooldown);
+
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"Доступ відхилено: @{request.Username} (chat_id={request.ChatId})."));
+            $"Доступ відхилено: @{request.Username} (chat_id={request.ChatId}). " +
+            $"Кулдаун на повторний запит: {RequestCooldown.TotalMinutes} хв."));
         _messenger.Send(new TelegramAccessChangedMessage
         {
             Action   = TelegramAccessAction.Denied,
