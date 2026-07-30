@@ -30,6 +30,18 @@ public sealed class UptimeTrackerService
     /// Поточний статус кожного IP (для визначення переходів)
     private readonly Dictionary<string, PingStatus> _lastStatus = new();
 
+    /// <summary>
+    /// IP-адреси, для яких уже прийшов ПЕРШИЙ реальний (не Checking/Unknown)
+    /// результат пінгу цієї сесії. Потрібно для reconciliation при старті:
+    /// одразу після рестарту _lastStatus порожній, тому звичайна перевірка
+    /// "prev == Offline" ніколи не спрацює для сервера, що відновився, поки
+    /// застосунок був вимкнений — доводиться один раз (саме один, далі
+    /// нормальна логіка prev==Offline вже коректно працює) звірити напряму
+    /// з персистентним _records, чи немає там "осиротілого" відкритого
+    /// інциденту для цього IP.
+    /// </summary>
+    private readonly HashSet<string> _reconciledIps = new();
+
     // Всі інциденти в пам'яті (поточна сесія + завантажені з диску)
     private readonly List<DowntimeRecord> _records = new();
     private readonly object               _lock    = new();
@@ -124,7 +136,7 @@ public sealed class UptimeTrackerService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        LoadFromDisk(DateTimeOffset.Now);
+        LoadFromDisk();
         PublishSnapshot();
         _logger.LogInformation("UptimeTrackerService started.");
         _messenger.Send(AppLogEntryMessage.Info(LogSource, 
@@ -150,7 +162,12 @@ public sealed class UptimeTrackerService
                     continue;
                 }
 
-                _lastStatus.TryGetValue(result.IP, out var prev);
+_lastStatus.TryGetValue(result.IP, out var prev);
+
+                // Add() повертає true, якщо цей IP бачимо ВПЕРШЕ з реальним
+                // (не Checking/Unknown) статусом цієї сесії — саме цей момент
+                // потребує звірки з диском (див. гілку Online нижче).
+                bool isFirstRealStatusThisSession = _reconciledIps.Add(result.IP);
 
                 if (result.Status == PingStatus.Offline)
                 {
@@ -189,12 +206,33 @@ public sealed class UptimeTrackerService
                         }
                     }
                 }
-                else if (result.Status == PingStatus.Online && prev == PingStatus.Offline)
+                else if (result.Status == PingStatus.Online)
                 {
-                    // Якщо інцидент ще був лише Pending (не встиг визріти) —
-                    // прибираємо його БЕЗ жодного звернення до диска чи UI.
-                    if (!_pendingOffline.Remove(result.IP))
+                    if (prev == PingStatus.Offline)
                     {
+                        // Звичайний, уже перевірений часом шлях: сервер впав і
+                        // піднявся, поки застосунок ПРАЦЮВАВ — _lastStatus
+                        // коректно відстежив обидва переходи цієї сесії.
+                        if (!_pendingOffline.Remove(result.IP))
+                        {
+                            var open = _records.FirstOrDefault(
+                                r => r.ServerIp == result.IP && !r.IsResolved);
+
+                            if (open is not null)
+                            {
+                                open.RecoveredAt = DateTimeOffset.Now;
+                                changed = true;
+                            }
+                        }
+                    }
+                    else if (isFirstRealStatusThisSession)
+                    {
+                        // ФІКС: перший реальний пінг цього IP цієї сесії, і при
+                        // цьому prev НЕ Offline (бо _lastStatus щойно після
+                        // рестарту порожній — звичайна перевірка вище ніколи
+                        // б не спрацювала). Звіряємось напряму з диском: якщо
+                        // там лежить незакритий інцидент для цього IP — сервер
+                        // явно відновився, поки застосунок був вимкнений.
                         var open = _records.FirstOrDefault(
                             r => r.ServerIp == result.IP && !r.IsResolved);
 
@@ -202,6 +240,10 @@ public sealed class UptimeTrackerService
                         {
                             open.RecoveredAt = DateTimeOffset.Now;
                             changed = true;
+
+                            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                                $"{open.ServerName} ({open.ServerIp}) уже ONLINE після перезапуску " +
+                                $"застосунку — закрито інцидент, що почався {open.FellAt:dd.MM HH:mm}."));
                         }
                     }
                 }
@@ -236,7 +278,7 @@ public sealed class UptimeTrackerService
                 // і запустить новий цикл накопичення, а не загубиться.
                 _saveScheduled = false;
 
-                SaveToDisk(DateTimeOffset.Now);
+                SaveToDisk();
             }
             catch (Exception ex)
             {
@@ -271,7 +313,7 @@ public sealed class UptimeTrackerService
             _records.Remove(record);
         }
 
-        _ = Task.Run(() => SaveToDisk(DateTimeOffset.Now));
+        _ = Task.Run(() => SaveToDisk());
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -289,7 +331,7 @@ public sealed class UptimeTrackerService
 
         if (removed == 0) return;
 
-        _ = Task.Run(() => SaveToDisk(DateTimeOffset.Now));
+        _ = Task.Run(() => SaveToDisk());
         PublishSnapshot();
 
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -301,42 +343,77 @@ public sealed class UptimeTrackerService
     private static string FilePath(DateTimeOffset month)
         => Path.Combine(LogDir, $"uptime-{month:yyyy-MM}.json");
 
-    private void LoadFromDisk(DateTimeOffset month)
+/// <summary>
+    /// ФІКС: раніше читався ЛИШЕ файл поточного місяця — інцидент,
+    /// що почався в попередньому місяці (наприклад, 31-го числа) і ще не
+    /// закритий на момент рестарту вже в наступному місяці, взагалі не
+    /// потрапляв у пам'ять (лежав "осиротілим" у старому файлі назавжди).
+    /// Тепер читаємо ВСІ uptime-*.json файли в папці логів і об'єднуємо —
+    /// дедуп за (ServerIp, FellAt) лишається тим самим, що й був.
+    /// </summary>
+    private void LoadFromDisk()
     {
-        var path = FilePath(month);
-        if (!File.Exists(path)) return;
+        if (!Directory.Exists(LogDir)) return;
 
+        string[] files;
         try
         {
-            var json    = File.ReadAllText(path);
-            var records = JsonSerializer.Deserialize<List<DowntimeRecord>>(json, JsonOptions);
-
-            if (records is null) return;
-
-            lock (_lock)
-            {
-                foreach (var r in records)
-                {
-                    bool exists = _records.Any(x =>
-                        x.ServerIp == r.ServerIp &&
-                        x.FellAt   == r.FellAt);
-
-                    if (!exists) _records.Add(r);
-                }
-                _records.Sort((a, b) => b.FellAt.CompareTo(a.FellAt));
-            }
-
-            _logger.LogInformation(
-                "UptimeTrackerService: завантажено {Count} записів з {Path}",
-                records.Count, path);
+            files = Directory.GetFiles(LogDir, "uptime-*.json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "UptimeTrackerService: помилка читання {Path}", path);
+            _logger.LogError(ex, "UptimeTrackerService: не вдалось прочитати директорію {Dir}", LogDir);
+            return;
         }
+
+        int totalLoaded = 0;
+
+        foreach (var path in files)
+        {
+            try
+            {
+                var json    = File.ReadAllText(path);
+                var records = JsonSerializer.Deserialize<List<DowntimeRecord>>(json, JsonOptions);
+                if (records is null) continue;
+
+                lock (_lock)
+                {
+                    foreach (var r in records)
+                    {
+                        bool exists = _records.Any(x =>
+                            x.ServerIp == r.ServerIp &&
+                            x.FellAt   == r.FellAt);
+
+                        if (!exists) _records.Add(r);
+                    }
+                }
+
+                totalLoaded += records.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UptimeTrackerService: помилка читання {Path}", path);
+            }
+        }
+
+        lock (_lock)
+            _records.Sort((a, b) => b.FellAt.CompareTo(a.FellAt));
+
+        _logger.LogInformation(
+            "UptimeTrackerService: завантажено {Count} записів з {FileCount} файл(ів).",
+            totalLoaded, files.Length);
     }
 
-    private void SaveToDisk(DateTimeOffset month)
+    /// <summary>
+    /// ФІКС: раніше писався ЛИШЕ файл "поточного" місяця (той, що
+    /// відповідав моменту виклику) — якщо інцидент відкрився в грудні, а
+    /// закрився вже в січні (застосунок пропрацював без рестарту через межу
+    /// місяця), оновлення "закрито" ніколи не потрапляло у грудневий файл.
+    /// Тепер групуємо ВЕСЬ знімок за місяцем FellAt кожного запису і
+    /// перезаписуємо КОЖЕН відповідний місячний файл повністю — незалежно
+    /// від того, який зараз "поточний" місяць.
+    /// </summary>
+    private void SaveToDisk()
     {
         List<DowntimeRecord> snapshot;
         lock (_lock) snapshot = _records.ToList();
@@ -347,17 +424,20 @@ public sealed class UptimeTrackerService
             {
                 Directory.CreateDirectory(LogDir);
 
-                var thisMonth = snapshot
-                    .Where(r => r.FellAt.Year  == month.Year &&
-                                r.FellAt.Month == month.Month)
-                    .ToList();
+                var byMonth = snapshot.GroupBy(r => new { r.FellAt.Year, r.FellAt.Month });
 
-                var finalPath = FilePath(month);
-                var tempPath  = finalPath + ".tmp";
-                var json      = JsonSerializer.Serialize(thisMonth, JsonOptions);
+                foreach (var group in byMonth)
+                {
+                    var monthStamp = new DateTimeOffset(
+                        group.Key.Year, group.Key.Month, 1, 0, 0, 0, TimeSpan.Zero);
 
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, finalPath, overwrite: true);
+                    var finalPath = FilePath(monthStamp);
+                    var tempPath  = finalPath + ".tmp";
+                    var json      = JsonSerializer.Serialize(group.ToList(), JsonOptions);
+
+                    File.WriteAllText(tempPath, json);
+                    File.Move(tempPath, finalPath, overwrite: true);
+                }
             }
             catch (Exception ex)
             {
