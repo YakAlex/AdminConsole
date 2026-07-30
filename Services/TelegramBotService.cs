@@ -53,6 +53,7 @@ public sealed class TelegramBotService
     private readonly IReadOnlyList<ServerEntry>          _allServers;
     
     private const string LogSource = "TelegramBot";
+    private bool IsSingleTerminalServer => _terminalServers.Count == 1;
 
     // ── Push-кеші
     private readonly ConcurrentDictionary<string, PingStatus>          _pingCache = new();
@@ -572,7 +573,12 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         }
         else if (data == "back:rdp_picker")
         {
-            await EditWithRdpPickerAsync(client, chatId, messageId, ct);
+            // Якщо сервер один — "picker" не існує, одразу показуємо його сесії
+            // (сюди можна дійти лише з BuildStatusKeyboard(), кнопка "🖥 RDP по серверах").
+            if (IsSingleTerminalServer)
+                await EditWithRdpSessionsAsync(client, chatId, messageId, _terminalServers[0].IP, ct);
+            else
+                await EditWithRdpPickerAsync(client, chatId, messageId, ct);
         }
         else if (data.StartsWith("revoke:"))
         {
@@ -743,8 +749,36 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     private async Task SendRdpPickerAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
+        if (IsSingleTerminalServer)
+        {
+            // Один сервер — одразу показуємо сесії, без проміжного кроку вибору.
+            await SendRdpSessionsDirectAsync(client, chatId, _terminalServers[0].IP, ct);
+            return;
+        }
+
         var msg = await client.SendMessage(chatId, "Оберіть сервер:",
             replyMarkup: BuildRdpPickerKeyboard(), cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// Показує сесії конкретного сервера як НОВЕ повідомлення (не EditMessageText —
+    /// на відміну від навігації picker→сесії через callback, тут немає попереднього
+    /// повідомлення для редагування). Без кнопки "◀ Назад" — повертатись нікуди,
+    /// адже picker для єдиного сервера не показувався.
+    /// </summary>
+    private async Task SendRdpSessionsDirectAsync(
+        ITelegramBotClient client, long chatId, string serverIp, CancellationToken ct)
+    {
+        var snapshot = _rdpMonitor.GetSnapshot();
+        var sessions = snapshot.TryGetValue(serverIp, out var list) ? list : [];
+
+        var lines = sessions.Count == 0
+            ? new List<string> { "Немає активних сесій." }
+            : sessions.Select(s => $"{s.Username} — {s.State} (logon: {s.LogonTime})").ToList();
+
+        var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Сесії:\n");
+
+        await client.SendMessage(chatId, pages[0], cancellationToken: ct);
     }
 
     private async Task EditWithRdpPickerAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct)
@@ -783,10 +817,13 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         // актуально — сесій зазвичай небагато, але захист лишається).
         var pages = TelegramTextChunker.BuildPages(lines, header: $"🖥 Сесії:\n");
 
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[] { InlineKeyboardButton.WithCallbackData("◀ Назад", "back:rdp_picker") }
-        });
+        // Якщо сервер лише один — picker'а не існувало, тому й "Назад" нікуди.
+        var keyboard = IsSingleTerminalServer
+            ? null
+            : new InlineKeyboardMarkup(new[]
+            {
+                new[] { InlineKeyboardButton.WithCallbackData("◀ Назад", "back:rdp_picker") }
+            });
 
         await client.EditMessageText(chatId, messageId, pages[0], replyMarkup: keyboard, cancellationToken: ct);
     }

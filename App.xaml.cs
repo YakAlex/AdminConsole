@@ -132,7 +132,6 @@ public partial class App : Application
         services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
 
         services.AddHostedService<FileLoggerService>();
-        services.AddHostedService<RdpMonitorService>();
         services.AddSingleton<RdpMonitorService>();
         services.AddHostedService(sp => sp.GetRequiredService<RdpMonitorService>());
         services.AddHostedService<ZabbixPollerService>();
