@@ -343,7 +343,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- Last Checked -->
-                <DataGridTextColumn Header="LAST CHECKED" Binding="{Binding LastChecked}" Width="110">
+                <DataGridTextColumn Header="LAST CHECKED" Binding="{Binding LastChecked}" Width="*">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
@@ -353,30 +353,6 @@
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
-                
-                <!-- Status Since -->
-                <DataGridTemplateColumn Header="SINCE" Width="155" SortMemberPath="StatusSince">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
-                            <TextBlock Text="{Binding StatusSince}"
-                                       VerticalAlignment="Center"
-                                       FontFamily="Consolas, Courier New"
-                                       FontSize="11">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="#FF80CBC4" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}"
-                                                         Value="{x:Static models:PingStatus.Offline}">
-                                                <Setter Property="Foreground" Value="#FFF44336" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
                 
                 <!-- ACTIONS -->
                 <DataGridTemplateColumn Header="ACTIONS" Width="Auto">

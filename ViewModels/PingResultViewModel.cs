@@ -34,7 +34,6 @@ public sealed partial class PingResultViewModel : ObservableObject, IRecipient<M
     [ObservableProperty] private string     _lastChecked    = "—";
     [ObservableProperty] private string     _latencyDisplay = "—";
     [ObservableProperty] private bool       _isActionBusy;
-    [ObservableProperty] private string     _statusSince = "—";
 
     // ── Maintenance ───────────────────────────────────────────────────────────
     [ObservableProperty] private bool   _isUnderMaintenance;
@@ -131,10 +130,6 @@ public sealed partial class PingResultViewModel : ObservableObject, IRecipient<M
 
     public void ApplyResult(PingResult result)
     {
-        // Оновлюємо StatusSince тільки при зміні стану
-        if (result.Status != Status)
-            StatusSince = result.Status is PingStatus.Online or PingStatus.Offline ? result.LastChecked.ToLocalTime().ToString("dd.MM.yyyy — HH:mm") : "—";
-        
         Status         = result.Status;
         LatencyMs      = result.LatencyMs;
         LastChecked    = result.LastChecked.ToLocalTime().ToString("HH:mm:ss");

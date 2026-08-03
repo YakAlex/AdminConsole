@@ -1219,7 +1219,7 @@
                                     </Style>
                                 </Border.Style>
                                 <StackPanel>
-<TextBlock Text="Запити на доступ" Foreground="#FF80CBC4"
+                                    <TextBlock Text="Запити на доступ" Foreground="#FF80CBC4"
                                                FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                     <TextBlock Text="Дозволити можна лише в Telegram. Тут — тільки відхилити."
                                                Foreground="#66FFFFFF" FontSize="11" FontStyle="Italic"
