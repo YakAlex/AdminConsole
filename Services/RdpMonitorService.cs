@@ -454,7 +454,7 @@ public sealed class RdpMonitorService : BackgroundService
             if (previous.State == RdpSessionState.Active &&
                 current.State  == RdpSessionState.Disconnected)
             {
-                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                _messenger.Send(AppLogEntryMessage.Info(LogSource,
                     $"{current.Username} → session went idle on {server.Name} " +
                     $"(Active → Disconnected, logon: {current.LogonTime})"));
             }
