@@ -25,7 +25,14 @@ public partial class App : Application
             
             try
             {
-                Console.OutputEncoding = Encoding.UTF8;
+                var stdout = Console.OpenStandardOutput();
+                var utf8Writer = new StreamWriter(
+                    stdout,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+                {
+                    AutoFlush = true
+                };
+                Console.SetOut(utf8Writer);
             }
             catch
             {
@@ -244,7 +251,18 @@ public partial class App : Application
         {
             System.Diagnostics.Debug.WriteLine($"[OnExit] SettingsViewModel dispose error: {ex.Message}");
         }
-
+        
+        try
+        {
+            _host.Services
+                .GetRequiredService<MaintenanceService>()
+                .ClearAllOnShutdown();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] MaintenanceService clear error: {ex.Message}");
+        }
+        
         try
         {
             _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();

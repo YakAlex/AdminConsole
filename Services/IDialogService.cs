@@ -1,4 +1,5 @@
-﻿namespace AdminConsole.Services;
+﻿using AdminConsole.Core.Models;
+namespace AdminConsole.Services;
 
 /// <summary>
 /// Abstracts MaterialDesign DialogHost from ViewModels.
@@ -6,8 +7,12 @@
 /// </summary>
 public interface IDialogService
 {
-    /// <summary>
-    /// Shows a confirmation dialog and returns true if the user confirmed.
-    /// </summary>
     Task<bool> ShowConfirmationAsync(string title, string body, string confirmLabel = "Confirm");
+
+    /// <summary>
+    /// Показує вибір тривалості Maintenance-вікна фіксованими пресетами
+    /// (10/30/60 хв або без обмеження), без вільного текстового вводу.
+    /// Повертає null, якщо користувач скасував діалог.
+    /// </summary>
+    Task<MaintenanceDurationChoice?> ShowMaintenanceDurationAsync(string serverName, string ip);
 }

@@ -103,11 +103,13 @@ public sealed class MaintenanceService : BackgroundService
         SaveToDisk();
 
         _logger.LogInformation(
-            "Maintenance розпочато: {Key}, до {To}", window.Key, window.To);
+            "Maintenance розпочато: {Key}, до {To}",
+            window.Key, window.To?.ToString() ?? "без обмеження");
+
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
             $"Maintenance розпочато для {window.DisplayName}: " +
             $"{(string.IsNullOrWhiteSpace(window.Reason) ? "без причини" : window.Reason)} " +
-            $"(до {window.To.ToLocalTime():dd.MM HH:mm})."));
+            $"({(window.To is { } to ? $"до {to.ToLocalTime():dd.MM HH:mm}" : "без обмеження часу")})."));
 
         _messenger.Send(new MaintenanceChangedMessage
         {
@@ -133,6 +135,37 @@ public sealed class MaintenanceService : BackgroundService
             Window = window
         });
     }
+    
+    /// <summary>
+    /// Знімає ВСІ активні вікна обслуговування (включно з "без обмеження часу")
+    /// і перезаписує logs/maintenance.json порожнім списком. Викликається з
+    /// App.OnExit() — Maintenance Mode свідомо не переживає перезапуск
+    /// застосунку: інакше забуте "без обмеження" вікно могло б мовчки
+    /// придушувати алерти тижнями після того, як адміністратор просто закрив
+    /// програму, забувши вимкнути обслуговування вручну. Згортання у трей
+    /// сюди не потрапляє — процес не завершується, OnExit не викликається.
+    /// </summary>
+    public void ClearAllOnShutdown()
+    {
+        var windows = _windows.Values.ToList();
+        if (windows.Count == 0) return;
+
+        _windows.Clear();
+        SaveToDisk();
+
+        foreach (var window in windows)
+        {
+            _messenger.Send(new MaintenanceChangedMessage
+            {
+                Action = MaintenanceAction.Ended,
+                Window = window
+            });
+        }
+
+        _logger.LogInformation(
+            "MaintenanceService: {Count} вікон(о) обслуговування знято при закритті застосунку.",
+            windows.Count);
+    }
 
     // ── Фонове автозавершення прострочених вікон ────────────────────────────
 
@@ -151,7 +184,7 @@ public sealed class MaintenanceService : BackgroundService
             catch (OperationCanceledException) { break; }
 
             var now = DateTimeOffset.Now;
-            var expired = _windows.Where(kv => kv.Value.To < now).ToList();
+            var expired = _windows.Where(kv => kv.Value.To is not null && kv.Value.To < now).ToList();
             if (expired.Count == 0) continue;
 
             foreach (var (key, window) in expired)
@@ -207,11 +240,10 @@ public sealed class MaintenanceService : BackgroundService
             var now = DateTimeOffset.Now;
             foreach (var w in windows)
             {
-                // Не відновлюємо вже прострочені вікна (застосунок міг
-                // не працювати довше, ніж тривало вікно) — інакше вони
-                // одразу потраплять у перший цикл автозавершення,
-                // що не страшно, але для чистоти фільтруємо тут.
-                if (w.To >= now)
+                // Не відновлюємо прострочені вікна. Вікна "без обмеження часу" (To == null)
+                // сюди в нормі й не мають потрапляти — ClearAllOnShutdown() спорожняє файл
+                // при кожному коректному завершенні застосунку.
+                if (w.To is null || w.To >= now)
                     _windows[w.Key] = w;
             }
         }

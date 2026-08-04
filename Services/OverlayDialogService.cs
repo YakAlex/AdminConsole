@@ -1,16 +1,9 @@
-﻿using AdminConsole.Views;
+﻿using AdminConsole.Core.Models;
+using AdminConsole.Views;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 namespace AdminConsole.Services;
 
-/// <summary>
-/// Shows confirmation dialogs via a named overlay Grid embedded directly
-/// in MainWindow. No DialogHost, no visual tree disruption.
-///
-/// Attach() is called once by MainWindow after InitializeComponent().
-/// ShowConfirmationAsync() can be called from any thread — it marshals
-/// to the UI dispatcher internally.
-/// </summary>
 public sealed class OverlayDialogService : IDialogService
 {
     private MainWindow?                       _window;
@@ -29,9 +22,7 @@ public sealed class OverlayDialogService : IDialogService
     }
 
     public Task<bool> ShowConfirmationAsync(
-        string title,
-        string body,
-        string confirmLabel = "Confirm")
+        string title, string body, string confirmLabel = "Confirm")
     {
         if (_window is null || _dispatcher is null)
         {
@@ -46,6 +37,35 @@ public sealed class OverlayDialogService : IDialogService
 
         _dispatcher.InvokeAsync(() =>
             _window.ShowDialog(title, body, confirmLabel, tcs));
+
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// На відміну від ShowConfirmationAsync (overlay Grid у самому MainWindow),
+    /// вибір тривалості показується окремим модальним Window — той самий
+    /// підхід, що й CredentialDialog/ZabbixTokenDialog. Простіше зробити
+    /// кілька кнопок-пресетів так, ніж розширювати overlay під новий UI.
+    /// </summary>
+    public Task<MaintenanceDurationChoice?> ShowMaintenanceDurationAsync(string serverName, string ip)
+    {
+        if (_window is null || _dispatcher is null)
+        {
+            _logger.LogWarning(
+                "OverlayDialogService: ShowMaintenanceDurationAsync викликано до Attach() — " +
+                "діалог для {Server} не показано.", serverName);
+            return Task.FromResult<MaintenanceDurationChoice?>(null);
+        }
+
+        var tcs = new TaskCompletionSource<MaintenanceDurationChoice?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _dispatcher.InvokeAsync(() =>
+        {
+            var dialog = new MaintenanceDialog(serverName, ip) { Owner = _window };
+            bool? result = dialog.ShowDialog();
+            tcs.SetResult(result == true ? dialog.Choice : null);
+        });
 
         return tcs.Task;
     }
