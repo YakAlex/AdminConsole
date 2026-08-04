@@ -22,10 +22,24 @@ public sealed class CredentialStore
     private string? _rdpPassword;
     private string? _zabbixToken;
     private string? _zabbixUsername;
+    private const string TelegramTarget = "AdminConsole/Telegram";
+    private string? _telegramToken;
     private readonly object _lock = new();
 
-    public bool UserCancelledRdpPrompt    { get; private set; }
-    public bool UserCancelledZabbixPrompt { get; private set; }
+    private volatile bool _userCancelledRdpPrompt;
+    private volatile bool _userCancelledZabbixPrompt;
+    
+    public bool UserCancelledRdpPrompt
+    {
+        get => _userCancelledRdpPrompt;
+        private set => _userCancelledRdpPrompt = value;
+    }
+
+    public bool UserCancelledZabbixPrompt
+    {
+        get => _userCancelledZabbixPrompt;
+        private set => _userCancelledZabbixPrompt = value;
+    }
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
@@ -60,8 +74,8 @@ public sealed class CredentialStore
             _rdpUsername           = username;
             _rdpPassword           = password;
             UserCancelledRdpPrompt = false;
+            WriteToVault(RdpTarget, username, password);
         }
-        WriteToVault(RdpTarget, username, password);
     }
 
     public void ClearRdp()
@@ -70,14 +84,19 @@ public sealed class CredentialStore
         {
             _rdpUsername = null;
             _rdpPassword = null;
+            DeleteFromVault(RdpTarget);
+
+            // Скидаємо прапорець скасування — інакше після автоматичного ClearRdp
+            // (напр. через logon failure у RdpMonitorService) поллер думатиме,
+            // що юзер уже "скасував" запит credentials, і більше сам їх не попросить.
+            // Перенесено всередину lock для консистентності з рештою методів
+            // (StoreRdp встановлює прапорець так само всередині lock).
+            _userCancelledRdpPrompt = false;
         }
-        DeleteFromVault(RdpTarget);
     }
 
-    public void MarkRdpCancelled()
-    {
-        lock (_lock) UserCancelledRdpPrompt = true;
-    }
+    
+    public void MarkRdpCancelled()    => _userCancelledRdpPrompt    = true;
     
     /// <summary>
     /// Повертає тільки Username без пароля — для відображення у Settings.
@@ -94,10 +113,7 @@ public sealed class CredentialStore
     /// без цього RdpMonitorService вважає що юзер скасував і більше
     /// не запитуватиме credentials навіть якщо вони вже збережені.
     /// </summary>
-    public void ResetRdpCancelledFlag()
-    {
-        lock (_lock) UserCancelledRdpPrompt = false;
-    }
+    public void ResetRdpCancelledFlag() => _userCancelledRdpPrompt  = false;
 
     /// <summary>
     /// Тимчасові credentials для quser /server:HOSTNAME (аналог cmdkey /add, через CredWrite).
@@ -146,8 +162,8 @@ public sealed class CredentialStore
             _zabbixUsername           = string.Empty;
             _zabbixToken              = apiToken;
             UserCancelledZabbixPrompt = false;
+            WriteToVault(ZabbixTarget, string.Empty, apiToken);
         }
-        WriteToVault(ZabbixTarget, string.Empty, apiToken);
     }
 
     public void StoreZabbixCredentials(string username, string password)
@@ -157,8 +173,8 @@ public sealed class CredentialStore
             _zabbixUsername           = username;
             _zabbixToken              = password;
             UserCancelledZabbixPrompt = false;
+            WriteToVault(ZabbixTarget, username, password);
         }
-        WriteToVault(ZabbixTarget, username, password);
     }
 
     public void ClearZabbix()
@@ -167,14 +183,17 @@ public sealed class CredentialStore
         {
             _zabbixUsername = null;
             _zabbixToken    = null;
+            DeleteFromVault(ZabbixTarget);
+
+            // Скидаємо прапорець скасування — інакше після автоматичного ClearZabbix
+            // поллер думатиме, що юзер уже "скасував" запит токена,
+            // і більше сам його не попросить.
+            _userCancelledZabbixPrompt = false;
         }
-        DeleteFromVault(ZabbixTarget);
     }
 
-    public void MarkZabbixCancelled()
-    {
-        lock (_lock) UserCancelledZabbixPrompt = true;
-    }
+    public void MarkZabbixCancelled() => _userCancelledZabbixPrompt = true;
+
     
     /// <summary>
     /// Повертає замаскований токен для відображення у Settings.
@@ -197,9 +216,57 @@ public sealed class CredentialStore
     /// Аналогічно ResetRdpCancelledFlag — критично для коректної роботи
     /// ZabbixPollerService після збереження токену через Settings.
     /// </summary>
-    public void ResetZabbixCancelledFlag()
+    public void ResetZabbixCancelledFlag() => _userCancelledZabbixPrompt = false;
+    
+    // ── Telegram ─────────────────────────────────────────────────────────────
+
+    public bool HasTelegramCredentials
     {
-        lock (_lock) UserCancelledZabbixPrompt = false;
+        get { lock (_lock) return !string.IsNullOrWhiteSpace(_telegramToken); }
+    }
+
+    public string GetTelegramToken()
+    {
+        lock (_lock) return _telegramToken ?? string.Empty;
+    }
+
+    public void LoadTelegramFromVault()
+    {
+        var cred = ReadFromVault(TelegramTarget);
+        if (cred is not null)
+        {
+            lock (_lock) _telegramToken = cred.Value.Password;
+        }
+    }
+
+    public void StoreTelegramToken(string botToken)
+    {
+        lock (_lock)
+        {
+            _telegramToken = botToken;
+            WriteToVault(TelegramTarget, string.Empty, botToken);
+        }
+    }
+
+    public void ClearTelegram()
+    {
+        lock (_lock)
+        {
+            _telegramToken = null;
+            DeleteFromVault(TelegramTarget);
+        }
+    }
+
+    /// <summary>Маскований токен для показу в Settings — той самий підхід, що й Zabbix.</summary>
+    public string GetTelegramTokenMasked()
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrEmpty(_telegramToken)) return string.Empty;
+            return _telegramToken.Length <= 4
+                ? new string('•', _telegramToken.Length)
+                : $"{"••••••••"}{_telegramToken[^4..]}";
+        }
     }
 
     // ── Win32 Credential Manager ──────────────────────────────────────────────

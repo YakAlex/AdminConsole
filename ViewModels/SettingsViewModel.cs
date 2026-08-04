@@ -1,22 +1,49 @@
-﻿using AdminConsole.Core.Messages;
+﻿using System.Collections.ObjectModel;
+using AdminConsole.Core.Messages;
+using AdminConsole.Core.Models;
 using AdminConsole.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using Telegram.Bot;
 
 namespace AdminConsole.ViewModels;
 
-public sealed partial class SettingsViewModel : ObservableObject
+/// <summary>
+/// Проста VM-обгортка pending-запиту для біндингу в XAML —
+/// ObservableObject не потрібен, список повністю перебудовується
+/// при кожному RefreshTelegramState().
+/// </summary>
+public sealed record TelegramPendingRequestVm(int Id, long ChatId, string Username, DateTimeOffset RequestedAt);
+
+public sealed partial class SettingsViewModel :
+    ObservableObject,
+    IRecipient<TelegramAccessRequestMessage>,
+    IRecipient<TelegramAccessChangedMessage>
 {
     private readonly CredentialStore  _credentials;
     private readonly ZabbixApiClient  _zabbixClient;
     private readonly RdpCredentialValidator _rdpValidator;
     private readonly IMessenger       _messenger;
+    private readonly UserSettingsService _userSettings;
+    private readonly TelegramAccessControlService _telegramAccess;
     private readonly string           _zabbixUrl;
 
     // ── Загальні ─────────────────────────────────────────────────────────────
 
     [ObservableProperty] private bool _closeToTray;
+
+    /// <summary>
+    /// Перемикач RDP-моніторингу. На відміну від CloseToTray —
+    /// застосовується МІТТЄВО (через OnRdpMonitoringEnabledChanged нижче),
+    /// а не лише при закритті Settings overlay.
+    /// </summary>
+    [ObservableProperty] private bool _rdpMonitoringEnabled;
+
+    /// <summary>
+    /// Перемикач Zabbix-моніторингу. Поведінка аналогічна RdpMonitoringEnabled.
+    /// </summary>
+    [ObservableProperty] private bool _zabbixMonitoringEnabled;
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
@@ -42,9 +69,31 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool   _isTestingZabbix;
     [ObservableProperty] private string _zabbixTestResult     = string.Empty;
     [ObservableProperty] private bool   _zabbixTestSuccess;
+    
+    // ── Telegram ──────────────────────────────────────────────────────────────
 
+    [ObservableProperty] private string _telegramTokenMasked   = string.Empty;
+    [ObservableProperty] private bool   _hasTelegramCredentials;
+    [ObservableProperty] private bool   _isTelegramEditMode;
+    [ObservableProperty] private string _telegramNewToken      = string.Empty;
+    [ObservableProperty] private bool   _isTestingTelegram;
+    [ObservableProperty] private string _telegramTestResult    = string.Empty;
+    [ObservableProperty] private bool   _telegramTestSuccess;
+
+    /// <summary>true — Primary Admin вже прив'язаний (chat_id збережено).</summary>
+    [ObservableProperty] private bool   _telegramAdminClaimed;
+    [ObservableProperty] private long?  _telegramPrimaryAdminChatId;
+
+    /// <summary>Код показується після натискання "Згенерувати" — лише в пам'яті.</summary>
+    [ObservableProperty] private string _telegramClaimCode     = string.Empty;
+    [ObservableProperty] private bool   _telegramClaimCodeVisible;
+
+    public ObservableCollection<TelegramPendingRequestVm> TelegramPendingRequests { get; } = new();
+    public ObservableCollection<TelegramAllowedUser> TelegramAllowedUsers { get; } = new();
+    
     private CancellationTokenSource? _rdpValidationCts;
     private CancellationTokenSource? _zabbixTestCts;
+    private CancellationTokenSource? _telegramTestCts;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -53,15 +102,67 @@ public sealed partial class SettingsViewModel : ObservableObject
         ZabbixApiClient  zabbixClient,
         IMessenger       messenger,
         RdpCredentialValidator rdpValidator,
+        UserSettingsService userSettings,
+        TelegramAccessControlService telegramAccess,
         Microsoft.Extensions.Options.IOptions<Configuration.MonitoringSettings> settings)
     {
-        _credentials  = credentials;
-        _zabbixClient = zabbixClient;
-        _rdpValidator = rdpValidator;
-        _messenger    = messenger;
-        _zabbixUrl    = settings.Value.ZabbixUrl;
+        _credentials    = credentials;
+        _zabbixClient   = zabbixClient;
+        _rdpValidator   = rdpValidator;
+        _messenger      = messenger;
+        _userSettings   = userSettings;
+        _telegramAccess = telegramAccess;
+        _zabbixUrl      = settings.Value.ZabbixUrl;
+        _messenger.RegisterAll(this);
 
         RefreshCredentialState();
+
+        // Важливо: присвоюємо бекінг-поля НАПРЯМУ, а НЕ через публічні
+        // властивості — щоб НЕ спрацювати OnXxxChanged (і зайвий Save())
+        // під час ініціалізації відповідно даними з минулої сесії.
+        _rdpMonitoringEnabled    = _userSettings.Current.RdpMonitoringEnabled;
+        _zabbixMonitoringEnabled = _userSettings.Current.ZabbixMonitoringEnabled;
+
+        // EDGE-CASE #3 (холодний старт): публікуємо початковий стан безумовно (і для
+        // true, і для false) для RdpSessionViewModel/ZabbixViewModel. Це важливо
+        // саме для випадку "моніторинг був вимкнений у минулій сесії":
+        // без цього явного Send() ViewModels залишились б у стані "enabled" (дефолт)
+        // аж до першого poll, показуючи порожній/завислий UI замість заглушки "вимкнено".
+        // На цей момент RdpSessionViewModel/ZabbixViewModel вже зареєстровані
+        // (створюються раніше за параметром в конструкторі MainViewModel), а самі
+        // RdpMonitorService/ZabbixPollerService — ще ні (стартують пізніше, в host.StartAsync()),
+        // тому цей Send до них не дойде — і не потрібно: вони самі прочитають
+        // UserSettingsService.Current напряму на своєму першому циклі (Pull).
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp,    _rdpMonitoringEnabled));
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, _zabbixMonitoringEnabled));
+    }
+
+    // ── Перемикачі моніторингу (RDP / Zabbix) ───────────────────
+
+    /// <summary>
+    /// Викликається автоматично (CommunityToolkit.Mvvm) при зміні RdpMonitoringEnabled
+    /// ЧЕРЕЗ БІНДІНГ з UI (тобто перемикнув користувач), а НЕ при ініціалізації
+    /// в конструкторі (там поле встановлюється напряму, без цього хука).
+    ///
+    /// НЕ логує подію самостійно — єдиним джерелом логу є
+    /// RdpMonitorService.EvaluateMonitoringToggle(), який сам виявить транзицію після
+    /// пробудження (едге-сасе #2). Два окремі логи на одну дію були б дублюванням.
+    /// </summary>
+    partial void OnRdpMonitoringEnabledChanged(bool value)
+    {
+        _userSettings.Current.RdpMonitoringEnabled = value;
+        _userSettings.Save();
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp, value));
+    }
+
+    /// <summary>
+    /// Аналогічно OnRdpMonitoringEnabledChanged — див. коментар вище.
+    /// </summary>
+    partial void OnZabbixMonitoringEnabledChanged(bool value)
+    {
+        _userSettings.Current.ZabbixMonitoringEnabled = value;
+        _userSettings.Save();
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, value));
     }
 
     // ── Ініціалізація стану ───────────────────────────────────────────────────
@@ -86,7 +187,180 @@ public sealed partial class SettingsViewModel : ObservableObject
         RdpValidationSuccess = false;
         ZabbixNewToken   = string.Empty;
         ZabbixTestResult = string.Empty;
+
+        RefreshTelegramState();
     }
+
+    // ── Telegram ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Оновлює весь Telegram-блок: токен, статус Primary Admin, pending-запити,
+    /// список дозволених користувачів. Викликається при відкритті Settings
+    /// і при кожному TelegramAccessRequestMessage/TelegramAccessChangedMessage.
+    /// </summary>
+    public void RefreshTelegramState()
+    {
+        HasTelegramCredentials = _credentials.HasTelegramCredentials;
+        TelegramTokenMasked    = _credentials.GetTelegramTokenMasked();
+        IsTelegramEditMode     = false;
+        TelegramNewToken       = string.Empty;
+        TelegramTestResult     = string.Empty;
+
+        TelegramAdminClaimed        = _telegramAccess.IsPrimaryAdminClaimed;
+        TelegramPrimaryAdminChatId  = _telegramAccess.PrimaryAdminChatId;
+
+        TelegramPendingRequests.Clear();
+        foreach (var p in _telegramAccess.GetAllPending())
+            TelegramPendingRequests.Add(new TelegramPendingRequestVm(p.Id, p.ChatId, p.Username, p.RequestedAt));
+
+        TelegramAllowedUsers.Clear();
+        foreach (var user in _telegramAccess.GetAllowedUsers())
+            TelegramAllowedUsers.Add(user);
+    }
+
+    [RelayCommand]
+    private void EnterTelegramEditMode()
+    {
+        TelegramNewToken   = string.Empty;
+        TelegramTestResult = string.Empty;
+        IsTelegramEditMode = true;
+    }
+
+    [RelayCommand]
+    private void CancelTelegramEdit()
+    {
+        TelegramNewToken   = string.Empty;
+        TelegramTestResult = string.Empty;
+        IsTelegramEditMode = false;
+    }
+
+    [RelayCommand]
+    private async Task SaveTelegramTokenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TelegramNewToken))
+        {
+            _messenger.Send(AppLogEntryMessage.Warning("Settings",
+                "Telegram: токен не може бути порожнім."));
+            return;
+        }
+
+        var tokenToSave = TelegramNewToken.Trim();
+
+        _telegramTestCts?.Cancel();
+        _telegramTestCts?.Dispose();
+        _telegramTestCts = new CancellationTokenSource();
+
+        IsTestingTelegram  = true;
+        TelegramTestResult = string.Empty;
+        TelegramTestSuccess = false;
+
+        try
+        {
+            var client = new TelegramBotClient(tokenToSave);
+            var me     = await client.GetMe(_telegramTestCts.Token);
+
+            TelegramTestSuccess = true;
+            TelegramTestResult  = $"✅ @{me.Username} — токен дійсний";
+
+            _credentials.StoreTelegramToken(tokenToSave);
+
+            _messenger.Send(new CredentialsChangedMessage
+            {
+                Target = CredentialTarget.Telegram,
+                Action = CredentialAction.Saved
+            });
+
+            _messenger.Send(AppLogEntryMessage.Success("Settings",
+                $"Telegram bot токен збережено: @{me.Username} — перезапускаємо полінг…"));
+
+            await Task.Delay(1200, _telegramTestCts.Token);
+            RefreshTelegramState();
+        }
+        catch (OperationCanceledException)
+        {
+            // Юзер закрив Settings поки тест йшов — ігноруємо
+        }
+        catch (Exception ex)
+        {
+            TelegramTestSuccess = false;
+            TelegramTestResult  = $"❌ {ex.Message}";
+            _messenger.Send(AppLogEntryMessage.Warning("Settings",
+                $"Telegram: токен не збережено — {ex.Message}"));
+        }
+        finally
+        {
+            IsTestingTelegram = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearTelegramCredentials()
+    {
+        _credentials.ClearTelegram();
+
+        _messenger.Send(new CredentialsChangedMessage
+        {
+            Target = CredentialTarget.Telegram,
+            Action = CredentialAction.Cleared
+        });
+
+        _messenger.Send(AppLogEntryMessage.Warning("Settings",
+            "Telegram bot токен видалено. Полінг зупинено."));
+
+        RefreshTelegramState();
+    }
+
+    /// <summary>
+    /// "Згенерувати код прив'язки адміна" — доступно, лише поки
+    /// Primary Admin ще не прив'язаний (перевіряється і в UI, і в сервісі).
+    /// </summary>
+    [RelayCommand]
+    private void GenerateTelegramClaimCode()
+    {
+        if (_telegramAccess.IsPrimaryAdminClaimed) return;
+
+        TelegramClaimCode        = _telegramAccess.GenerateClaimCode();
+        TelegramClaimCodeVisible = true;
+
+        _messenger.Send(AppLogEntryMessage.Info("Settings",
+            "Код прив'язки Telegram Primary Admin згенеровано (дійсний 10 хв)."));
+    }
+
+    /// <summary>Скидання прив'язки — виключно вручну, з підтвердженням у XAML (Command + confirm-діалог).</summary>
+    [RelayCommand]
+    private void ResetTelegramPrimaryAdmin()
+    {
+        _telegramAccess.ResetPrimaryAdmin();
+        TelegramClaimCodeVisible = false;
+        TelegramClaimCode        = string.Empty;
+        RefreshTelegramState();
+    }
+
+    // Approve — свідомо ВІДСУТНІЙ тут. Дозвіл нового користувача (не Primary Admin)
+    // можливий лише через inline-кнопку "✅ Дозволити" безпосередньо в Telegram —
+    // так Primary Admin підтверджує особу саме в тому каналі, звідки прийшов запит.
+    // З WPF можна тільки відхилити (Deny) — це "запобіжник", а не спосіб надання доступу.
+
+    [RelayCommand]
+    private void DenyTelegramRequest(int id)
+    {
+        _telegramAccess.Deny(id);
+        RefreshTelegramState();
+    }
+
+    [RelayCommand]
+    private void RevokeTelegramUser(long chatId)
+    {
+        _telegramAccess.Revoke(chatId);
+        RefreshTelegramState();
+    }
+
+    // IRecipient — живе оновлення, якщо approve/deny/revoke прийшли з Telegram
+    void IRecipient<TelegramAccessRequestMessage>.Receive(TelegramAccessRequestMessage message)
+        => System.Windows.Application.Current.Dispatcher.Invoke(RefreshTelegramState);
+
+    void IRecipient<TelegramAccessChangedMessage>.Receive(TelegramAccessChangedMessage message)
+        => System.Windows.Application.Current.Dispatcher.Invoke(RefreshTelegramState);
 
     // ── RDP команди ───────────────────────────────────────────────────────────
 
@@ -180,7 +454,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         finally
         {
             IsValidatingRdp  = false;
-            passwordToSave   = string.Empty;
         }
     }
     
@@ -245,8 +518,6 @@ private async Task SaveZabbixTokenAsync()
         _credentials.StoreZabbixToken(tokenToSave);
         _credentials.ResetZabbixCancelledFlag();
 
-        // Надсилаємо ОДРАЗУ після збереження — незалежно від результату тесту
-        // і від того чи юзер закриє Settings під час тесту.
         _messenger.Send(new CredentialsChangedMessage
         {
             Target = CredentialTarget.Zabbix,
@@ -256,8 +527,8 @@ private async Task SaveZabbixTokenAsync()
         _messenger.Send(AppLogEntryMessage.Info("Settings",
             "Zabbix API токен збережено — перевіряємо з'єднання…"));
 
-        RefreshCredentialState();
-
+        HasZabbixCredentials = _credentials.HasZabbixCredentials;
+        ZabbixTokenMasked    = _credentials.GetZabbixTokenMasked();
         if (!string.IsNullOrWhiteSpace(_zabbixUrl))
         {
             _zabbixTestCts?.Cancel();
@@ -283,12 +554,23 @@ private async Task SaveZabbixTokenAsync()
                 });
 
                 if (success)
+                {
                     _messenger.Send(AppLogEntryMessage.Success("Settings",
                         $"Zabbix {version} — з'єднання успішне, поллер оновлено."));
+                    try
+                    {
+                        await Task.Delay(1500, _zabbixTestCts.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                    RefreshCredentialState();
+                }
                 else
+                {
                     _messenger.Send(AppLogEntryMessage.Warning("Settings",
                         $"Токен збережено, тест показав помилку: {error}. " +
                         $"Поллер спробує самостійно."));
+                }
             }
             catch (OperationCanceledException) { }
             finally
@@ -296,8 +578,12 @@ private async Task SaveZabbixTokenAsync()
                 IsTestingZabbix = false;
             }
         }
+        else
+        {
+            RefreshCredentialState();
+        }
     }
-
+        
     [RelayCommand]
     private void ClearZabbixCredentials()
     {
@@ -397,12 +683,18 @@ private async Task SaveZabbixTokenAsync()
         _rdpValidationCts = null;
         IsValidatingRdp      = false;
         RdpValidationResult  = string.Empty;
-
+        
         _zabbixTestCts?.Cancel();
         _zabbixTestCts?.Dispose();
         _zabbixTestCts = null;
         IsTestingZabbix  = false;
         ZabbixTestResult = string.Empty;
+
+        _telegramTestCts?.Cancel();
+        _telegramTestCts?.Dispose();
+        _telegramTestCts = null;
+        IsTestingTelegram  = false;
+        TelegramTestResult = string.Empty;
     }
 
     /// <summary>
@@ -414,5 +706,7 @@ private async Task SaveZabbixTokenAsync()
         CancelPendingTest();
         _rdpNewPassword = string.Empty;
         ZabbixNewToken  = string.Empty;
+        TelegramNewToken = string.Empty;
+        _messenger.UnregisterAll(this);
     }
 }

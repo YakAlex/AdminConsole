@@ -81,6 +81,8 @@
         ═══════════════════════════════════════ -->
         <ItemsControl Grid.Row="1"
                       ItemsSource="{Binding ServerStatuses}"
+                      Visibility="{Binding IsMonitoringDisabled,
+                                   Converter={x:Static converters:InverseBooleanToVisibilityConverter.Instance}}"
                       Margin="0,0,0,10">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -139,7 +141,9 @@
             RowBackground="#0AFFFFFF"
             AlternatingRowBackground="#14FFFFFF"
             HorizontalScrollBarVisibility="Disabled"
-            VerticalScrollBarVisibility="Auto">
+            VerticalScrollBarVisibility="Auto"
+            Visibility="{Binding IsMonitoringDisabled,
+                         Converter={x:Static converters:InverseBooleanToVisibilityConverter.Instance}}">
 
             <DataGrid.ColumnHeaderStyle>
                 <Style TargetType="DataGridColumnHeader">
@@ -286,6 +290,29 @@
 
             </DataGrid.Columns>
         </DataGrid>
+
+        <!-- ══ ROW 2 (оверлай) — Заглушка при вимкненому моніторингу (edge-case #3) ══ -->
+        <Border Grid.Row="2"
+                Visibility="{Binding IsMonitoringDisabled,
+                             Converter={x:Static converters:DirectBooleanToVisibilityConverter.Instance}}"
+                Background="#0AFFFFFF"
+                CornerRadius="6">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <materialDesign:PackIcon Kind="BellOff"
+                                         Width="48" Height="48"
+                                         Foreground="#44FFFFFF"
+                                         HorizontalAlignment="Center" />
+                <TextBlock Text="RDP моніторинг вимкнено"
+                           Foreground="#66FFFFFF" FontSize="15" FontWeight="Medium"
+                           HorizontalAlignment="Center" Margin="0,16,0,4" />
+                <TextBlock Text="Увімкніть у розділі «Settings → Моніторинг сервісів»,"
+                           Foreground="#44FFFFFF" FontSize="12"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="щоб поновити опитування terminal-серверів."
+                           Foreground="#44FFFFFF" FontSize="12"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <!-- ═══════════════════════════════════════
              ROW 3 — Summary strip

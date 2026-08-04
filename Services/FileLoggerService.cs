@@ -33,8 +33,18 @@ public sealed class FileLoggerService
     private static readonly string LogDirectory =
         Path.Combine(AppContext.BaseDirectory, "logs");
 
-    private const int    FlushBatchSize = 50;
+    /// <summary>
+    /// Верхня межа черги в пам'яті. Захист від необмеженого росту, якщо
+    /// джерело повідомлень (наприклад, потік Warning-логів від
+    /// неавторизованих/спам-Telegram-повідомлень) генерує записи швидше,
+    /// ніж встигає писатись на диск. Понад цей ліміт — нові записи
+    /// відкидаються (а не чекають місця), із сумарним підрахунком
+    /// втрачених записів, який публікується одним підсумковим рядком.
+    /// </summary>
+    private const int    MaxQueueSize   = 5000;
     private const string LogSource      = "FileLogger";
+
+    private long _droppedSinceLastFlush;
 
     public FileLoggerService(
         IMessenger messenger,
@@ -83,9 +93,14 @@ public sealed class FileLoggerService
     /// </summary>
     public void Receive(AppLogEntryMessage message)
     {
+        if (_queue.Count >= MaxQueueSize)
+        {
+            Interlocked.Increment(ref _droppedSinceLastFlush);
+            return;
+        }
+
         _queue.Enqueue(message.Value);
-        if (_signal.CurrentCount == 0)
-            _signal.Release();
+        _signal.Release();
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -94,8 +109,12 @@ public sealed class FileLoggerService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await _signal.WaitAsync(stoppingToken).ConfigureAwait(false);
-            await Task.Delay(200, stoppingToken).ConfigureAwait(false);
+            try
+            {
+                await _signal.WaitAsync(stoppingToken).ConfigureAwait(false);
+                await Task.Delay(200, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { break; }
 
             FlushQueueToFile();
         }
@@ -118,15 +137,21 @@ public sealed class FileLoggerService
             {
                 AutoFlush = false
             };
-
-            int written = 0;
-            while (_queue.TryDequeue(out var entry) && written < FlushBatchSize)
-            {
+            
+            while (_queue.TryDequeue(out var entry))
                 writer.WriteLine(entry.Formatted);
-                written++;
-            }
 
             writer.Flush();
+            
+            long dropped = Interlocked.Exchange(ref _droppedSinceLastFlush, 0);
+            if (dropped > 0)
+            {
+                writer.WriteLine(new AppLogEntry(
+                    LogSeverity.Warning, LogSource,
+                    $"Черга логів переповнена — відкинуто {dropped} запис(ів) з моменту останнього flush.",
+                    DateTimeOffset.Now).Formatted);
+                writer.Flush();
+            }
         }
         catch (Exception ex)
         {

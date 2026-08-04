@@ -11,7 +11,8 @@ public sealed partial class RdpSessionViewModel
     : ObservableObject,
       IRecipient<RdpSessionsUpdatedMessage>,
       IRecipient<RdpCredentialsClearedMessage>,
-      IRecipient<CredentialsChangedMessage>       // ← додаємо новий інтерфейс
+      IRecipient<CredentialsChangedMessage>,      // ← додаємо новий інтерфейс
+      IRecipient<MonitoringToggledMessage>        // ← edge-case #3: UI-заглушка при вимкненому моніторингу
 {
     public ObservableCollection<RdpSessionRowViewModel> Sessions { get; } = [];
     public ObservableCollection<ServerPollStatusViewModel> ServerStatuses { get; } = [];
@@ -20,6 +21,12 @@ public sealed partial class RdpSessionViewModel
     [ObservableProperty] private string _statusText = "Waiting for first poll…";
     [ObservableProperty] private int    _activeCount;
     [ObservableProperty] private int    _disconnectedCount;
+
+    /// <summary>
+    /// true — RDP-моніторинг вимкнено в Settings. XAML повинен сховати
+    /// таблицю сесій і показати заглушку "Моніторинг вимкнено" (edge-case #3).
+    /// </summary>
+    [ObservableProperty] private bool _isMonitoringDisabled;
 
     // Встановлюється при видаленні credentials — блокує успішні повідомлення
     // що лежали в черзі диспетчера до видалення.
@@ -39,10 +46,40 @@ public sealed partial class RdpSessionViewModel
         if (message.Target != CredentialTarget.Rdp) return;
         if (message.Action != CredentialAction.Saved) return;
 
-        // Не через Dispatcher — просто скидаємо прапорець.
-        // Він читається тільки всередині InvokeAsync (UI-потік),
-        // тому запис з будь-якого потоку тут безпечний для bool.
-        _credentialsCleared = false;
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            _credentialsCleared = false;
+        });
+    }
+
+    /// <summary>
+    /// Edge-case #3: синхронізує IsMonitoringDisabled на основі перемиканняв Settings.
+    /// Спрацьовує двічі: на реальне перемикання користувачем та один раз на
+    /// холодному старті (SettingsViewModel конструктор).
+    /// </summary>
+    public void Receive(MonitoringToggledMessage message)
+    {
+        if (message.Service != MonitoredService.Rdp) return;
+
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            IsMonitoringDisabled = !message.Value;
+
+            if (!message.Value)
+            {
+                // Моніторинг вимкнено — чистимо застарілі дані, щоб під
+                // заглушкою не лишались застарілі сесії.
+                Sessions.Clear();
+                ServerStatuses.Clear();
+                ActiveCount       = 0;
+                DisconnectedCount = 0;
+                StatusText        = "RDP моніторинг вимкнено в Settings.";
+            }
+            else
+            {
+                StatusText = "Waiting for first poll…";
+            }
+        });
     }
 
     public void Receive(RdpCredentialsClearedMessage _)
@@ -70,12 +107,21 @@ public sealed partial class RdpSessionViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Якщо credentials видалено і нові ще не збережено —
-            // ігноруємо будь-які повідомлення (і успішні і з помилками від старого poll).
-            // Як тільки юзер збереже нові credentials — Receive(CredentialsChangedMessage)
-            // скине _credentialsCleared до того як прийде перший результат нового poll.
             if (_credentialsCleared)
                 return;
+
+            // Захист від запізнілих повідомлень в черзі диспетчера,
+            // які могли надійти тільки що після вимкнення (edge-case #3).
+            if (IsMonitoringDisabled)
+                return;
+
+            // Запам'ятовуємо виділену сесію по ключу (ServerIp+SessionId),
+            // щоб відновити виділення після пересворення рядків нижче —
+            // об'єкти RdpSessionRowViewModel readonly, тому "diff на місці"
+            // тут не робимо, лише зберігаємо/відновлюємо SelectedSession.
+            var selectedKey = SelectedSession is { } sel
+                ? (sel.ServerIp, sel.SessionId)
+                : ((string, string)?)null;
 
             var toRemove = Sessions
                 .Where(s => s.ServerIp == payload.ServerIp)
@@ -86,6 +132,12 @@ public sealed partial class RdpSessionViewModel
 
             foreach (var session in payload.Sessions)
                 Sessions.Add(new RdpSessionRowViewModel(session));
+
+            if (selectedKey is { } key)
+            {
+                SelectedSession = Sessions.FirstOrDefault(
+                    s => s.ServerIp == key.Item1 && s.SessionId == key.Item2);
+            }
 
             var statusRow = ServerStatuses
                 .FirstOrDefault(s => s.ServerIp == payload.ServerIp);
@@ -103,8 +155,14 @@ public sealed partial class RdpSessionViewModel
             DisconnectedCount = Sessions.Count(s => s.State == RdpSessionState.Disconnected);
 
             int total = Sessions.Count;
-            StatusText = payload.ErrorMessage is not null
-                ? $"Error on {payload.ServerName}: {payload.ErrorMessage}"
+            var errorServers = ServerStatuses
+                .Where(s => s.HasError)
+                .Select(s => s.ServerName)
+                .ToList();
+
+            StatusText = errorServers.Any()
+                ? $"Errors on: {string.Join(", ", errorServers)} — " +
+                  $"{ActiveCount} active, {DisconnectedCount} disconnected"
                 : $"{ActiveCount} active, {DisconnectedCount} disconnected" +
                   $" — {total} total session(s) — " +
                   $"last updated {DateTime.Now:HH:mm:ss}";

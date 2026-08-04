@@ -225,7 +225,7 @@
             <DataGrid.Columns>
 
                 <!-- Status -->
-                <DataGridTemplateColumn Header="STATUS" Width="85" SortMemberPath="Status">
+                <DataGridTemplateColumn Header="STATUS" Width="95" SortMemberPath="Status">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -262,13 +262,31 @@
                                     Foreground="{Binding Status, Converter={StaticResource StatusToColor}}"
                                     FontSize="12" FontWeight="Medium"
                                     Margin="8,0,0,0" VerticalAlignment="Center" />
+
+                                <materialDesign:PackIcon
+                                    Kind="Wrench"
+                                    Width="13" Height="13"
+                                    Foreground="#FFFFC107"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    ToolTip="{Binding MaintenanceTooltip}">
+                                    <materialDesign:PackIcon.Style>
+                                        <Style TargetType="materialDesign:PackIcon">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUnderMaintenance}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </materialDesign:PackIcon.Style>
+                                </materialDesign:PackIcon>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-
                 <!-- Name -->
-                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*">
+                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="135">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -279,7 +297,7 @@
                 </DataGridTextColumn>
 
                 <!-- IP -->
-                <DataGridTextColumn Header="IP ADDRESS" Binding="{Binding IP}" Width="150">
+                <DataGridTextColumn Header="IP ADDRESS" Binding="{Binding IP}" Width="130">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -291,7 +309,7 @@
                 </DataGridTextColumn>
 
                 <!-- Group -->
-                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="160">
+                <DataGridTextColumn Header="GROUP" Binding="{Binding Group}" Width="145">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
@@ -301,7 +319,7 @@
                 </DataGridTextColumn>
 
                 <!-- Latency -->
-                <DataGridTemplateColumn Header="LATENCY" Width="110" SortMemberPath="LatencyMs">
+                <DataGridTemplateColumn Header="LATENCY" Width="75" SortMemberPath="LatencyMs">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <TextBlock Text="{Binding LatencyDisplay}"
@@ -325,7 +343,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- Last Checked -->
-                <DataGridTextColumn Header="LAST CHECKED" Binding="{Binding LastChecked}" Width="110">
+                <DataGridTextColumn Header="LAST CHECKED" Binding="{Binding LastChecked}" Width="*">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
@@ -336,32 +354,29 @@
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
                 
-                <!-- Status Since -->
-                <DataGridTemplateColumn Header="SINCE" Width="155" SortMemberPath="StatusSince">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
-                            <TextBlock Text="{Binding StatusSince}"
-                                       VerticalAlignment="Center"
-                                       FontFamily="Consolas, Courier New"
-                                       FontSize="11">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="#FF80CBC4" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}"
-                                                         Value="{x:Static models:PingStatus.Offline}">
-                                                <Setter Property="Foreground" Value="#FFF44336" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                
-                <!-- ══ ACTIONS column (new in Phase 5) ══ -->
+                <!-- ACTIONS -->
                 <DataGridTemplateColumn Header="ACTIONS" Width="Auto">
+
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="Background"
+                                    Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow},
+                                                     Path=Background}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="DataGridCell">
+                                        <Border Padding="12,0"
+                                                Background="{TemplateBinding Background}"
+                                                BorderThickness="0">
+                                            <ContentPresenter VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
+
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
                             <StackPanel
@@ -424,7 +439,30 @@
                                         Width="16" Height="16"
                                         Foreground="#FF80CBC4" />
                                 </Button>
-
+                                
+                                <Button
+                                    Style="{StaticResource ActionIconButton}"
+                                    Command="{Binding ToggleMaintenanceCommand}"
+                                    ToolTip="{Binding MaintenanceTooltip}"
+                                    Margin="2,0">
+                                    <Button.Content>
+                                        <materialDesign:PackIcon
+                                            Kind="Wrench"
+                                            Width="16" Height="16">
+                                            <materialDesign:PackIcon.Style>
+                                                <Style TargetType="materialDesign:PackIcon">
+                                                    <Setter Property="Foreground" Value="#FF80CBC4" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsUnderMaintenance}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FFFFC107" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </materialDesign:PackIcon.Style>
+                                        </materialDesign:PackIcon>
+                                    </Button.Content>
+                                </Button>
+                                
                                 <!-- Restart (тільки Windows) -->
                                 <Button
                                     Command="{Binding RemoteRestartCommand}"

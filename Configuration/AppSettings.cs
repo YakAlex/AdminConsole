@@ -16,6 +16,14 @@ public sealed class MonitoringSettings
     public int    ZabbixPollIntervalSeconds        { get; init; } = 60;
     public int    RdpPollIntervalSeconds           { get; init; } = 120;
     public int    LocalResourcePollIntervalSeconds { get; init; } = 3;
+    /// <summary>
+    /// Мінімальна тривалість (у секундах) даунтайму, щоб він потрапив
+    /// у DowntimeRecord і зберігся на диск. Коротші "миготіння"
+    /// (наприклад, одиничний втрачений ping-пакет через мережеву затримку)
+    /// відкидаються при відновленні і не рахуються як SLA-інцидент.
+    /// 0 — вимкнути фільтр (записувати все, як раніше).
+    /// </summary>
+    public int MinIncidentDurationSeconds { get; init; } = 10;
 }
 
 /// <summary>
@@ -30,4 +38,39 @@ public sealed class UserSettings
     /// false — натискання хрестика закриває програму повністю.
     /// </summary>
     public bool CloseToTray { get; set; } = true;
+    
+    /// <summary>
+    /// true  — RdpMonitorService опитує Terminal Servers.
+    /// false — сервіс не робить quser-запитів і не запитує RDP credentials,
+    ///         навіть якщо вони відсутні (перевіряється ДО credential-логіки).
+    /// </summary>
+    public bool RdpMonitoringEnabled { get; set; } = true;
+
+    /// <summary>
+    /// true  — ZabbixPollerService опитує Zabbix API.
+    /// false — сервіс не робить запитів і не запитує Zabbix токен,
+    ///         навіть якщо він відсутній (перевіряється ДО credential-логіки).
+    /// </summary>
+    public bool ZabbixMonitoringEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Chat ID Primary Admin в Telegram. Встановлюється один раз через
+    /// /claim_admin з кодом, згенерованим у Settings. Null = ще не прив'язано.
+    /// </summary>
+    public long? TelegramPrimaryAdminChatId { get; set; }
+
+    /// <summary>
+    /// Список chat_id користувачів, яким Primary Admin дозволив read-only
+    /// доступ до бота (окрім самого Primary Admin — той завжди має повний доступ).
+    /// </summary>
+    public List<long> TelegramAllowedChatIds { get; set; } = new();
+
+    /// <summary>
+    /// chat_id → останній відомий Telegram username (без @), для показу
+    /// в списку "Дозволені користувачі" в WPF/боті — той самий вигляд,
+    /// що й у запиті на approve ("@username (chat_id=...)").
+    /// Оновлюється при approve і при кожному /start вже дозволеного
+    /// користувача (username міг змінитись відтоді).
+    /// </summary>
+    public Dictionary<long, string> TelegramUsernames { get; set; } = new();
 }

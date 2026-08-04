@@ -22,6 +22,15 @@ public partial class App : Application
         try
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+            }
+            catch
+            {
+                // Ignored
+            }
 
             // Глобальний обробник необроблених винятків з UI-потоку.
             // Критично для async void OnStartup — виняток що виникне після
@@ -110,7 +119,8 @@ public partial class App : Application
             client.Timeout = TimeSpan.FromSeconds(30);
         });
 
-        services.AddHostedService<PingMonitorService>();
+        services.AddSingleton<PingMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService>());
         services.AddHostedService<ResourceMonitorService>();
 
         // EventLogService реєструємо як Singleton (а не лише AddHostedService),
@@ -122,10 +132,15 @@ public partial class App : Application
         services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
 
         services.AddHostedService<FileLoggerService>();
-        services.AddHostedService<RdpMonitorService>();
+        services.AddSingleton<RdpMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<RdpMonitorService>());
         services.AddHostedService<ZabbixPollerService>();
+        services.AddSingleton<TelegramAccessControlService>();
+        services.AddHostedService<TelegramBotService>();
         services.AddSingleton<UptimeTrackerService>();
         services.AddHostedService(sp => sp.GetRequiredService<UptimeTrackerService>());
+        services.AddSingleton<MaintenanceService>();
+        services.AddHostedService(sp => sp.GetRequiredService<MaintenanceService>());
         services.AddSingleton<RemoteEventLogService>();
         services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();
@@ -189,6 +204,17 @@ public partial class App : Application
         try
         {
             _host.Services
+                .GetRequiredService<MainWindow>()
+                .DisposeTrayIcon();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] TrayIcon dispose error: {ex.Message}");
+        }
+
+        try
+        {
+            _host.Services
                 .GetRequiredService<ResourceMonitorViewModel>()
                 .Dispose();
         }
@@ -221,7 +247,7 @@ public partial class App : Application
 
         try
         {
-            _host.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
+            _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

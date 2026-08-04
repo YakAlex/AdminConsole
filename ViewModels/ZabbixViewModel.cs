@@ -8,7 +8,9 @@ using System.Windows;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class ZabbixViewModel
-    : ObservableObject, IRecipient<ZabbixProblemsUpdatedMessage>
+    : ObservableObject,
+      IRecipient<ZabbixProblemsUpdatedMessage>,
+      IRecipient<MonitoringToggledMessage>     // ← edge-case #3: UI-заглушка при вимкненому моніторингу
 {
     // ── Observable state ─────────────────────────────────────────────────────
 
@@ -22,11 +24,47 @@ public sealed partial class ZabbixViewModel
     [ObservableProperty] private string _lastFetched      = "—";
     [ObservableProperty] private bool   _isConnected;
 
+    /// <summary>
+    /// true — Zabbix-моніторинг вимкнено в Settings. XAML повинен сховати
+    /// список проблем і показати заглушку "Моніторинг вимкнено" (edge-case #3).
+    /// </summary>
+    [ObservableProperty] private bool _isMonitoringDisabled;
+
     // ── Constructor ──────────────────────────────────────────────────────────
 
     public ZabbixViewModel(IMessenger messenger)
     {
         messenger.RegisterAll(this);
+    }
+
+    /// <summary>
+    /// Edge-case #3: синхронізує IsMonitoringDisabled. Спрацьовує на реальне
+    /// перемикання користувачем та один раз на холодному старті
+    /// (SettingsViewModel конструктор).
+    /// </summary>
+    public void Receive(MonitoringToggledMessage message)
+    {
+        if (message.Service != MonitoredService.Zabbix) return;
+
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            IsMonitoringDisabled = !message.Value;
+
+            if (!message.Value)
+            {
+                Problems.Clear();
+                DisasterCount    = 0;
+                HighCount        = 0;
+                IsConnected      = false;
+                ConnectionStatus = "Моніторинг вимкнено в Settings";
+                StatusColor      = "#FF607D8B";
+            }
+            else
+            {
+                ConnectionStatus = "Connecting…";
+                StatusColor      = "#FF607D8B";
+            }
+        });
     }
 
     // ── IRecipient ────────────────────────────────────────────────────────────
@@ -37,6 +75,11 @@ public sealed partial class ZabbixViewModel
 
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
+            // Захист від запізнілих повідомлень в черзі диспетчера,
+            // які могли надійти тільки що після вимкнення (edge-case #3).
+            if (IsMonitoringDisabled)
+                return;
+
             if (payload.Problems is not null)
             {
                 var incoming    = payload.Problems;

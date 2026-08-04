@@ -39,7 +39,7 @@ public sealed class RemoteEventLogService
         string machineNameOrIp,
         CancellationToken ct = default)
     {
-        bool reachable = await EventLogReader
+        bool reachable = await WinEventLogReader
             .IsReachableAsync(machineNameOrIp, PingTimeoutMs, ct)
             .ConfigureAwait(false);
 
@@ -55,7 +55,7 @@ public sealed class RemoteEventLogService
         try
         {
             var entries = await Task
-                .Run(() => QueryWmiEventLog(machineNameOrIp), ct)
+                .Run(() => QueryWmiEventLog(machineNameOrIp, ct), ct)
                 .ConfigureAwait(false);
 
             return RemoteEventLogResult.Success(entries);
@@ -85,8 +85,10 @@ public sealed class RemoteEventLogService
 
     // ── WMI ───────────────────────────────────────────────────────────────────
 
-    private static List<EventLogEntry> QueryWmiEventLog(string machineName)
+    private static List<EventLogEntry> QueryWmiEventLog(string machineName, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+
         var scope = new ManagementScope(
             $@"\\{machineName}\root\cimv2",
             new ConnectionOptions
@@ -98,14 +100,16 @@ public sealed class RemoteEventLogService
 
         scope.Connect();
 
+        ct.ThrowIfCancellationRequested();
+
         var results = new List<EventLogEntry>();
         DateTime cutoff = DateTime.Now.AddDays(-3);
         string dmtfCutoff = ManagementDateTimeConverter.ToDmtfDateTime(cutoff);
-        
+
         foreach (var logName in new[] { "System", "Application" })
         {
-            // Додаємо ЖОРСТКИЙ фільтр по часу: TimeGenerated >= '{dmtfCutoff}'
-            // Це радикально пришвидшує Win32_NTLogEvent, бо він не сканує старі записи.
+            ct.ThrowIfCancellationRequested();
+
             var query = new ObjectQuery(
                 $"SELECT TimeGenerated, SourceName, Message, EventCode, EventType " +
                 $"FROM Win32_NTLogEvent " +
@@ -120,18 +124,16 @@ public sealed class RemoteEventLogService
 
             using var collection = searcher.Get();
 
-            // Win32_NTLogEvent не підтримує ORDER BY/TOP у WQL —
-            // збираємо все що повернулось (вже відфільтроване по EventType)
-            // і сортуємо/обрізаємо на клієнті.
             int scanned = 0;
-            const int maxScanPerLog = 500; // захисний ліміт — не йдемо в нескінченність на величезних логах
+            const int maxScanPerLog = 500;
 
             foreach (ManagementObject mo in collection)
             {
+                if (ct.IsCancellationRequested) break;
+
                 using (mo)
                 {
                     if (++scanned > maxScanPerLog) break;
-
                     results.Add(MapWmiEvent(mo));
                 }
             }
@@ -149,7 +151,7 @@ public sealed class RemoteEventLogService
         DateTimeOffset timestamp = ParseWmiDateTime(timeGeneratedRaw);
 
         string source  = mo["SourceName"]?.ToString() ?? "Unknown";
-        string message = EventLogReader.TrimMessage(mo["Message"]?.ToString() ?? string.Empty);
+        string message = WinEventLogReader.TrimMessage(mo["Message"]?.ToString() ?? string.Empty);
         string eventId = mo["EventCode"]?.ToString() ?? "0";
 
         return new EventLogEntry(

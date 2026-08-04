@@ -156,5 +156,5 @@ public sealed class EventLogService : BackgroundService
     // Винесено у EventLogReader — спільний для local (цей сервіс)
     // і remote (RemoteEventLogService) читання.
     private static List<EventLogEntry> ReadErrors(DateTimeOffset? since)
-        => EventLogReader.ReadErrors(".", since);
+        => WinEventLogReader.ReadErrors(".", since);
 }

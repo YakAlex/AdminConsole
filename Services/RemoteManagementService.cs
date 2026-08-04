@@ -34,6 +34,13 @@ public sealed class RemoteManagementService
     /// </summary>
     public void OpenContinuousPing(string ip, string serverName)
     {
+        if (!IsValidHostOrIp(ip))
+        {
+            _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                $"Недійсний формат адреси для {serverName}: '{ip}'. Ping не запущено."));
+            return;
+        }
+
         try
         {
             Process.Start(new ProcessStartInfo
@@ -138,14 +145,14 @@ public sealed class RemoteManagementService
 
     private static void ExecuteWmiShutdown(string ip, bool isReboot)
     {
-        // Connect to the remote host's WMI namespace.
         var scope = new ManagementScope(
             $@"\\{ip}\root\cimv2",
             new ConnectionOptions
             {
-                Impersonation  = ImpersonationLevel.Impersonate,
-                Authentication = AuthenticationLevel.PacketPrivacy,
-                EnablePrivileges = true
+                Impersonation    = ImpersonationLevel.Impersonate,
+                Authentication   = AuthenticationLevel.PacketPrivacy,
+                EnablePrivileges = true,
+                Timeout          = TimeSpan.FromSeconds(15)
             });
 
         scope.Connect();
@@ -184,6 +191,13 @@ public sealed class RemoteManagementService
     /// </summary>
     public void OpenSsh(string ip, string name)
     {
+        if (!IsValidHostOrIp(ip))
+        {
+            _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                $"Недійсний формат адреси для {name}: '{ip}'. SSH не запущено."));
+            return;
+        }
+
         try
         {
             var puttyPaths = new[]
@@ -227,5 +241,20 @@ public sealed class RemoteManagementService
             _messenger.Send(AppLogEntryMessage.Error(LogSource,
                 $"Failed to open SSH to {name} ({ip}): {ex.Message}"));
         }
+    }
+
+    /// <summary>
+    /// Валідує, що рядок є IP-адресою або доменним ім'ям без символів,
+    /// здатних вплинути на розбір аргументів cmd.exe (наприклад & | ^ " %).
+    /// Захист на майбутнє: наразі ip завжди береться з довіреного
+    /// appsettings.json, але цей метод унеможливлює command injection,
+    /// якщо джерело колись стане динамічним (ручне додавання серверів тощо).
+    /// </summary>
+    private static bool IsValidHostOrIp(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            value, @"^[a-zA-Z0-9.\-]+$");
     }
 }

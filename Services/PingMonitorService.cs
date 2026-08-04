@@ -16,6 +16,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
     private readonly ILogger<PingMonitorService> _logger;
     private readonly MonitoringSettings          _settings;
     private readonly IReadOnlyList<ServerEntry>  _servers;
+    private readonly MaintenanceService _maintenance;
 
     // ── Стан статусів ────────────────────────────────────────────────────────
 
@@ -32,6 +33,21 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
     // Не ділимо з основним — recovery не блокується основним циклом
     // навіть якщо всі 10 слотів зайняті.
     private readonly SemaphoreSlim _recoveryThrottle = new(5);
+    
+    /// <summary>
+    /// Per-IP замок: якщо /ping (on-demand з Telegram) і фоновий цикл
+    /// (main/recovery loop) намагаються опитати ОДИН і той самий сервер
+    /// одночасно — без цього замка обидва виклики незалежно читають/пишуть
+    /// _previousStatus[ip] через GetOrAdd+TryUpdate (CAS), що НЕ пошкоджує
+    /// сам словник, але може подвоїти або загубити один із Warning/Error
+    /// логів про перехід статусу через інтерлівінг двох перевірок стану.
+    /// Серіалізуємо саме на рівні "один сервер" — різні сервери й далі
+    /// пінгуються повністю паралельно між собою.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _perServerLocks = new();
+
+    private SemaphoreSlim GetServerLock(string ip) =>
+        _perServerLocks.GetOrAdd(ip, _ => new SemaphoreSlim(1, 1));
 
     // ── Константи ────────────────────────────────────────────────────────────
 
@@ -45,12 +61,34 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         IMessenger                   messenger,
         ILogger<PingMonitorService>  logger,
         IOptions<MonitoringSettings> settings,
-        IOptions<List<ServerEntry>>  servers)
+        IOptions<List<ServerEntry>>  servers,
+        MaintenanceService           maintenance)
     {
         _messenger = messenger;
         _logger    = logger;
         _settings  = settings.Value;
         _servers   = servers.Value.AsReadOnly();
+        _maintenance = maintenance;
+        _messenger.Register<MaintenanceChangedMessage>(
+            this, (_, msg) => OnMaintenanceChanged(msg));
+    }
+
+    private void OnMaintenanceChanged(MaintenanceChangedMessage msg)
+    {
+        if (msg.Action != MaintenanceAction.Ended) return;
+
+        // Скидаємо previousStatus для зачеплених серверів на Unknown —
+        // наступний цикл пінгу сприйме поточний Offline (якщо сервер
+        // не встиг піднятись вчасно) як "перехід з Unknown", що вже
+        // існуючою гілкою коду генерує Warning — без окремої логіки
+        // "примусового алерту".
+        var affected = msg.Window.TargetGroup is not null
+            ? _servers.Where(s => s.Group.Equals(msg.Window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase))
+            : _servers.Where(s => s.IP == msg.Window.ServerIp);
+
+        foreach (var s in affected)
+            _previousStatus[s.IP] = PingStatus.Unknown;
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────
@@ -131,28 +169,32 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
 
     private async Task RunRecoveryLoopAsync(int intervalSec, CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(intervalSec),
-                ct).ConfigureAwait(false);
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(intervalSec),
+                    ct).ConfigureAwait(false);
 
-            if (ct.IsCancellationRequested) break;
-            
-            var offlineServers = _servers
-                .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
-                            && st == PingStatus.Offline)
-                .ToList();
+                if (ct.IsCancellationRequested) break;
 
-            if (offlineServers.Count == 0) continue;
+                var offlineServers = _servers
+                    .Where(s => _previousStatus.TryGetValue(s.IP, out var st)
+                                && st == PingStatus.Offline)
+                    .ToList();
 
-            _logger.LogDebug(
-                "Recovery loop: pinging {Count} offline server(s).",
-                offlineServers.Count);
+                if (offlineServers.Count == 0) continue;
 
-            await PingServersAsync(offlineServers, _recoveryThrottle, ct)
-                .ConfigureAwait(false);
+                _logger.LogDebug(
+                    "Recovery loop: pinging {Count} offline server(s).",
+                    offlineServers.Count);
+
+                await PingServersAsync(offlineServers, _recoveryThrottle, ct)
+                    .ConfigureAwait(false);
+            }
         }
+        catch (OperationCanceledException) { }
     }
     
     // ── Guard для циклів ──────────────────────────────────────────────────────
@@ -223,10 +265,19 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         CancellationToken ct)
     {
         var acquired = false;
+        var serverLock = GetServerLock(server.IP);
+        var serverLockAcquired = false;
         try
         {
             await throttle.WaitAsync(ct).ConfigureAwait(false);
             acquired = true;  // слот захоплено — тепер Release() безпечний
+
+            // Серіалізація саме для цього IP — якщо цей сервер уже
+            // пінгується іншим викликом (main loop / recovery loop / /ping),
+            // чекаємо на його завершення перед тим, як читати/писати
+            // _previousStatus[ip] і слати транзиційні логи.
+            await serverLock.WaitAsync(ct).ConfigureAwait(false);
+            serverLockAcquired = true;
 
             PingStatus status;
             long?      latencyMs = null;
@@ -272,12 +323,20 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
                     }
                     else if (status == PingStatus.Offline)
                     {
-                        if (prev is PingStatus.Unknown or PingStatus.Checking)
-                            _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                                $"{server.Name} ({server.IP}) недоступний при старті."));
-                        else
-                            _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                                $"{server.Name} ({server.IP}) went OFFLINE."));
+                        bool underMaintenance = _maintenance.IsUnderMaintenance(server.IP, server.Group);
+
+                        if (!underMaintenance)
+                        {
+                            if (prev is PingStatus.Unknown or PingStatus.Checking)
+                                _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                                    $"{server.Name} ({server.IP}) недоступний при старті."));
+                            else
+                                _messenger.Send(AppLogEntryMessage.Error(LogSource,
+                                    $"{server.Name} ({server.IP}) went OFFLINE."));
+                        }
+                        // Під maintenance — жодного Warning/Error, але статус
+                        // все одно оновлюється (PingResult нижче), UI покаже
+                        // Offline + бейдж 🔧 замість тривоги.
                     }
                     // Checking/Unknown → Online: тихо, без логу — не спам при старті.
                 }
@@ -290,6 +349,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         catch (OperationCanceledException) { }
         finally
         {
+            if (serverLockAcquired) serverLock.Release();
             if (acquired) throttle.Release();
         }
     }
@@ -312,7 +372,50 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
             Results:          initialResults,
             CycleCompletedAt: DateTimeOffset.Now)));
     }
+    
+    // ── Public API для TelegramBotService
 
+    /// <summary>
+    /// Живий знімок поточного статусу всіх серверів прямо зараз.
+    /// ConcurrentDictionary вже є єдиним джерелом правди (_previousStatus),
+    /// тому це тонкий read-only метод без додаткової синхронізації.
+    /// Дозволяє боту відповідати коректно навіть у перші секунди після старту,
+    /// не покладаючись лише на PingBatchResultMessage (який ще міг не прийти).
+    /// </summary>
+    public IReadOnlyDictionary<string, PingStatus> GetSnapshot()
+        => _previousStatus.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+    /// <summary>
+    /// Пінгує ВСІ сервери прямо зараз, поза звичайним циклом
+    /// (для команди /ping бота — "живий" запит на вимогу).
+    /// Перевикористовує ту саму PingSingleServerAsync — тобто:
+    ///  - оновлює _previousStatus (той самий стан, що бачить UI);
+    ///  - шле ті самі Warning/Error/Success логи при зміні статусу;
+    ///  - шле PingBatchResultMessage — UI Ping Dashboard оновиться теж.
+    /// Ділить throttle з основним циклом (_mainThrottle) — жодного
+    /// окремого "паралельного" навантаження на мережу понад заплановане.
+    /// </summary>
+    public async Task<IReadOnlyList<PingResult>> PingAllNowAsync(CancellationToken ct)
+    {
+        var bag = new ConcurrentBag<PingResult>();
+
+        var tasks = _servers.Select(s => PingSingleServerAsync(s, _mainThrottle, bag, ct));
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        var results = bag.ToArray();
+        if (results.Length > 0)
+        {
+            _messenger.Send(new PingBatchResultMessage(new PingBatchPayload(
+                Results:          results,
+                CycleCompletedAt: DateTimeOffset.Now)));
+        }
+
+        return results
+            .OrderBy(r => r.Group)
+            .ThenBy(r => r.Name)
+            .ToList();
+    }
+    
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     public override void Dispose()
@@ -320,6 +423,7 @@ public sealed class PingMonitorService : BackgroundService, IDisposable
         // Обидва SemaphoreSlim містять внутрішній WaitHandle — звільняємо обидва.
         _mainThrottle.Dispose();
         _recoveryThrottle.Dispose();
+        foreach (var l in _perServerLocks.Values) l.Dispose();
         base.Dispose();
     }
 }

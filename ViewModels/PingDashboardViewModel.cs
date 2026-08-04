@@ -15,6 +15,7 @@ public sealed partial class PingDashboardViewModel
     : ObservableObject, IRecipient<PingBatchResultMessage>
 {
     public ObservableCollection<PingResultViewModel> Servers { get; } = [];
+    private readonly Dictionary<string, PingResultViewModel> _byIp = new();
     public CollectionViewSource GroupedServers { get; } = new();
 
     [ObservableProperty] private string              _summaryText   = "Initialising…";
@@ -27,21 +28,27 @@ public sealed partial class PingDashboardViewModel
     private readonly RemoteManagementService _remoteMgmt;
     private readonly IDialogService          _dialog;
 
+    private readonly MaintenanceService _maintenance;
+
     public PingDashboardViewModel(
         IMessenger messenger,
         IOptions<List<ServerEntry>> serversOptions,
         RemoteManagementService remoteMgmt,
-        IDialogService dialog)
+        IDialogService dialog,
+        MaintenanceService maintenance)
     {
-        _remoteMgmt = remoteMgmt;
-        _dialog     = dialog;
+        _remoteMgmt  = remoteMgmt;
+        _dialog      = dialog;
+        _maintenance = maintenance;
 
         foreach (var entry in serversOptions.Value)
         {
             Servers.Add(new PingResultViewModel(
                 entry.Name, entry.IP, entry.Group, entry.Type,
-                _remoteMgmt, _dialog));
+                _remoteMgmt, _dialog, _maintenance, messenger));
         }
+        foreach (var s in Servers)
+            _byIp[s.IP] = s;
 
         TotalCount = Servers.Count;
 
@@ -52,18 +59,16 @@ public sealed partial class PingDashboardViewModel
         messenger.RegisterAll(this);
         UpdateSummary();
     }
-
+    
     public void Receive(PingBatchResultMessage message)
     {
         var results = message.Value.Results;
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            // Один прохід по всіх результатах — один Dispatcher call,
-            // одне перемальовування UI після всіх оновлень
             foreach (var result in results)
             {
-                var row = Servers.FirstOrDefault(s => s.IP == result.IP);
-                row?.ApplyResult(result);
+                if (_byIp.TryGetValue(result.IP, out var row))
+                    row.ApplyResult(result);
             }
             UpdateSummary();
         });

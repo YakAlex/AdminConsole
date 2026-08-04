@@ -26,9 +26,14 @@ public sealed class UserSettingsService
         WriteIndented = true
     };
 
-    private readonly ILogger<UserSettingsService> _logger;
+private readonly ILogger<UserSettingsService> _logger;
     private UserSettings? _current;
 
+    /// <summary>
+    /// Єдиний lock для ВСІХ читань/записів UserSettings, що можуть
+    /// приходити з більш ніж одного потоку (UI + Telegram polling thread).
+    /// </summary>
+    private readonly object _lock = new();
     public UserSettingsService(ILogger<UserSettingsService> logger)
     {
         _logger = logger;
@@ -37,25 +42,71 @@ public sealed class UserSettingsService
     /// <summary>
     /// Поточні налаштування. При першому зверненні завантажуються з диску.
     /// Якщо файл відсутній або пошкоджений — повертаються дефолтні значення.
+    /// ОБЕРЕЖНО: для простих одиничних полів (CloseToTray, RdpMonitoringEnabled
+    /// тощо), які читаються/пишуться лише з UI thread, пряме звернення
+    /// через Current лишається безпечним, як і раніше.
     /// </summary>
     public UserSettings Current => _current ??= Load();
 
     /// <summary>
-    /// Зберігає поточні налаштування на диск.
-    /// Потокобезпечний — викликається лише з UI thread.
+    /// Зберігає поточні налаштування на диск. Потокобезпечний — тепер
+    /// дійсно, а не лише в коментарі: весь блок під _lock.
     /// </summary>
     public void Save()
+    {
+        lock (_lock)
+        {
+            SaveInternalNoLock();
+        }
+    }
+
+    private void SaveInternalNoLock()
     {
         try
         {
             Directory.CreateDirectory(SettingsDir); // ідемпотентно
             var json = JsonSerializer.Serialize(Current, JsonOptions);
-            File.WriteAllText(SettingsPath, json);
+
+            var tempPath = SettingsPath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, SettingsPath, overwrite: true);
+
             _logger.LogDebug("UserSettings saved to {Path}", SettingsPath);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save UserSettings to {Path}", SettingsPath);
+        }
+    }
+
+    // ── Потокобезпечний доступ до Telegram-стану ────────────────────────────
+
+    /// <summary>
+    /// Єдина точка входу для БУДЬ-ЯКОЇ зміни Telegram-пов'язаного стану
+    /// (AllowedChatIds, Usernames, PrimaryAdminChatId). Мутація і Save()
+    /// відбуваються в одному lock — без вікна для гонки чи для конкурентного
+    /// File.Move. Викликач передає делегат, що змінює UserSettings напряму.
+    /// </summary>
+    public void MutateTelegramState(Action<UserSettings> mutate)
+    {
+        lock (_lock)
+        {
+            mutate(Current);
+            SaveInternalNoLock();
+        }
+    }
+
+    /// <summary>
+    /// Безпечне читання: повертає РЕЗУЛЬТАТ selector-функції, обчислений
+    /// під тим самим lock — тобто копію (наприклад .ToList()), а не
+    /// пряме посилання на внутрішню колекцію. Використовуйте це замість
+    /// прямого читання Current.TelegramAllowedChatIds/TelegramUsernames.
+    /// </summary>
+    public T ReadTelegramState<T>(Func<UserSettings, T> selector)
+    {
+        lock (_lock)
+        {
+            return selector(Current);
         }
     }
 

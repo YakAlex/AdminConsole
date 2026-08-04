@@ -1,6 +1,6 @@
 ﻿namespace AdminConsole.Core.Messages;
 
-public enum CredentialTarget { Rdp, Zabbix }
+public enum CredentialTarget { Rdp, Zabbix, Telegram }
 public enum CredentialAction { Saved, Cleared }
 
 /// <summary>
