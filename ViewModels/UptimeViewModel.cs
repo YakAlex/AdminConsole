@@ -1,5 +1,6 @@
 ﻿using AdminConsole.Core.Messages;
 using AdminConsole.Core.Models;
+using AdminConsole.Core.Models.Reports;
 using AdminConsole.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,6 +8,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Data;
+using System.Diagnostics;
+using System.IO;
 
 namespace AdminConsole.ViewModels;
 
@@ -14,7 +17,9 @@ public sealed partial class UptimeViewModel
     : ObservableObject, IRecipient<UptimeUpdatedMessage>, IDisposable
 {
     private readonly UptimeTrackerService  _tracker;
+    private readonly SlaReportService      _slaReport;
     private readonly System.Threading.Timer _refreshTimer;
+    private bool _isGeneratingReport;
 
     // ── Колекція і групування ────────────────────────────────────────────────
 
@@ -75,10 +80,10 @@ public sealed partial class UptimeViewModel
 
     // ── Constructor ──────────────────────────────────────────────────────────
 
-    public UptimeViewModel(IMessenger messenger, UptimeTrackerService tracker)
+    public UptimeViewModel(IMessenger messenger, UptimeTrackerService tracker, SlaReportService slaReport)
     {
         _tracker = tracker;
-
+        _slaReport = slaReport;
         RecordsView.Source = _allRecords;
         RecordsView.Filter += OnFilter;
         RecordsView.SortDescriptions.Add(
@@ -326,6 +331,59 @@ public sealed partial class UptimeViewModel
             SelectedRecord = null;
 
         _tracker.ClearAllResolved();
+    }
+    
+    /// <summary>
+    /// Формує SLA-звіт за поточними фільтрами FilterGroup/FilterServer.
+    /// Дати: якщо FilterDateFrom/FilterDateTo не задані вручну — From береться
+    /// як "30 днів тому", To — точний "зараз". Якщо задані вручну (DatePicker
+    /// повертає лише дату, час 00:00) — From лишається початком доби,
+    /// а To розтягується до кінця обраної доби (23:59:59.9999999), інакше
+    /// весь останній день діапазону випадав би зі звіту.
+    /// </summary>
+    [RelayCommand]
+    private async Task GenerateReport()
+    {
+        if (_isGeneratingReport) return;
+        _isGeneratingReport = true;
+
+        try
+        {
+            var now = DateTimeOffset.Now;
+
+            var from = FilterDateFrom is { } f
+                ? new DateTimeOffset(f.Date)
+                : now.AddDays(-30);
+
+            var to = FilterDateTo is { } t
+                ? new DateTimeOffset(t.Date).AddDays(1).AddTicks(-1)
+                : now;
+
+            var request = new SlaReportRequest
+            {
+                From         = from,
+                To           = to,
+                GroupFilter  = FilterGroup is "All" or "" ? null : FilterGroup,
+                ServerFilter = string.IsNullOrWhiteSpace(FilterServer) || FilterServer == "All"
+                    ? null : FilterServer
+            };
+
+            var report = await Task.Run(() => _slaReport.Generate(request));
+            var html   = SlaReportHtmlRenderer.Render(report);
+
+            var dir = Path.Combine(AppContext.BaseDirectory, "reports");
+            Directory.CreateDirectory(dir);
+
+            var fileName = $"sla_{from:yyyy-MM-dd}_{to:yyyy-MM-dd}_{report.GeneratedAt:yyyyMMdd-HHmmss}.html";
+            var path     = Path.Combine(dir, fileName);
+            await File.WriteAllTextAsync(path, html);
+
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        finally
+        {
+            _isGeneratingReport = false;
+        }
     }
 
     // ── IDisposable ──────────────────────────────────────────────────────────

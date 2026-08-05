@@ -129,7 +129,7 @@ public partial class App : Application
         services.AddSingleton<PingMonitorService>();
         services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService>());
         services.AddHostedService<ResourceMonitorService>();
-
+        
         // EventLogService реєструємо як Singleton (а не лише AddHostedService),
         // щоб ResourceMonitorViewModel міг отримати той самий екземпляр напряму
         // через конструктор (потрібно для читання LastSnapshot).
@@ -137,7 +137,7 @@ public partial class App : Application
         // тип T лишається нерезолвним без цього явного AddSingleton.
         services.AddSingleton<EventLogService>();
         services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
-
+        services.AddSingleton<SlaReportService>();
         services.AddHostedService<FileLoggerService>();
         services.AddSingleton<RdpMonitorService>();
         services.AddHostedService(sp => sp.GetRequiredService<RdpMonitorService>());

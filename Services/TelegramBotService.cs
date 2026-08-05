@@ -183,7 +183,7 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     string text = $"🔴 СЕРВЕР ОФЛАЙН\n" +
                   $"{record.ServerName} ({record.ServerIp})\n" +
-                  $"Впав: {record.FellAt:dd.MM HH:mm:ss}";
+                  $"Початок інциденту: {record.FellAt:dd.MM HH:mm:ss}";
 
     var recipients = new List<long>();
     if (_access.PrimaryAdminChatId is long adminId) recipients.Add(adminId);
