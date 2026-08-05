@@ -29,13 +29,11 @@ public sealed class SlaReportService
 
     public SlaReport Generate(SlaReportRequest request)
     {
-        // Фіксуємо "зараз" ОДИН раз — інакше при переборі історії Now міг би
-        // зміститись на мс/с між ітераціями й зробити суми/юніт-тести нестабільними.
         var now  = DateTimeOffset.Now;
         var from = request.From;
         var to   = request.To;
-
-        var periodDuration = to - from;
+        var effectiveTo    = Min(now, to);
+        var periodDuration = effectiveTo - from;
 
         if (periodDuration <= TimeSpan.Zero)
         {
@@ -54,13 +52,9 @@ public sealed class SlaReportService
             .Where(s => MatchesFilters(s.Group, s.Name, request))
             .ToList();
 
-        // Єдине джерело фільтрації: запис лишається тільки якщо його
-        // клипована тривалість у цьому періоді > 0 — той самий метод,
-        // що й рахує внесок у даунтайм, тож жодного розбіжного визначення
-        // "перетинається чи ні" в іншому місці немає.
         var records = _uptime.GetSnapshot()
             .Where(r => MatchesFilters(r.ServerGroup, r.ServerName, request))
-            .Where(r => ClippedDuration(r, from, to, now) > TimeSpan.Zero)
+            .Where(r => ClippedDuration(r, from, effectiveTo, now) > TimeSpan.Zero)   // ← to → effectiveTo
             .ToList();
 
         var baseKeys = liveServers.Select(s => s.IP)
@@ -96,7 +90,7 @@ public sealed class SlaReportService
 
             foreach (var r in serverRecords)
             {
-                var clipped = ClippedDuration(r, from, to, now);
+                var clipped = ClippedDuration(r, from, effectiveTo, now);
 
                 if (r.ClosedByMaintenance)
                     maintenanceDowntime += clipped;
@@ -105,9 +99,7 @@ public sealed class SlaReportService
                     downtime += clipped;
                     incidentCount++;
                 }
-
-                // MTTR — реальна (некліпована) тривалість, тільки закриті.
-                if (r.RecoveredAt is not null)
+                if (r.RecoveredAt is not null && !r.ClosedByMaintenance)
                     closedDurations.Add(r.RecoveredAt.Value - r.FellAt);
             }
 
@@ -120,7 +112,7 @@ public sealed class SlaReportService
 
             var incidentDetails = serverRecords
                 .OrderByDescending(r => r.FellAt)
-                .Select(r => ToIncidentDetail(r, from, to, now))
+                .Select(r => ToIncidentDetail(r, from, effectiveTo, now))
                 .ToList();
 
             entries.Add(new ServerSlaEntry
@@ -144,7 +136,7 @@ public sealed class SlaReportService
             .Where(r => r.ClosedByMaintenance)
             .OrderBy(r => r.ServerName)
             .ThenByDescending(r => r.FellAt)
-            .Select(r => ToIncidentDetail(r, from, to, now))
+            .Select(r => ToIncidentDetail(r, from, effectiveTo, now))
             .ToList();
 
         double? overallUptimePercent;

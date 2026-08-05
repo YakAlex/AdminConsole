@@ -24,6 +24,7 @@ public sealed class UptimeTrackerService
 {
     private readonly IMessenger                   _messenger;
     private readonly ILogger<UptimeTrackerService> _logger;
+    private readonly IReadOnlyList<ServerEntry> _servers;
     private readonly MaintenanceService _maintenance;
     private readonly MonitoringSettings _settings;
 
@@ -76,63 +77,102 @@ public sealed class UptimeTrackerService
         IMessenger                    messenger,
         ILogger<UptimeTrackerService> logger,
         MaintenanceService            maintenance,
+        IOptions<List<ServerEntry>>   servers,
         IOptions<MonitoringSettings>  settings)
     {
         _messenger = messenger;
         _logger    = logger;
         _maintenance = maintenance;
         _settings  = settings.Value;
+        _servers     = servers.Value.AsReadOnly();
         _messenger.RegisterAll(this);
     }
 
     // ── IRecipient<MaintenanceChangedMessage> ───────────────────────────────
 
     public void Receive(MaintenanceChangedMessage message)
+{
+    switch (message.Action)
     {
-        if (message.Action != MaintenanceAction.Started) return;
+        case MaintenanceAction.Started:
+            HandleMaintenanceStarted(message.Window);
+            break;
+        case MaintenanceAction.Ended:
+            HandleMaintenanceEnded(message.Window);
+            break;
+    }
+}
 
-        var window = message.Window;
-        bool changed = false;
+private void HandleMaintenanceStarted(MaintenanceWindow window)
+{
+    bool changed = false;
 
-        lock (_lock)
+    lock (_lock)
+    {
+        var affected = window.TargetGroup is not null
+            ? _records.Where(r => r.ServerGroup.Equals(window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase) && !r.IsResolved)
+            : _records.Where(r => r.ServerIp == window.ServerIp && !r.IsResolved);
+
+        foreach (var record in affected)
         {
-            var affected = window.TargetGroup is not null
-                ? _records.Where(r => r.ServerGroup.Equals(window.TargetGroup,
-                    StringComparison.OrdinalIgnoreCase) && !r.IsResolved)
-                : _records.Where(r => r.ServerIp == window.ServerIp && !r.IsResolved);
+            record.RecoveredAt        = DateTimeOffset.Now;
+            record.ClosedByMaintenance = true;
+            changed = true;
 
-            foreach (var record in affected)
-            {
-                record.RecoveredAt        = DateTimeOffset.Now;
-                record.ClosedByMaintenance = true;
-                changed = true;
-
-                _lastStatus[record.ServerIp] = PingStatus.Unknown;
-            }
-
-            // Прибираємо pending-записи (ще не промоутовані в DowntimeRecord) —
-            // інакше вони можуть "визріти" вже після Maintenance зі старим
-            // FellAt, що передував самому вікну обслуговування.
-            var pendingKeysToRemove = window.TargetGroup is not null
-                ? _pendingOffline.Where(kv => kv.Value.Group.Equals(
-                        window.TargetGroup, StringComparison.OrdinalIgnoreCase))
-                    .Select(kv => kv.Key).ToList()
-                : (_pendingOffline.ContainsKey(window.ServerIp!)
-                    ? [window.ServerIp!]
-                    : []);
-
-            foreach (var key in pendingKeysToRemove)
-                _pendingOffline.Remove(key);
+            _lastStatus[record.ServerIp] = PingStatus.Unknown;
         }
 
-        if (!changed) return;
+        var pendingKeysToRemove = window.TargetGroup is not null
+            ? _pendingOffline.Where(kv => kv.Value.Group.Equals(
+                    window.TargetGroup, StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Key).ToList()
+            : (_pendingOffline.ContainsKey(window.ServerIp!)
+                ? [window.ServerIp!]
+                : []);
 
-        ScheduleSave();
-        PublishSnapshot();
-
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."));
+        foreach (var key in pendingKeysToRemove)
+            _pendingOffline.Remove(key);
     }
+
+    if (!changed) return;
+
+    ScheduleSave();
+    PublishSnapshot();
+
+    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+        $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."));
+}
+
+/// <summary>
+/// ФІКС: без цього _lastStatus[ip] лишався Offline назавжди, якщо сервер
+/// не піднявся до кінця вікна — жоден наступний Offline-пінг більше не
+/// сприймався як "новий перехід" (prev вже дорівнював Offline), тому
+/// DowntimeRecord ніколи не створювався для періоду ПІСЛЯ вікна.
+///
+/// Скидаємо саме на Online (а не Unknown, як у PingMonitorService) —
+/// перехід Unknown/Checking → Offline у ЦЬОМУ сервісі навмисно не створює
+/// _pendingOffline (фільтр "стартового шуму"), тому Unknown відтворив би
+/// той самий баг. Online → Offline — звичайна, вже перевірена гілка:
+/// наступний реальний Offline-пінг коректно "падає" в _pendingOffline
+/// з FellAt = момент виявлення. Якщо сервер вже онлайн — безпечний no-op.
+/// </summary>
+private void HandleMaintenanceEnded(MaintenanceWindow window)
+{
+    var affectedIps = window.TargetGroup is not null
+        ? _servers.Where(s => s.Group.Equals(window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.IP)
+        : window.ServerIp is not null
+            ? [window.ServerIp]
+            : Array.Empty<string>();
+
+    lock (_lock)
+    {
+        foreach (var ip in affectedIps)
+            _lastStatus[ip] = PingStatus.Online;
+    }
+}
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -290,11 +330,31 @@ _lastStatus.TryGetValue(result.IP, out var prev);
 
     // ── Public API для UptimeViewModel ────────────────────────────────────────
 
-    /// <summary>Повертає копію списку інцидентів для початкового завантаження VM.</summary>
+    /// <summary>
+    /// ФІКС: повертає ГЛИБОКІ копії, а не референси на живі об'єкти з _records.
+    /// DowntimeRecord.RecoveredAt/ClosedByMaintenance мутуються з фонового
+    /// потоку в Receive(PingBatchResultMessage) без зв'язку з тим, хто читає
+    /// знімок ззовні _lock. Раніше це було безпечно, бо єдиний споживач читав
+    /// через UI-Dispatcher послідовно; SlaReportService.Generate() викликається
+    /// з окремого Task.Run-потоку (UptimeViewModel.GenerateReport) і рахує
+    /// один і той самий запис (ClippedDuration) кілька разів незалежно —
+    /// без заморожування знімка ці виклики можуть побачити різні значення
+    /// для одного інциденту в межах одного звіту.
+    /// </summary>
     public IReadOnlyList<DowntimeRecord> GetSnapshot()
     {
-        lock (_lock) return _records.ToList();
+        lock (_lock) return _records.Select(CloneRecord).ToList();
     }
+
+    private static DowntimeRecord CloneRecord(DowntimeRecord r) => new()
+    {
+        ServerName          = r.ServerName,
+        ServerIp            = r.ServerIp,
+        ServerGroup         = r.ServerGroup,
+        FellAt              = r.FellAt,
+        RecoveredAt         = r.RecoveredAt,
+        ClosedByMaintenance = r.ClosedByMaintenance
+    };
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
@@ -449,7 +509,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     private void PublishSnapshot()
     {
         IReadOnlyList<DowntimeRecord> snapshot;
-        lock (_lock) snapshot = _records.ToList();
+        lock (_lock) snapshot = _records.Select(CloneRecord).ToList();
         _messenger.Send(new UptimeUpdatedMessage(snapshot));
     }
 
