@@ -85,6 +85,8 @@ public sealed class UptimeTrackerService
         _maintenance = maintenance;
         _settings  = settings.Value;
         _servers     = servers.Value.AsReadOnly();
+        
+        LoadFromDisk();
         _messenger.RegisterAll(this);
     }
 
@@ -176,12 +178,36 @@ private void HandleMaintenanceEnded(MaintenanceWindow window)
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        LoadFromDisk();
         PublishSnapshot();
         _logger.LogInformation("UptimeTrackerService started.");
         _messenger.Send(AppLogEntryMessage.Info(LogSource, 
             "Uptime tracker started — відстеження переходів Online/Offline запущено."));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// ФІКС: ScheduleSave() відкладає запис на 500мс через окремий незалежний
+    /// Task.Run, який хосту НІЧОГО не відомий — дефолтний BackgroundService.StopAsync
+    /// чекає лише _executeTask, а той вже давно завершений (ExecuteAsync повертає
+    /// Task.CompletedTask одразу після старту). Тому будь-яка зміна, що сталась
+    /// протягом останніх 500мс перед закриттям застосунку (App.xaml.cs викликає
+    /// _host.StopAsync), губилась — на диск нічого не встигало піти.
+    /// Тут робимо синхронний, безумовний SaveToDisk() перед виходом — незалежно
+    /// від того, чи є зараз запланований дебаунс-виклик. SaveToDisk() ідемпотентний
+    /// і дешевий (JSON невеликого обсягу), тож зайвий виклик безпечний.
+    /// </summary>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            SaveToDisk();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UptimeTrackerService: помилка фінального збереження при зупинці.");
+        }
+
+        await base.StopAsync(cancellationToken);
     }
 
     // ── IRecipient ────────────────────────────────────────────────────────────
@@ -366,11 +392,25 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     /// </summary>
     public void DeleteRecord(DowntimeRecord record)
     {
+        DowntimeRecord? target;
+
         lock (_lock)
         {
-            if (!record.IsResolved && _lastStatus.ContainsKey(record.ServerIp))
-                _lastStatus[record.ServerIp] = PingStatus.Online;
-            _records.Remove(record);
+            target = _records.FirstOrDefault(r =>
+                r.ServerIp == record.ServerIp && r.FellAt == record.FellAt);
+
+            if (target is null)
+            {
+                _logger.LogWarning(
+                    "DeleteRecord: запис {Server} ({Ip}) / {FellAt} не знайдено — можливо, вже видалено.",
+                    record.ServerName, record.ServerIp, record.FellAt);
+                return;
+            }
+
+            if (!target.IsResolved && _lastStatus.ContainsKey(target.ServerIp))
+                _lastStatus[target.ServerIp] = PingStatus.Online;
+
+            _records.Remove(target);
         }
 
         _ = Task.Run(() => SaveToDisk());
@@ -484,19 +524,36 @@ _lastStatus.TryGetValue(result.IP, out var prev);
             {
                 Directory.CreateDirectory(LogDir);
 
-                var byMonth = snapshot.GroupBy(r => new { r.FellAt.Year, r.FellAt.Month });
+                var byMonth = snapshot
+                    .GroupBy(r => new DateTimeOffset(
+                        r.FellAt.Year, r.FellAt.Month, 1, 0, 0, 0, TimeSpan.Zero))
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
-                foreach (var group in byMonth)
+                foreach (var (monthStamp, records) in byMonth)
                 {
-                    var monthStamp = new DateTimeOffset(
-                        group.Key.Year, group.Key.Month, 1, 0, 0, 0, TimeSpan.Zero);
-
                     var finalPath = FilePath(monthStamp);
                     var tempPath  = finalPath + ".tmp";
-                    var json      = JsonSerializer.Serialize(group.ToList(), JsonOptions);
+                    var json      = JsonSerializer.Serialize(records, JsonOptions);
 
                     File.WriteAllText(tempPath, json);
                     File.Move(tempPath, finalPath, overwrite: true);
+                }
+
+                // ФІКС: якщо для місяця в пам'яті НЕ лишилось жодного запису
+                // (усе видалено через DeleteRecord/ClearAllResolved), цикл вище
+                // його просто не торкається — файл лишався на диску зі старими
+                // "видаленими" записами назавжди, і LoadFromDisk() при наступному
+                // старті повертав їх назад. Тут прибираємо файли місяців, яких
+                // більше немає серед byMonth.
+                var monthsWithData = byMonth.Keys
+                    .Select(m => $"{m:yyyy-MM}")
+                    .ToHashSet();
+
+                foreach (var path in Directory.GetFiles(LogDir, "uptime-*.json"))
+                {
+                    var fileMonth = Path.GetFileNameWithoutExtension(path)["uptime-".Length..];
+                    if (!monthsWithData.Contains(fileMonth))
+                        File.Delete(path);
                 }
             }
             catch (Exception ex)
