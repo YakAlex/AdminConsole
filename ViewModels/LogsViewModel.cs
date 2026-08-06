@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Data;
 namespace AdminConsole.ViewModels;
@@ -18,7 +20,24 @@ using System.Collections.Specialized;
 public sealed partial class LogsViewModel
     : ObservableObject, IRecipient<AppLogEntryMessage>
 {
-    private const int MaxEntries = 500;
+    private const int MaxEntries = 1000;
+
+    /// <summary>
+    /// Скільки рядків читати з хвоста найновішого лог-файлу при старті.
+    /// Дорівнює MaxEntries — більше однаково буде обрізано тримом нижче.
+    /// </summary>
+    private const int MaxHistoryLines = 1000;
+
+    private static readonly string LogDirectory =
+        System.IO.Path.Combine(AppContext.BaseDirectory, "logs");
+
+    // Формат рядка фіксований — AppLogEntry.Formatted:
+    // [yyyy-MM-dd HH:mm:ss] [Severity] [Source] Message
+    // Повідомлення вже гарантовано однорядкове (санітизація \r\n при записі),
+    // тому парсинг рядок-за-рядком безпечний — жоден запис не розірветься.
+    private static readonly Regex LogLineRegex = new(
+        @"^\[(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s*\[(?<sev>[A-Za-z]+)\s*\]\s*\[(?<source>[^\]]*)\]\s(?<msg>.*)$",
+        RegexOptions.Compiled);
 
     private readonly ObservableCollection<LogEntryViewModel> _logEntries = [];
     private readonly IMessenger _messenger;
@@ -58,6 +77,96 @@ public sealed partial class LogsViewModel
         LogEntriesView.Filter += OnFilter;
 
         messenger.RegisterAll(this);
+
+        _ = LoadHistoryAsync();
+    }
+
+    /// <summary>
+    /// Підвантажує хвіст найновішого лог-файлу (app-*.log) при старті програми —
+    /// щоб після рестарту записи з попередньої сесії одразу були видні й доступні
+    /// для пошуку в цій вкладці, а не тільки в текстовому файлі на диску.
+    /// </summary>
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            var history = await Task.Run(() =>
+            {
+                var file = FindLatestLogFile();
+                return file is null
+                    ? []
+                    : ParseTailLines(file, MaxHistoryLines);
+            });
+
+            if (history.Count == 0) return;
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                // history вже у хронологічному порядку (старі → нові).
+                // Вставляємо НА ПОЧАТОК — якщо якісь live-події вже встигли
+                // прилетіти через Receive() поки читався файл, вони новіші
+                // за будь-який запис з попередньої сесії і мають лишитись у кінці.
+                // Так _logEntries лишається природньо хронологічним, а існуючий
+                // RemoveAt(0) в Receive() продовжує видаляти саме найстаріше.
+                for (int i = 0; i < history.Count; i++)
+                    _logEntries.Insert(i, history[i]);
+
+                while (_logEntries.Count > MaxEntries)
+                    _logEntries.RemoveAt(0);
+
+                if (_logEntries.Count > 0)
+                    StatusText = $"{_logEntries.Count} entries — last: {_logEntries[^1].TimeShort}";
+            });
+        }
+        catch (Exception ex)
+        {
+            _messenger.Send(AppLogEntryMessage.Warning("Logs",
+                $"Не вдалося завантажити історію логів: {ex.Message}"));
+        }
+    }
+
+    private static string? FindLatestLogFile()
+    {
+        if (!System.IO.Directory.Exists(LogDirectory)) return null;
+
+        return System.IO.Directory
+            .EnumerateFiles(LogDirectory, "app-*.log")
+            .OrderByDescending(f => f, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static List<LogEntryViewModel> ParseTailLines(string path, int maxLines)
+    {
+        var result = new List<LogEntryViewModel>(maxLines);
+
+        foreach (var line in System.IO.File.ReadLines(path).TakeLast(maxLines))
+        {
+            if (TryParseLine(line, out var entry))
+                result.Add(new LogEntryViewModel(entry));
+        }
+
+        return result;
+    }
+
+    private static bool TryParseLine(string line, out AppLogEntry entry)
+    {
+        entry = null!;
+
+        var m = LogLineRegex.Match(line);
+        if (!m.Success) return false;
+
+        if (!DateTime.TryParseExact(
+                m.Groups["time"].Value, "yyyy-MM-dd HH:mm:ss",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var localTime))
+            return false;
+        
+        if (!Enum.TryParse<LogSeverity>(m.Groups["sev"].Value, ignoreCase: true, out var severity))
+            severity = LogSeverity.Info;
+
+        var timestamp = new DateTimeOffset(localTime, TimeZoneInfo.Local.GetUtcOffset(localTime));
+
+        entry = new AppLogEntry(severity, m.Groups["source"].Value, m.Groups["msg"].Value, timestamp);
+        return true;
     }
 
     /// <summary>
