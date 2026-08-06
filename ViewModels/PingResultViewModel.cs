@@ -110,13 +110,22 @@ public sealed partial class PingResultViewModel : ObservableObject, IRecipient<M
             if (choice is null) return; // користувач скасував діалог
 
             var now = DateTimeOffset.Now;
+
+            // Порожній/пробільний коментар — свідомо підставляємо дефолтну
+            // причину замість розмитого "без причини" — адмін, який просто клацнув кнопку
+            // тривалості не вводячи коментар, отримає однаковий, очікуваний текст у логах/тултіпах
+            // замість порожнього рядка.
+            var reason = string.IsNullOrWhiteSpace(choice.Comment)
+                ? "Планове обслуговування"
+                : choice.Comment.Trim();
+
             _maintenance.StartMaintenance(new MaintenanceWindow
             {
                 ServerIp    = IP,
                 DisplayName = Name,
                 From        = now,
                 To          = choice.Duration is { } d ? now + d : null,
-                Reason      = "Планове обслуговування"
+                Reason      = reason
             });
         }
         finally

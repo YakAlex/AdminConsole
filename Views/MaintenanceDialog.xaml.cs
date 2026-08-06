@@ -21,7 +21,11 @@ public partial class MaintenanceDialog : Window
 
     private void Commit(TimeSpan? duration)
     {
-        Choice = new MaintenanceDurationChoice { Duration = duration };
+        Choice = new MaintenanceDurationChoice
+        {
+            Duration = duration,
+            Comment  = CommentBox.Text
+        };
         DialogResult = true;
     }
 

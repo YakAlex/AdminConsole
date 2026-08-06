@@ -9,4 +9,11 @@
 public sealed class MaintenanceDurationChoice
 {
     public TimeSpan? Duration { get; init; }
+
+    /// <summary>
+    /// Вільний коментар, введений адміністратором у діалозі (необов'язковий).
+    /// Порожній/не введений — виклик використовує дефолтну причину
+    /// "Планове обслуговування" (див. PingResultViewModel.ToggleMaintenance).
+    /// </summary>
+    public string? Comment { get; init; }
 }

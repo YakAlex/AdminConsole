@@ -37,6 +37,16 @@ public sealed partial class LogsViewModel
     [ObservableProperty]
     private bool _autoScroll = true;
 
+    /// <summary>
+    /// Підрядок пошуку над DataGrid. Порожній/пробільний — всі записи видимі.
+    /// Фільтрує в пам'яті (LogEntriesView, тільки поточна сесія, до 500 записів) —
+    /// для пошуку по всій історії (інші дні, після рестарту) потрібно відкрити
+    /// папку логів (кнопка "Open Folder") — там текстові файли app-YYYY-MM-DD.log,
+    /// які пише FileLoggerService — вони вже персистентні та не обмежені 500 записами.
+    /// </summary>
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
     public LogsViewModel(IMessenger messenger)
     {
         _messenger = messenger;
@@ -45,9 +55,36 @@ public sealed partial class LogsViewModel
             new System.ComponentModel.SortDescription(
                 nameof(LogEntryViewModel.TimeFull),
                 System.ComponentModel.ListSortDirection.Descending));
+        LogEntriesView.Filter += OnFilter;
 
         messenger.RegisterAll(this);
     }
+
+    /// <summary>
+    /// Шукає підрядком в Source або Message (case-insensitive, підрядок-входження).
+    /// Наприклад, ввівши частину коментаря або ім'я сервера — знайдеш запис про Maintenance
+    /// серед сотень інших записів без ручного скролу.
+    /// </summary>
+    private void OnFilter(object? sender, System.Windows.Data.FilterEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            e.Accepted = true;
+            return;
+        }
+
+        if (e.Item is not LogEntryViewModel entry)
+        {
+            e.Accepted = false;
+            return;
+        }
+
+        e.Accepted =
+            entry.Message.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
+            entry.Source.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    partial void OnSearchTextChanged(string value) => LogEntriesView.View.Refresh();
 
     public void Receive(AppLogEntryMessage message)
     {
