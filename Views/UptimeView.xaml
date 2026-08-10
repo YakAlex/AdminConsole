@@ -86,7 +86,7 @@
 
                     <!-- Кнопка Clear History — видима тільки якщо є завершені записи -->
                     <Button Command="{Binding ClearAllResolvedCommand}"
-                            Padding="10,6" Cursor="Hand">
+                            Padding="10,6" Cursor="Hand" Margin="10,0,8,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -121,7 +121,7 @@
                     </Button>
                     
                     <Button Command="{Binding GenerateReportCommand}"
-                            Padding="10,6" Cursor="Hand" Margin="0,0,8,0"
+                            Padding="10,6" Cursor="Hand" Margin="10,0,8,0"
                             ToolTip="Сформувати SLA-звіт за поточними фільтрами (дати/група)">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
