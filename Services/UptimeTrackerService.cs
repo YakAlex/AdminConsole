@@ -24,6 +24,7 @@ public sealed class UptimeTrackerService
 {
     private readonly IMessenger                   _messenger;
     private readonly ILogger<UptimeTrackerService> _logger;
+    private readonly IReadOnlyList<ServerEntry> _servers;
     private readonly MaintenanceService _maintenance;
     private readonly MonitoringSettings _settings;
 
@@ -76,72 +77,137 @@ public sealed class UptimeTrackerService
         IMessenger                    messenger,
         ILogger<UptimeTrackerService> logger,
         MaintenanceService            maintenance,
+        IOptions<List<ServerEntry>>   servers,
         IOptions<MonitoringSettings>  settings)
     {
         _messenger = messenger;
         _logger    = logger;
         _maintenance = maintenance;
         _settings  = settings.Value;
+        _servers     = servers.Value.AsReadOnly();
+        
+        LoadFromDisk();
         _messenger.RegisterAll(this);
     }
 
     // ── IRecipient<MaintenanceChangedMessage> ───────────────────────────────
 
     public void Receive(MaintenanceChangedMessage message)
+{
+    switch (message.Action)
     {
-        if (message.Action != MaintenanceAction.Started) return;
+        case MaintenanceAction.Started:
+            HandleMaintenanceStarted(message.Window);
+            break;
+        case MaintenanceAction.Ended:
+            HandleMaintenanceEnded(message.Window);
+            break;
+    }
+}
 
-        var window = message.Window;
-        bool changed = false;
+private void HandleMaintenanceStarted(MaintenanceWindow window)
+{
+    bool changed = false;
 
-        lock (_lock)
+    lock (_lock)
+    {
+        var affected = window.TargetGroup is not null
+            ? _records.Where(r => r.ServerGroup.Equals(window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase) && !r.IsResolved)
+            : _records.Where(r => r.ServerIp == window.ServerIp && !r.IsResolved);
+
+        foreach (var record in affected)
         {
-            var affected = window.TargetGroup is not null
-                ? _records.Where(r => r.ServerGroup.Equals(window.TargetGroup,
-                    StringComparison.OrdinalIgnoreCase) && !r.IsResolved)
-                : _records.Where(r => r.ServerIp == window.ServerIp && !r.IsResolved);
+            record.RecoveredAt        = DateTimeOffset.Now;
+            record.ClosedByMaintenance = true;
+            changed = true;
 
-            foreach (var record in affected)
-            {
-                record.RecoveredAt        = DateTimeOffset.Now;
-                record.ClosedByMaintenance = true;
-                changed = true;
-
-                _lastStatus[record.ServerIp] = PingStatus.Unknown;
-            }
-
-            // Прибираємо pending-записи (ще не промоутовані в DowntimeRecord) —
-            // інакше вони можуть "визріти" вже після Maintenance зі старим
-            // FellAt, що передував самому вікну обслуговування.
-            var pendingKeysToRemove = window.TargetGroup is not null
-                ? _pendingOffline.Where(kv => kv.Value.Group.Equals(
-                        window.TargetGroup, StringComparison.OrdinalIgnoreCase))
-                    .Select(kv => kv.Key).ToList()
-                : (_pendingOffline.ContainsKey(window.ServerIp!)
-                    ? [window.ServerIp!]
-                    : []);
-
-            foreach (var key in pendingKeysToRemove)
-                _pendingOffline.Remove(key);
+            _lastStatus[record.ServerIp] = PingStatus.Unknown;
         }
 
-        if (!changed) return;
+        var pendingKeysToRemove = window.TargetGroup is not null
+            ? _pendingOffline.Where(kv => kv.Value.Group.Equals(
+                    window.TargetGroup, StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Key).ToList()
+            : (_pendingOffline.ContainsKey(window.ServerIp!)
+                ? [window.ServerIp!]
+                : []);
 
-        ScheduleSave();
-        PublishSnapshot();
-
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."));
+        foreach (var key in pendingKeysToRemove)
+            _pendingOffline.Remove(key);
     }
+
+    if (!changed) return;
+
+    ScheduleSave();
+    PublishSnapshot();
+
+    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+        $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."));
+}
+
+/// <summary>
+/// ФІКС: без цього _lastStatus[ip] лишався Offline назавжди, якщо сервер
+/// не піднявся до кінця вікна — жоден наступний Offline-пінг більше не
+/// сприймався як "новий перехід" (prev вже дорівнював Offline), тому
+/// DowntimeRecord ніколи не створювався для періоду ПІСЛЯ вікна.
+///
+/// Скидаємо саме на Online (а не Unknown, як у PingMonitorService) —
+/// перехід Unknown/Checking → Offline у ЦЬОМУ сервісі навмисно не створює
+/// _pendingOffline (фільтр "стартового шуму"), тому Unknown відтворив би
+/// той самий баг. Online → Offline — звичайна, вже перевірена гілка:
+/// наступний реальний Offline-пінг коректно "падає" в _pendingOffline
+/// з FellAt = момент виявлення. Якщо сервер вже онлайн — безпечний no-op.
+/// </summary>
+private void HandleMaintenanceEnded(MaintenanceWindow window)
+{
+    var affectedIps = window.TargetGroup is not null
+        ? _servers.Where(s => s.Group.Equals(window.TargetGroup,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.IP)
+        : window.ServerIp is not null
+            ? [window.ServerIp]
+            : Array.Empty<string>();
+
+    lock (_lock)
+    {
+        foreach (var ip in affectedIps)
+            _lastStatus[ip] = PingStatus.Online;
+    }
+}
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        LoadFromDisk();
         PublishSnapshot();
         _logger.LogInformation("UptimeTrackerService started.");
         _messenger.Send(AppLogEntryMessage.Info(LogSource, 
             "Uptime tracker started — відстеження переходів Online/Offline запущено."));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// ФІКС: ScheduleSave() відкладає запис на 500мс через окремий незалежний
+    /// Task.Run, який хосту НІЧОГО не відомий — дефолтний BackgroundService.StopAsync
+    /// чекає лише _executeTask, а той вже давно завершений (ExecuteAsync повертає
+    /// Task.CompletedTask одразу після старту). Тому будь-яка зміна, що сталась
+    /// протягом останніх 500мс перед закриттям застосунку (App.xaml.cs викликає
+    /// _host.StopAsync), губилась — на диск нічого не встигало піти.
+    /// Тут робимо синхронний, безумовний SaveToDisk() перед виходом — незалежно
+    /// від того, чи є зараз запланований дебаунс-виклик. SaveToDisk() ідемпотентний
+    /// і дешевий (JSON невеликого обсягу), тож зайвий виклик безпечний.
+    /// </summary>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            SaveToDisk();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UptimeTrackerService: помилка фінального збереження при зупинці.");
+        }
+
+        await base.StopAsync(cancellationToken);
     }
 
     // ── IRecipient ────────────────────────────────────────────────────────────
@@ -290,11 +356,31 @@ _lastStatus.TryGetValue(result.IP, out var prev);
 
     // ── Public API для UptimeViewModel ────────────────────────────────────────
 
-    /// <summary>Повертає копію списку інцидентів для початкового завантаження VM.</summary>
+    /// <summary>
+    /// ФІКС: повертає ГЛИБОКІ копії, а не референси на живі об'єкти з _records.
+    /// DowntimeRecord.RecoveredAt/ClosedByMaintenance мутуються з фонового
+    /// потоку в Receive(PingBatchResultMessage) без зв'язку з тим, хто читає
+    /// знімок ззовні _lock. Раніше це було безпечно, бо єдиний споживач читав
+    /// через UI-Dispatcher послідовно; SlaReportService.Generate() викликається
+    /// з окремого Task.Run-потоку (UptimeViewModel.GenerateReport) і рахує
+    /// один і той самий запис (ClippedDuration) кілька разів незалежно —
+    /// без заморожування знімка ці виклики можуть побачити різні значення
+    /// для одного інциденту в межах одного звіту.
+    /// </summary>
     public IReadOnlyList<DowntimeRecord> GetSnapshot()
     {
-        lock (_lock) return _records.ToList();
+        lock (_lock) return _records.Select(CloneRecord).ToList();
     }
+
+    private static DowntimeRecord CloneRecord(DowntimeRecord r) => new()
+    {
+        ServerName          = r.ServerName,
+        ServerIp            = r.ServerIp,
+        ServerGroup         = r.ServerGroup,
+        FellAt              = r.FellAt,
+        RecoveredAt         = r.RecoveredAt,
+        ClosedByMaintenance = r.ClosedByMaintenance
+    };
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
@@ -306,11 +392,25 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     /// </summary>
     public void DeleteRecord(DowntimeRecord record)
     {
+        DowntimeRecord? target;
+
         lock (_lock)
         {
-            if (!record.IsResolved && _lastStatus.ContainsKey(record.ServerIp))
-                _lastStatus[record.ServerIp] = PingStatus.Online;
-            _records.Remove(record);
+            target = _records.FirstOrDefault(r =>
+                r.ServerIp == record.ServerIp && r.FellAt == record.FellAt);
+
+            if (target is null)
+            {
+                _logger.LogWarning(
+                    "DeleteRecord: запис {Server} ({Ip}) / {FellAt} не знайдено — можливо, вже видалено.",
+                    record.ServerName, record.ServerIp, record.FellAt);
+                return;
+            }
+
+            if (!target.IsResolved && _lastStatus.ContainsKey(target.ServerIp))
+                _lastStatus[target.ServerIp] = PingStatus.Online;
+
+            _records.Remove(target);
         }
 
         _ = Task.Run(() => SaveToDisk());
@@ -424,19 +524,36 @@ _lastStatus.TryGetValue(result.IP, out var prev);
             {
                 Directory.CreateDirectory(LogDir);
 
-                var byMonth = snapshot.GroupBy(r => new { r.FellAt.Year, r.FellAt.Month });
+                var byMonth = snapshot
+                    .GroupBy(r => new DateTimeOffset(
+                        r.FellAt.Year, r.FellAt.Month, 1, 0, 0, 0, TimeSpan.Zero))
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
-                foreach (var group in byMonth)
+                foreach (var (monthStamp, records) in byMonth)
                 {
-                    var monthStamp = new DateTimeOffset(
-                        group.Key.Year, group.Key.Month, 1, 0, 0, 0, TimeSpan.Zero);
-
                     var finalPath = FilePath(monthStamp);
                     var tempPath  = finalPath + ".tmp";
-                    var json      = JsonSerializer.Serialize(group.ToList(), JsonOptions);
+                    var json      = JsonSerializer.Serialize(records, JsonOptions);
 
                     File.WriteAllText(tempPath, json);
                     File.Move(tempPath, finalPath, overwrite: true);
+                }
+
+                // ФІКС: якщо для місяця в пам'яті НЕ лишилось жодного запису
+                // (усе видалено через DeleteRecord/ClearAllResolved), цикл вище
+                // його просто не торкається — файл лишався на диску зі старими
+                // "видаленими" записами назавжди, і LoadFromDisk() при наступному
+                // старті повертав їх назад. Тут прибираємо файли місяців, яких
+                // більше немає серед byMonth.
+                var monthsWithData = byMonth.Keys
+                    .Select(m => $"{m:yyyy-MM}")
+                    .ToHashSet();
+
+                foreach (var path in Directory.GetFiles(LogDir, "uptime-*.json"))
+                {
+                    var fileMonth = Path.GetFileNameWithoutExtension(path)["uptime-".Length..];
+                    if (!monthsWithData.Contains(fileMonth))
+                        File.Delete(path);
                 }
             }
             catch (Exception ex)
@@ -449,7 +566,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     private void PublishSnapshot()
     {
         IReadOnlyList<DowntimeRecord> snapshot;
-        lock (_lock) snapshot = _records.ToList();
+        lock (_lock) snapshot = _records.Select(CloneRecord).ToList();
         _messenger.Send(new UptimeUpdatedMessage(snapshot));
     }
 

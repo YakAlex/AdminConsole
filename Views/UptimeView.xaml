@@ -86,7 +86,7 @@
 
                     <!-- Кнопка Clear History — видима тільки якщо є завершені записи -->
                     <Button Command="{Binding ClearAllResolvedCommand}"
-                            Padding="10,6" Cursor="Hand">
+                            Padding="10,6" Cursor="Hand" Margin="10,0,8,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -114,6 +114,32 @@
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="Bd" Property="Background" Value="#44FF9800" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <Button Command="{Binding GenerateReportCommand}"
+                            Padding="10,6" Cursor="Hand" Margin="10,0,8,0"
+                            ToolTip="Сформувати SLA-звіт за поточними фільтрами (дати/група)">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Bd" Background="#220097A7"
+                                        CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="FileChartOutline"
+                                                                 Width="14" Height="14"
+                                                                 Foreground="#FF4DD0E1"
+                                                                 VerticalAlignment="Center" />
+                                        <TextBlock Text="Звіт за період"
+                                                   Foreground="#FF4DD0E1" FontSize="12"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#440097A7" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

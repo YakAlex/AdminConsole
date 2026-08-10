@@ -9,6 +9,12 @@
     ResizeMode="NoResize"
     Background="#FF263238"
     TextElement.Foreground="White"
+    TextElement.FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="Grayscale"
+    TextOptions.TextHintingMode="Fixed"
+    UseLayoutRounding="True"
+    SnapsToDevicePixels="True"
     TextElement.FontFamily="{materialDesign:MaterialDesignFont}">
 
     <Border Padding="28,24">

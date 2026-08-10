@@ -183,7 +183,7 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
     string text = $"🔴 СЕРВЕР ОФЛАЙН\n" +
                   $"{record.ServerName} ({record.ServerIp})\n" +
-                  $"Впав: {record.FellAt:dd.MM HH:mm:ss}";
+                  $"Початок інциденту: {record.FellAt:dd.MM HH:mm:ss}";
 
     var recipients = new List<long>();
     if (_access.PrimaryAdminChatId is long adminId) recipients.Add(adminId);
@@ -888,13 +888,13 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
     private async Task SendMaintenanceListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
         var windows = _maintenance.GetActiveWindows()
-            .OrderBy(w => w.To)
+            .OrderBy(w => w.To ?? DateTimeOffset.MaxValue) // "без обмеження" — в кінець списку
             .ToList();
 
         var lines = windows
             .Select(w => $"🔧 {w.DisplayName}\n" +
                          $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "без причини" : w.Reason)}\n" +
-                         $"   до {w.To.ToLocalTime():dd.MM HH:mm}")
+                         $"   {(w.To is { } to ? $"до {to.ToLocalTime():dd.MM HH:mm}" : "без обмеження часу")}")
             .ToList();
 
         if (lines.Count == 0)

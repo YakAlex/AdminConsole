@@ -14,6 +14,8 @@
         <Grid.RowDefinitions>
             <!-- Toolbar -->
             <RowDefinition Height="56" />
+            <!-- Search -->
+            <RowDefinition Height="Auto" />
             <!-- DataGrid -->
             <RowDefinition Height="*" />
             <!-- Detail strip -->
@@ -164,11 +166,55 @@
         <!-- ═══════════════════════════════════════
              ROW 1 — Log DataGrid
         ═══════════════════════════════════════ -->
+        <Border
+            Grid.Row="1"
+            Background="#1AFFFFFF"
+            CornerRadius="6"
+            Margin="0,0,0,8"
+            Padding="12,2">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon
+                        Kind="Magnify"
+                        Width="18" Height="18"
+                        Foreground="#7780CBC4"
+                        VerticalAlignment="Center"
+                        Margin="0,0,8,0" />
+                    <Grid Width="320">
+                        <TextBox
+                            x:Name="SearchBox"
+                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Foreground="White"
+                            CaretBrush="White"
+                            VerticalAlignment="Center"
+                            FontSize="12" />
+                        <TextBlock
+                            Text="Пошук…"
+                            Foreground="#66FFFFFF"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </StackPanel>
+        </Border>
+
         <DataGrid
             x:Name="LogGrid"
             VirtualizingPanel.IsVirtualizing="True"
             VirtualizingPanel.VirtualizationMode="Recycling"
-            Grid.Row="1"
+            Grid.Row="2"
             ItemsSource="{Binding LogEntriesView.View}"
             SelectedItem="{Binding SelectedEntry}"
             AutoGenerateColumns="False"
@@ -307,7 +353,7 @@
              ROW 2 — Selected entry detail strip
         ═══════════════════════════════════════ -->
         <Border
-            Grid.Row="2"
+            Grid.Row="3"
             Background="#1AFFFFFF"
             CornerRadius="4"
             Padding="12,8"

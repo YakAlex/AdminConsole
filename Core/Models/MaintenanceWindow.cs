@@ -22,11 +22,19 @@ public sealed class MaintenanceWindow
     public required string DisplayName { get; init; }
 
     public required DateTimeOffset From { get; init; }
-    public required DateTimeOffset To   { get; init; }
+
+    /// <summary>
+    /// Момент автоматичного завершення вікна. Null — "без обмеження часу":
+    /// вікно лишається активним, поки адміністратор не вимкне його вручну
+    /// (EndMaintenanceEarly) — фоновий цикл автозавершення MaintenanceService
+    /// такі вікна просто пропускає при перевірці прострочення.
+    /// </summary>
+    public DateTimeOffset? To { get; init; }
+
     public string Reason { get; init; } = string.Empty;
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.Now;
 
-    public bool IsActiveAt(DateTimeOffset now) => now >= From && now <= To;
+    public bool IsActiveAt(DateTimeOffset now) => now >= From && (To is null || now <= To);
 
     /// <summary>Ключ для зберігання/пошуку в MaintenanceService.</summary>
     [JsonIgnore]

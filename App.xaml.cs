@@ -25,7 +25,14 @@ public partial class App : Application
             
             try
             {
-                Console.OutputEncoding = Encoding.UTF8;
+                var stdout = Console.OpenStandardOutput();
+                var utf8Writer = new StreamWriter(
+                    stdout,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+                {
+                    AutoFlush = true
+                };
+                Console.SetOut(utf8Writer);
             }
             catch
             {
@@ -122,7 +129,7 @@ public partial class App : Application
         services.AddSingleton<PingMonitorService>();
         services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService>());
         services.AddHostedService<ResourceMonitorService>();
-
+        
         // EventLogService реєструємо як Singleton (а не лише AddHostedService),
         // щоб ResourceMonitorViewModel міг отримати той самий екземпляр напряму
         // через конструктор (потрібно для читання LastSnapshot).
@@ -130,7 +137,7 @@ public partial class App : Application
         // тип T лишається нерезолвним без цього явного AddSingleton.
         services.AddSingleton<EventLogService>();
         services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
-
+        services.AddSingleton<SlaReportService>();
         services.AddHostedService<FileLoggerService>();
         services.AddSingleton<RdpMonitorService>();
         services.AddHostedService(sp => sp.GetRequiredService<RdpMonitorService>());
@@ -244,7 +251,18 @@ public partial class App : Application
         {
             System.Diagnostics.Debug.WriteLine($"[OnExit] SettingsViewModel dispose error: {ex.Message}");
         }
-
+        
+        try
+        {
+            _host.Services
+                .GetRequiredService<MaintenanceService>()
+                .ClearAllOnShutdown();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnExit] MaintenanceService clear error: {ex.Message}");
+        }
+        
         try
         {
             _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();

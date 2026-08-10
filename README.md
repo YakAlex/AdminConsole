@@ -31,14 +31,14 @@
 | Вкладка | Опис |
 |---------|------|
 | **Ping Dashboard** | Безперервний ICMP-моніторинг усіх серверів з групуванням, індикацією затримки та кольоровим статусом. Логує лише реальні зміни стану. Паралелізм обмежений `SemaphoreSlim`. Результати всього циклу публікуються одним batch-повідомленням. Пошук рядка сервера — через `Dictionary<string, PingResultViewModel>` (O(1)) замість лінійного пошуку. Кожен рядок має кнопку **Maintenance Mode** (🔧). Стовпець "SINCE" (час з моменту зміни статусу) прибрано з UI та з бекенду — визнано зайвим. |
-| **Uptime & Incidents** | Автоматичне фіксування інцидентів недоступності: час падіння, відновлення, тривалість простою. Повна фільтрація по сервері, групі, даті та статусу. Зберігається на диск у `logs/uptime-YYYY-MM.json` з атомарним записом. Короткі мережеві "миготіння" (нижче порогу `MinIncidentDurationSeconds`) не фіксуються взагалі — ані на диску, ані в UI. Інциденти, перервані через Maintenance Mode, позначаються окремо (`ClosedByMaintenance`). |
+| **Uptime & Incidents** | Автоматичне фіксування інцидентів недоступності: час падіння, відновлення, тривалість простою. Повна фільтрація по сервері, групі, даті та статусу. Зберігається на диск у `logs/uptime-YYYY-MM.json` з атомарним записом. Короткі мережеві "миготіння" (нижче порогу `MinIncidentDurationSeconds`) не фіксуються взагалі — ані на диску, ані в UI. Інциденти, перервані через Maintenance Mode, позначаються окремо (`ClosedByMaintenance`). Кнопкою на панелі інструментів генерується **SLA-звіт** (`SlaReportService`) за обраний період — uptime%, downtime, кількість інцидентів, MTTR по кожному серверу — у вигляді самодостатнього HTML-файлу, що відкривається в браузері. |
 | **Resource Monitor** | CPU та RAM у реальному часі — для `localhost` через `PerformanceCounter` і `GlobalMemoryStatusEx`, для віддалених машин через WMI. Відображає останні помилки Event Log обраного вузла. Помилки опитування конкретного вузла агрегуються у `HasError` (`ServerPollStatusViewModel`) для наочного індикатора в UI. |
 | **RDP Sessions** | Опитування Terminal Servers через `quser /server:HOSTNAME`. Показує активні та відключені сесії, ім'я користувача, час входу та idle. Diff-оновлення зі збереженням виділеного рядка (`SelectedSession`) між циклами опитування. Перемикається окремим тумблером у Settings (`RdpMonitoringEnabled`) — при вимкненні опитування зупиняється, credentials не запитуються, а UI одразу показує плейсхолдер-заглушку (іконка BellOff) замість застарілих даних. Перехід сесії `Active → Disconnected` (звичайне від'єднання користувача) логується як **Info**, а не Warning — це очікувана, а не проблемна подія. |
 | **Zabbix Alerts** | Інтеграція із Zabbix API (JSON-RPC 2.0). Активні проблеми severity High та Disaster. Підтримка API-токена та сесійного логіна. Помилки авторизації (включно з точним кодом і причиною від Zabbix, наприклад `API token expired`) прокидаються і в консольний лог, і в UI-вкладку Logs. Перемикається окремим тумблером у Settings (`ZabbixMonitoringEnabled`) — та сама миттєва заглушка в UI при вимкненні. |
-| **Logs** | Агрегований потік подій усіх сервісів у реальному часі з рівнями severity. Записується у rolling-файл. Консольний вивід коректно відображає кирилицю (UTF-8 output encoding). |
+| **Logs** | Агрегований потік подій усіх сервісів у реальному часі з рівнями severity. Записується у rolling-файл. При старті програми автоматично підвантажується хвіст найновішого лог-файлу (до 1000 рядків) — вкладка більше не порожня одразу після перезапуску. Пошук у реальному часі над таблицею — фільтр по Source/Message. Консольний вивід коректно відображає кирилицю (UTF-8 через `Console.SetOut`). |
 | **Remote Management** | Перезавантаження та вимкнення через WMI (`Win32Shutdown` з Force-флагами), RDP (`mstsc.exe`), безперервний ping у новому вікні, SSH через PuTTY або вбудований Windows SSH. |
-| **Maintenance Windows** | Планове вікно обслуговування для сервера (з можливістю розширення на групу). На час вікна: Ping-моніторинг та Uptime-трекер не генерують тривог/інцидентів для цього сервера, а UI показує окремий 🔧-бейдж замість тривожного статусу. Реальний ping/статус при цьому не підмінюється — сервер, що впав, і далі показується як Offline, просто без шуму в логах і без SLA-наслідків. |
-| **Telegram Bot** | Віддалене керування та сповіщення через Telegram: перегляд статусу серверів, RDP-сесій, Zabbix-проблем, ping "в один клік", approve/deny запитів на доступ через inline-кнопки, розсилка алертів про падіння/відновлення серверів. Rate-limiting та cooldown проти зловживання. |
+| **Maintenance Windows** | Планове вікно обслуговування для сервера (з можливістю розширення на групу), з вибором довільної тривалості (10/30/60 хвилин або без обмеження часу) і опціональним вільним коментарем причини. На час вікна: Ping-моніторинг та Uptime-трекер не генерують тривог/інцидентів для цього сервера, а UI показує окремий 🔧-бейдж замість тривожного статусу. Реальний ping/статус при цьому не підмінюється — сервер, що впав, і далі показується як Offline, просто без шуму в логах і без SLA-наслідків. Вікна не переживають перезапуск застосунку. |
+| **Telegram Bot** | Віддалене керування та сповіщення через Telegram: перегляд статусу серверів, RDP-сесій, Zabbix-проблем, активних Maintenance-вікон, ping "в один клік", approve/deny запитів на доступ через inline-кнопки, розсилка алертів про падіння/відновлення серверів. Rate-limiting та cooldown проти зловживання. |
 | **Tray Icon** | Згортання застосунку у системний трей (`CloseToTray` в Settings) замість повного завершення процесу. |
 
 ---
@@ -50,14 +50,15 @@
 │                        WPF UI (Views)                       │
 │  MainWindow (+ TrayIcon) · PingDashboard · UptimeView        │
 │  RdpSessions · ResourceMonitor · ZabbixAlerts · Logs         │
-│  CredentialDialog · ZabbixTokenDialog                       │
+│  CredentialDialog · ZabbixTokenDialog · MaintenanceDialog    │
 └───────────────────────────┬─────────────────────────────────┘
                             │ DataBinding (MVVM)
 ┌───────────────────────────▼─────────────────────────────────┐
 │                    ViewModels (MVVM)                        │
 │  MainViewModel · SettingsViewModel · PingDashboardViewModel │
-│  UptimeViewModel (IDisposable) · RdpSessionViewModel        │
-│  ZabbixViewModel · ResourceMonitorViewModel (IDisposable)   │
+│  UptimeViewModel (IDisposable, GenerateReportCommand)       │
+│  RdpSessionViewModel · ZabbixViewModel                      │
+│  ResourceMonitorViewModel (IDisposable)                     │
 │  ServerPollStatusViewModel (HasError) · LogsViewModel       │
 │  PingResultViewModel (IRecipient<Maintenance>)              │
 └───────────────────────────┬─────────────────────────────────┘
@@ -77,23 +78,26 @@
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
 │          On-demand сервіси (Singleton, не Hosted)           │
-│  RemoteResourceService     — WMI CPU/RAM remote              │
-│  RemoteEventLogService     — WMI Event Log remote            │
-│  RemoteManagementService   — WMI shutdown/restart, SSH, RDP  │
+│  RemoteResourceService     — WMI CPU/RAM remote               │
+│  RemoteEventLogService     — WMI Event Log remote             │
+│  RemoteManagementService   — WMI shutdown/restart, SSH, RDP   │
+│  SlaReportService          — розрахунок SLA-звіту з in-memory │
+│                               даних UptimeTrackerService      │
 │  EventLogReader (static)   — спільна логіка + IsReachableAsync│
-│  TelegramAccessControlService — allow-list, rate-limit, TTL │
+│  TelegramAccessControlService — allow-list, rate-limit, TTL   │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
 │                    Infrastructure / Core                    │
 │  CredentialStore             — Win32 Credential Manager     │
 │  CredentialPromptCoordinator — SemaphoreSlim(1,1)           │
-│  RdpCredentialValidator      — LogonUser-перевірка          │
+│  RdpCredentialValidator      — LogonUser-перевірка           │
 │  ZabbixApiClient             — HttpClient / JSON-RPC 2.0    │
 │  OverlayDialogService        — модальні overlay без сторонніх│
 │  UserSettingsService         — %LocalAppData% JSON (atomic) │
 │  TelegramCallbackRegistry    — короткі id для callback_data │
 │  TelegramTextChunker         — пагінація довгих повідомлень │
+│  SlaReportHtmlRenderer       — рендер SLA-звіту в HTML       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,9 +111,15 @@
 
 **CAS-патерн замість lock** — у `PingMonitorService` відсутній будь-який `lock` чи `Mutex` для статусів. Потокобезпека досягається через `ConcurrentDictionary<string, PingStatus>.TryUpdate` (Compare-And-Swap): тільки перший потік що виграє гонку оновлює статус і логує перехід. Другий потік отримує `false` і мовчить.
 
-**UptimeTrackerService — двоетапна фіксація інцидентів (Pending → Confirmed)** — падіння сервера одразу **не** створює запис в `_records`. Спочатку інцидент потрапляє у внутрішній `_pendingOffline` (лише пам'ять, без диска й без UI). Тільки якщо сервер лишається Offline довше за `MinIncidentDurationSeconds`, запис "визріває" в офіційний `DowntimeRecord`, зберігається на диск і показується в UI. Це усуває зайве I/O та UI-мерехтіння при короткочасних мережевих "миготіннях", які раніше спершу створювались, а потім видалялись — подвоюючи дискові операції. Окремо: реалізована реконсиляція через `HashSet` `reconciledIps` — при перезапуску застосунку сервер, що відновився поки програма не працювала, коректно закриває відкритий з минулої сесії `DowntimeRecord` замість того, щоб лишити його "висіти" відкритим назавжди. Дані `DowntimeRecord` при збереженні групуються по місяцю фактичного падіння (`FellAt`), а при завантаженні читаються з усіх `uptime-*.json` файлів одразу — інциденти, що перетинають межу місяця, більше не губляться.
+**UptimeTrackerService — двоетапна фіксація інцидентів (Pending → Confirmed)** — падіння сервера одразу **не** створює запис в `_records`. Спочатку інцидент потрапляє у внутрішній `_pendingOffline` (лише пам'ять, без диска й без UI). Тільки якщо сервер лишається Offline довше за `MinIncidentDurationSeconds`, запис "визріває" в офіційний `DowntimeRecord`, зберігається на диск і показується в UI. Це усуває зайве I/O та UI-мерехтіння при короткочасних мережевих "миготіннях", які раніше спершу створювались, а потім видалялись — подвоюючи дискові операції.
 
-**Гібридна модель Pull + Push для Maintenance** — `MaintenanceService` є одночасно `Singleton` (для синхронного `Pull`-запиту `IsUnderMaintenance(ip, group)` з фонових поллерів на кожному циклі) і `IHostedService` (для фонового автозавершення прострочених вікон). Зміни стану (`Started`/`Ended`) додатково `Push`-яться через `MaintenanceChangedMessage`, щоб `UptimeTrackerService` міг закрити вже відкриті інциденти при старті вікна, `PingMonitorService` — перегенерувати алерт, якщо сервер не піднявся вчасно після завершення вікна, а `PingResultViewModel` — миттєво оновити бейдж в UI без затримки на наступний цикл опитування.
+`LoadFromDisk()` виконується **синхронно в конструкторі, до підписки на месенджер** — не в `ExecuteAsync`, як раніше. Оскільки `UptimeTrackerService` зареєстрований далеко не першим серед hosted-сервісів у `App.xaml.cs`, а `PingMonitorService` (зареєстрований першим) міг надіслати перший реальний `PingBatchResultMessage` ще до того, як черга hosted-сервісів дійде до `UptimeTrackerService.StartAsync()`, одноразова спроба реконсиляції відкритих з минулої сесії інцидентів (`HashSet reconciledIps`) могла "спалитись" проти ще порожнього `_records` — і сервер, що вже давно онлайн, лишався б висіти відкритим інцидентом назавжди. Зараз диск гарантовано прочитаний до того, як сервіс фізично може отримати перше повідомлення. Симетрично, `StopAsync` синхронно викликає `SaveToDisk()` перед виходом, незалежно від того, чи заплановане зараз дебаунс-збереження — раніше відкладений на 500мс запис виконувався в окремому, не пов'язаному з lifecycle хоста `Task.Run`, і міг просто не встигнути до закриття процесу.
+
+Дані `DowntimeRecord` при збереженні групуються по місяцю фактичного падіння (`FellAt`), а при завантаженні читаються з усіх `uptime-*.json` файлів одразу — інциденти, що перетинають межу місяця, більше не губляться. Файли місяців, для яких у пам'яті не лишилось жодного запису (видалено вручну), також видаляються з диска — інакше видалені записи "воскресали" би при наступному запуску. `GetSnapshot()`/`PublishSnapshot()` повертають глибокі копії записів (`CloneRecord`), а не оригінальні мутабельні об'єкти — потрібно для безпечного паралельного читання знімка з `SlaReportService.Generate()` (окремий потік `Task.Run`), поки фоновий цикл потенційно продовжує змінювати ті самі поля.
+
+**SLA-звітність (`SlaReportService`)** — розраховується повністю на даних, що вже є в пам'яті (`UptimeTrackerService.GetSnapshot()` + конфігурований список серверів), без окремої персистентності. Уніфікована формула тривалості одного інциденту — `EffectiveEnd = RecoveredAt ?? Min(Now, To)`, `Duration = перетин [FellAt, EffectiveEnd] з [From, To]` — однаково коректно обробляє закриті інциденти, ще відкриті на живих серверах, і "покинуті" відкриті записи на серверах, вилучених з конфігурації, без розгалужень по типу. Це саме обмеження (`Min(Now, To)`) застосовується і до знаменника відсотка uptime, а не лише до окремих інцидентів — інакше запит зі "звітним періодом до сьогодні" (типовий фільтр) занижував би реальний downtime, зараховуючи ще не прожитий час доби як гарантовані 100%. Інциденти, закриті через Maintenance, виключені з Uptime%/MTTR і виводяться окремим додатком; MTTR рахується лише по реальних відновленнях (`RecoveredAt` у maintenance-закритих записах — це момент вмикання обслуговування, а не факт ремонту).
+
+**Гібридна модель Pull + Push для Maintenance** — `MaintenanceService` є одночасно `Singleton` (для синхронного `Pull`-запиту `IsUnderMaintenance(ip, group)` з фонових поллерів на кожному циклі) і `IHostedService` (для фонового автозавершення прострочених вікон). Зміни стану (`Started`/`Ended`) додатково `Push`-яться через `MaintenanceChangedMessage`, щоб `UptimeTrackerService` міг закрити вже відкриті інциденти при старті вікна, `PingMonitorService` — перегенерувати алерт, якщо сервер не піднявся вчасно після завершення вікна, а `PingResultViewModel` — миттєво оновити бейдж в UI без затримки на наступний цикл опитування. Тривалість вікна — довільна (10/30/60 хвилин або без обмеження часу, `MaintenanceWindow.To` — nullable), з опціональним вільним коментарем причини; вікна знімаються при реальному виході із застосунку (`ClearAllOnShutdown`) і не переживають перезапуск.
 
 **Атомарний запис на диск (write-then-replace)** — `UptimeTrackerService`, `MaintenanceService` і `UserSettingsService` серіалізують у `*.tmp`, потім `File.Move(overwrite: true)` — атомарна операція NTFS. Якщо процес впаде під час запису, основний файл лишається цілим. Файлові I/O-операції додатково захищені окремим `lock`, який серіалізує доступ між UI-потоком (ручні дії користувача) і фоновими циклами автозавершення/збереження.
 
@@ -134,7 +144,7 @@
 ```
 AdminConsole/
 ├── App.xaml / App.xaml.cs              # Точка входу, DI, Host lifecycle, DispatcherUnhandledException,
-│                                        # UTF-8 Console.OutputEncoding, звільнення TrayIcon при виході
+│                                        # UTF-8 консоль через Console.SetOut, звільнення TrayIcon при виході
 ├── appsettings.json                    # Сервери, інтервали, Zabbix URL, Telegram
 ├── appsettings_example.json            # Шаблон конфігурації без реальних даних інфраструктури
 │
@@ -147,7 +157,9 @@ AdminConsole/
 │   │   ├── PingResult.cs               # record: Name, IP, Group, Status, LatencyMs, LastChecked
 │   │   ├── DowntimeRecord.cs           # sealed class: FellAt, RecoveredAt, Duration,
 │   │   │                               # DurationDisplay, ClosedByMaintenance
-│   │   ├── MaintenanceWindow.cs        # ServerIp / TargetGroup, From, To, Reason, Key ([JsonIgnore])
+│   │   ├── MaintenanceWindow.cs        # ServerIp / TargetGroup, From, To (nullable — null = без
+│   │   │                               # обмеження часу), Reason, Key ([JsonIgnore])
+│   │   ├── MaintenanceDurationChoice.cs # Duration (nullable) + Comment — результат MaintenanceDialog
 │   │   ├── ServerEntry.cs
 │   │   ├── ServerDashboardEntry.cs
 │   │   ├── ResourceSnapshot.cs
@@ -155,7 +167,15 @@ AdminConsole/
 │   │   ├── ZabbixProblem.cs
 │   │   ├── AppLogEntry.cs              # sealed record, Formatted кешується, Sanitize() (anti log-injection)
 │   │   ├── EventLogEntry.cs
-│   │   └── TelegramPendingRequest.cs   # ChatId, Username, RequestedAt — запит на доступ до бота
+│   │   ├── TelegramPendingRequest.cs   # ChatId, Username, RequestedAt — запит на доступ до бота
+│   │   └── Reports/                    # DTO для SLA-звіту (SlaReportService)
+│   │       ├── SlaReportRequest.cs     # From, To, GroupFilter, ServerFilter
+│   │       ├── SlaReport.cs            # GeneratedAt, From, To, OverallUptimePercent, Servers,
+│   │       │                           # MaintenanceAppendix
+│   │       ├── ServerSlaEntry.cs       # ServerName/Group, UptimePercent, Downtime, IncidentCount,
+│   │       │                           # Mttr, Incidents
+│   │       └── IncidentDetail.cs       # FellAt, RecoveredAt, EffectiveDuration, IsOngoing,
+│   │                                   # ClosedByMaintenance
 │   └── Messages/
 │       ├── PingBatchResultMessage.cs
 │       ├── UptimeMessages.cs           # UptimeUpdatedMessage
@@ -177,9 +197,16 @@ AdminConsole/
 │   │                                    # perServerLocks, PingAllNowAsync (on-demand /ping),
 │   │                                    # TryConsumePingCooldown (20с throttle), GetSnapshot()
 │   ├── UptimeTrackerService.cs         # Pending→Confirmed інциденти, JSON persistence, atomic write,
-│   │                                    # Maintenance Pull + Started-Push (закриття інцидентів),
-│   │                                    # реконсиляція (reconciledIps) + cross-month persistence
-│   ├── MaintenanceService.cs           # Вікна обслуговування, ConcurrentDictionary, atomic write
+│   │                                    # Maintenance Pull + Started/Ended-Push, реконсиляція
+│   │                                    # (reconciledIps, LoadFromDisk у конструкторі — до RegisterAll),
+│   │                                    # cross-month persistence з видаленням спорожнілих файлів,
+│   │                                    # StopAsync-flush, GetSnapshot/PublishSnapshot повертають
+│   │                                    # глибокі копії (CloneRecord), DeleteRecord за ключем
+│   ├── SlaReportService.cs             # Singleton, не Hosted — розрахунок SLA-звіту з in-memory
+│   │                                    # знімка UptimeTrackerService, викликається з Task.Run
+│   ├── SlaReportHtmlRenderer.cs        # Самодостатній HTML (inline CSS), стиль темної палітри застосунку
+│   ├── MaintenanceService.cs           # Вікна обслуговування, ConcurrentDictionary, atomic write,
+│   │                                    # ClearAllOnShutdown (вікна не переживають перезапуск)
 │   ├── RdpMonitorService.cs            # quser, Regex з matchTimeout, credentials НЕ видаляються,
 │   │                                    # Pull-перевірка toggle перед credential-логікою,
 │   │                                    # Active→Disconnected логується як Info, GetSnapshot()
@@ -215,9 +242,10 @@ AdminConsole/
 │   ├── SettingsViewModel.cs            # RDP/Zabbix/Telegram credentials, monitoring toggles,
 │   │                                    # Telegram allow-list з username, IDisposable
 │   ├── PingDashboardViewModel.cs       # Dictionary-lookup замість FirstOrDefault
-│   ├── PingResultViewModel.cs          # ToggleMaintenanceCommand, IsUnderMaintenance-бейдж,
-│   │                                    # IRecipient<MaintenanceChangedMessage>
-│   ├── UptimeViewModel.cs              # CollectionViewSource, фільтри, Timer, IDisposable
+│   ├── PingResultViewModel.cs          # ToggleMaintenanceCommand (діалог тривалості + коментаря),
+│   │                                    # IsUnderMaintenance-бейдж, IRecipient<MaintenanceChangedMessage>
+│   ├── UptimeViewModel.cs              # CollectionViewSource, фільтри, Timer, IDisposable,
+│   │                                    # GenerateReportCommand (SlaReportService → HTML-звіт)
 │   ├── RdpSessionViewModel.cs          # Diff-оновлення зі збереженням SelectedSession, HasError,
 │   │                                    # IsMonitoringDisabled (плейсхолдер BellOff)
 │   ├── RdpSessionRowViewModel.cs       # Рядок сесії для RdpSessionView
@@ -226,16 +254,22 @@ AdminConsole/
 │   ├── ResourceMonitorViewModel.cs     # Interlocked.Exchange для CTS, IDisposable
 │   ├── ServerPollStatusViewModel.cs    # HasError — агрегований стан помилки опитування вузла
 │   ├── LogEntryViewModel.cs            # Рядок логу з кольоровим тегом severity
-│   └── LogsViewModel.cs                # CleanupThreshold = MaxEntries + 50
+│   └── LogsViewModel.cs                # MaxEntries = 1000, SearchText + CollectionViewSource.Filter
+│                                        # (Source/Message), LoadHistoryAsync() — хвіст найновішого
+│                                        # app-*.log при старті (лінивий File.ReadLines().TakeLast())
 │
 ├── Views/
 │   ├── MainWindow.xaml(.cs)            # Sidebar, Settings overlay, Dialog overlay, TrayIcon
-│   ├── UptimeView.xaml(.cs)            # DataGrid, фільтр-бар, Delete кнопка per-row
+│   ├── UptimeView.xaml(.cs)            # DataGrid, фільтр-бар, Delete кнопка per-row, кнопка генерації
+│   │                                    # SLA-звіту
 │   ├── PingDashboardView.xaml(.cs)     # Кнопка Maintenance + бейдж 🔧 у колонці STATUS
 │   ├── RdpSessionView.xaml(.cs)
 │   ├── ZabbixView.xaml(.cs)
 │   ├── ResourceMonitorView.xaml(.cs)
-│   ├── LogsView.xaml(.cs)
+│   ├── LogsView.xaml(.cs)              # Пошук по Source/Message над DataGrid, автопідвантаження
+│   │                                    # історії останнього app-*.log при старті
+│   ├── MaintenanceDialog.xaml(.cs)     # Вибір тривалості (10/30/60хв/без обмеження) + опціональний
+│   │                                    # коментар причини
 │   ├── CredentialDialog.xaml(.cs)      # Логін/пароль для RDP
 │   └── ZabbixTokenDialog.xaml(.cs)     # Введення API-токена Zabbix
 │
@@ -342,25 +376,26 @@ AdminConsole/
 - **Опитування не зупиняється.** Ping/RDP/WMI продовжують працювати як завжди — сервер, що фізично впав, і далі показує реальний статус `Offline`. Зупинка опитування створила б небезпечну "сліпу зону": якщо сервер підніметься раніше запланованого, ви маєте це побачити негайно.
 - **Фільтрується лише шум.** Замовчуються Warning/Error-логи (`PingMonitorService`) і не створюються нові `DowntimeRecord` (`UptimeTrackerService`), поки вікно активне.
 - **UI показує окремий бейдж 🔧**, а не підміняє статус — адміністратор завжди бачить і реальний стан, і факт того, що це очікувано.
+- **Вікна не переживають перезапуск.** При реальному виході із застосунку (`App.OnExit`) `MaintenanceService.ClearAllOnShutdown()` знімає всі активні вікна, включно з "без обмеження часу" — після перезапуску моніторинг завжди стартує "начисто".
 
 ### Життєвий цикл
 
 | Подія | Що відбувається |
 |---|---|
-| Старт вікна (кнопка 🔧 на рядку сервера) | `MaintenanceService.StartMaintenance` зберігає вікно, шле `MaintenanceChangedMessage(Started)` |
+| Старт вікна (кнопка 🔧 на рядку сервера) | `MaintenanceDialog` (`IDialogService.ShowMaintenanceDurationAsync`) — вибір тривалості (10/30/60 хвилин або без обмеження часу) і опціональний вільний коментар причини; порожній коментар — дефолт `"Планове обслуговування"`. `MaintenanceService.StartMaintenance` зберігає вікно (`To = null` при "без обмеження"), шле `MaintenanceChangedMessage(Started)` |
 | Сервер падає **до** старту вікна, потім вмикається Maintenance | `UptimeTrackerService` примусово закриває вже відкритий інцидент (`RecoveredAt = Now`, `ClosedByMaintenance = true`) — інакше він продовжив би псувати SLA-статистику весь час дії вікна |
 | Сервер падає **під час** активного вікна | Ping/Uptime мовчать (Pull-перевірка `IsUnderMaintenance`); при відновленні короткі падіння додатково фільтруються порогом `MinIncidentDurationSeconds` |
-| Вікно закінчується (автоматично, `MaintenanceService` перевіряє кожні 30с) | `MaintenanceChangedMessage(Ended)`; якщо сервер все ще `Offline` — `PingMonitorService` скидає `previousStatus` на `Unknown`, щоб наступний цикл згенерував свіжий алерт (сервер не "завис" непоміченим після закінчення вікна) |
+| Вікно закінчується (автоматично, `MaintenanceService` перевіряє кожні 30с) | `MaintenanceChangedMessage(Ended)`. Якщо сервер все ще `Offline`: `PingMonitorService` скидає власний `previousStatus` на `Unknown` (щоб наступний цикл згенерував свіжий Warning/Error-алерт), а `UptimeTrackerService` скидає власний `_lastStatus` на **`Online`**, а не `Unknown` — у нього перехід з `Unknown` навмисно не створює запис (фільтр "стартового шуму"), тож саме перехід `Online → Offline` коректно відкриває новий `DowntimeRecord` для простою вже поза вікном обслуговування |
 | Дострокове завершення вручну | Повторний клік на 🔧 — `EndMaintenanceEarly` резолвить вікно по фактичному ключу (`IP` або `group:X`), а не завжди по IP |
+| Закриття застосунку | `MaintenanceService.ClearAllOnShutdown()` (з `App.OnExit`) знімає всі активні вікна, включно з "без обмеження часу" |
 
 ### Ключові технічні деталі
 
 - **Один ключ — одне активне вікно.** Ключ — `ServerIp`, або `"group:{TargetGroup}"` для групових вікон. Логічне **АБО**: сервер вважається під maintenance, якщо активне індивідуальне АБО групове вікно.
 - **`ConcurrentDictionary<string, MaintenanceWindow>`** — сховище читається одночасно з кількох фонових потоків (Pull з поллерів) і пишеться з UI-потоку та фонового циклу автозавершення.
-- **Персистентність** — `logs/maintenance.json`, атомарний запис (temp+rename) під окремим `lock`, щоб UI-потік і фоновий цикл автозавершення не намагались одночасно писати той самий файл. `Key` — обчислювана властивість, позначена `[JsonIgnore]`, щоб не потрапляла у сам JSON-файл.
+- **Персистентність** — `logs/maintenance.json`, атомарний запис (temp+rename) під окремим `lock`, щоб UI-потік і фоновий цикл автозавершення не намагались одночасно писати той самий файл. `Key` — обчислювана властивість, позначена `[JsonIgnore]`, щоб не потрапляла у сам JSON-файл. `To` — nullable (`null` = без обмеження часу).
 - **MVP-обмеження (свідомо, за межами поточної реалізації):**
   - RDP/Zabbix-поллери поки не інтегровані з Maintenance — під час вікна вони продовжують логувати власні помилки з'єднання як реальні.
-  - Тривалість вікна поки фіксована (2 години) через простий діалог підтвердження — повноцінний вибір довільного часу і причини планується окремим `MaintenanceDialog`.
   - Кнопка запуску **групового** вікна в UI ще не реалізована (модель і `MaintenanceService` це вже підтримують).
 
 ---
@@ -371,11 +406,11 @@ AdminConsole/
 
 Паролі **не зберігаються у файлах або реєстрі**. Використовується Win32 Credential Manager (`advapi32.dll`):
 
-| Target | Вміст | Persist |
-|--------|-------|---------|
-| `AdminConsole/RDP` | Логін + пароль для `quser` | `CRED_PERSIST_ENTERPRISE` |
-| `AdminConsole/Zabbix` | API-токен або пароль | `CRED_PERSIST_ENTERPRISE` |
-| `AdminConsole/Telegram` | Bot Token | `CRED_PERSIST_ENTERPRISE` |
+| Target | Вміст                                              | Persist |
+|--------|----------------------------------------------------|---------|
+| `AdminConsole/RDP` | Логін + пароль для `quser`                         | `CRED_PERSIST_ENTERPRISE` |
+| `AdminConsole/Zabbix` | API-токен                                          | `CRED_PERSIST_ENTERPRISE` |
+| `AdminConsole/Telegram` | Bot Token                                          | `CRED_PERSIST_ENTERPRISE` |
 | `<hostname>` | Тимчасові credentials для конкретного quser-запиту | `CRED_PERSIST_SESSION` |
 
 Тимчасові session-credentials видаляються у `finally` після кожного запиту — незалежно від успіху.
@@ -406,7 +441,7 @@ AdminConsole/
 
 ### Захист від log injection
 
-`AppLogEntry.Sanitize()` прибирає CRLF та керівні символи, обмежує довжину повідомлення 2000 символами — застосовується до будь-якого тексту, що потрапляє в лог ззовні (включно з повідомленнями від Telegram-користувачів), запобігаючи підробці рядків логу через спеціально сформований вхідний текст.
+`AppLogEntry.Sanitize()` прибирає CRLF та керівні символи, обмежує довжину повідомлення 2000 символами — застосовується до будь-якого тексту, що потрапляє в лог ззовні (включно з повідомленнями від Telegram-користувачів і коментарем причини Maintenance), запобігаючи підробці рядків логу через спеціально сформований вхідний текст.
 
 ---
 
@@ -421,6 +456,7 @@ AdminConsole/
 | Перегляд статусу серверів | Список Online/Offline з групуванням, пагінація довгих списків                                                                                                                                                                                                                                  |
 | RDP-сесії | Перегляд активних сесій по кожному Terminal Server; якщо налаштований лише один Terminal Server — бот одразу показує сесії, пропускаючи зайвий крок вибору сервера (`IsSingleTerminalServer`)                                                                                                  |
 | Zabbix-проблеми | Список активних алертів High/Disaster                                                                                                                                                                                                                                                          |
+| Список Maintenance-вікон (🔧 Обслуговування) | Активні вікна обслуговування — сервер/група, час дії (або "без обмеження часу" для `To = null`) і коментар причини (`Reason`) |
 | `🏓 Пінг` / `/ping` | Реальний паралельний ICMP-опитування всіх серверів на вимогу (`PingAllNowAsync`), без обходу основного throttle; повідомлення-плейсхолдер "🏓 Пінгую…" редагується власним текстом одразу після завершення. Обмежено окремим, суворішим глобальним cooldown (20с) через ресурсоємність команди |
 | Broadcast-алерти | Автоматична розсилка при падінні сервера всім підтвердженим користувачам                                                                                                                                                                                                                       |
 | Approve/Deny запитів | Підтвердження нового користувача можливе **лише через Telegram inline-кнопку** Primary Admin (`approve:<id>`) — навмисне архітектурне рішення, щоб верифікація завжди відбувалась безпосередньо в месенджері. З UI Settings можна лише **відхилити** (❌) запит як запасний канал              |
@@ -501,22 +537,49 @@ try {
 | `Unknown/Checking → Offline` | Не створює запис (стартовий шум) |
 | `Unknown/Checking → Online` (перший real-status у сесії, `reconciledIps`) | Реконсиляція: якщо на диску лишився відкритий `DowntimeRecord` з минулої сесії — коректно закриває його, а не лишає висіти назавжди |
 | `MaintenanceChangedMessage(Started)` | Примусово закриває відкриті інциденти для зачепленого сервера/групи (`ClosedByMaintenance = true`), прибирає відповідні pending-записи |
+| `MaintenanceChangedMessage(Ended)` | Скидає власний `_lastStatus` для зачепленого сервера/групи на `Online` (не `Unknown` — див. розділ [Maintenance Windows](#maintenance-windows-планове-обслуговування)), щоб наступний реальний `Offline`-пінг коректно відкрив новий інцидент |
 
 **Атомарний запис на диск, з групуванням по місяцю фактичного падіння:**
 ```
 1. Групуємо DowntimeRecord за місяцем FellAt (не поточним місяцем!)
-2. Для кожного місяця: серіалізуємо JSON → uptime-YYYY-MM.json.tmp
+2. Для кожного місяця, що ще має записи: серіалізуємо JSON → uptime-YYYY-MM.json.tmp
 3. File.Move(.tmp → .json, overwrite: true)   ← атомарна операція NTFS
+4. Файли місяців, для яких у пам'яті НЕ лишилось жодного запису (видалено через
+   DeleteRecord/ClearAllResolved), — видаляються з диска
 ```
 
 При завантаженні читаються й агрегуються **всі** файли `uptime-*.json` у директорії логів одразу — інциденти, що почались в одному місяці, а тривають в іншому, більше не губляться при перезапуску застосунку. Якщо процес впаде під час запису — `.tmp` пошкоджений, але основний `.json` цілий.
 
-**Debounce збереження:** `ScheduleSave()` відкладає `SaveToDisk()` на 500мс і об'єднує кілька змін підряд (наприклад, кілька серверів впали в одному batch) в один запис на диск. Прапорець `_saveScheduled` скидається **до** старту самого запису — так будь-яка подія, що прийде під час `SaveToDisk`, гарантовано запланує наступний цикл, а не загубиться.
+**Гарантований flush при зупинці.** `StopAsync` синхронно викликає `SaveToDisk()` перед виходом, незалежно від того, чи заплановано зараз дебаунс-збереження. Раніше відкладений на 500мс запис (`ScheduleSave()`) виконувався у власному, не пов'язаному з lifecycle хоста `Task.Run` — дефолтний `BackgroundService.StopAsync` чекав лише вже давно завершений `_executeTask` і про цей `Task.Run` нічого не знав. Будь-яка зміна (закриття інциденту, видалення запису), що відбувалась протягом останніх 500мс перед закриттям вікна, губилась і "воскресала" при наступному запуску.
+
+**`LoadFromDisk()` — у конструкторі, до `RegisterAll`.** Раніше виклик був у `ExecuteAsync`, який хост запускає лише під час `StartAsync()` цього конкретного сервісу — а `UptimeTrackerService` зареєстрований одним з останніх серед hosted-сервісів у `App.xaml.cs`. `PingMonitorService` (зареєстрований першим) міг встигнути надіслати перший реальний `PingBatchResultMessage` ще до того, як `_records` заповнився з диска — одноразова спроба реконсиляції (`reconciledIps`) "спалювалась" проти порожньої колекції, і відкритий з минулої сесії інцидент лишався висіти назавжди, навіть якщо сервер насправді вже давно онлайн. Тепер `LoadFromDisk()` викликається синхронно в конструкторі, до підписки на месенджер — жодне повідомлення фізично не може прийти раніше, ніж диск буде прочитано.
+
+**`GetSnapshot()`/`PublishSnapshot()` повертають глибокі копії.** `DowntimeRecord` має публічні сеттери (`RecoveredAt`, `ClosedByMaintenance`), тому початкова реалізація (`_records.ToList()`) лише копіювала список, але ділилась тими самими мутабельними об'єктами із зовнішнім кодом. Це було безпечно, поки єдиний споживач читав дані через UI-Dispatcher послідовно — але `SlaReportService.Generate()` викликається з окремого `Task.Run`-потоку і читає ті самі поля, поки фоновий цикл потенційно продовжує їх мутувати. `CloneRecord()` створює нові, "заморожені" об'єкти під тим самим `_lock`, усуваючи гонку даних.
+
+**`DeleteRecord` шукає за ключем, не за посиланням.** Через клонування вище `List<DowntimeRecord>.Remove(record)` (порівняння за замовчуванням — за посиланням, `DowntimeRecord` не перевизначає `Equals`/`GetHashCode`) ніколи не знаходив збіг і мовчки нічого не видаляв, хоча лог про видалення все одно надсилався — виглядало так, ніби видалення "нічого не робить". Тепер `DeleteRecord` шукає справжній об'єкт у `_records` за природним ключем `(ServerIp, FellAt)` — тим самим, що вже використовують `ApplySnapshot()` і дедуплікація в `LoadFromDisk()`.
 
 **Три lock-и:**
 - `_lock` — захищає `_records`, `_lastStatus` і `_pendingOffline` (швидкі in-memory операції)
 - `_saveLock` — захищає I/O (повільні операції з диском), серіалізація JSON відбувається поза локом
 - `_messenger.Send(AppLogEntryMessage)` — завжди **поза** `_lock`, щоб уникнути потенційного дедлоку при синхронному виклику підписників
+
+### SlaReportService (on-demand, Singleton — не Hosted)
+
+Обчислює SLA-звіт за довільний період на вимогу, повністю на даних, що вже є в пам'яті (`UptimeTrackerService.GetSnapshot()` + конфігурований список `ServerEntry`) — без окремої персистентності. Викликається напряму з `UptimeViewModel.GenerateReportCommand` через `Task.Run` (щоб не блокувати UI-потік); результат рендериться `SlaReportHtmlRenderer` у самодостатній HTML-файл (inline CSS, без зовнішніх залежностей, у стилі темної палітри застосунку) і відкривається в браузері за замовчуванням.
+
+**Уніфікована формула тривалості для будь-якого інциденту** — закритого, ще відкритого на живому сервері, або "покинутого" відкритого запису на сервері, вже видаленому з конфігурації — без розгалужень по типу:
+```
+EffectiveEnd = RecoveredAt ?? Min(Now, To)
+Duration     = перетин [FellAt, EffectiveEnd] з [From, To]
+```
+
+**`effectiveTo = Min(Now, To)` застосовується і до знаменника відсотка uptime**, не лише до тривалості окремих інцидентів — інакше запит з `To` в майбутньому (типовий випадок: фільтр "До: сьогодні" в `UptimeViewModel` розтягується до кінця поточної доби) занижував би реальний downtime%, зараховуючи ще не прожитий час доби як гарантовані 100%.
+
+**Інциденти, закриті через Maintenance** (`ClosedByMaintenance = true`), виключені з Uptime%/MTTR і виводяться окремим додатком у звіті (з ім'ям сервера й групою в кожному рядку) — плановий простій не псує SLA-показник.
+
+**MTTR рахується лише по реальних відновленнях** — записи, закриті через Maintenance, у середню тривалість не входять: їхній `RecoveredAt` — це момент, коли адміністратор увімкнув обслуговування, а не момент фактичного ремонту сервера.
+
+Зареєстрований як `AddSingleton<SlaReportService>()` в `App.xaml.cs` — без `AddHostedService`, оскільки не має фонового циклу.
 
 ### MaintenanceService
 
@@ -525,6 +588,7 @@ try {
 - Push через `MaintenanceChangedMessage(Started/Ended)` — підписники: `UptimeTrackerService`, `PingMonitorService`, `PingResultViewModel`
 - Атомарний запис `logs/maintenance.json`, серіалізація JSON поза `lock`, файлові операції під окремим `_saveLock`
 - Одне активне вікно на ключ (`ServerIp` або `"group:{TargetGroup}"`), логічне АБО між індивідуальним і груповим вікном
+- `To` — nullable (`null` = без обмеження часу, до ручного вимкнення); `ClearAllOnShutdown()` знімає всі активні вікна (включно з indefinite) при реальному виході з `App.OnExit` — maintenance не переживає перезапуск
 
 ### RdpMonitorService
 
@@ -569,7 +633,7 @@ try {
 - `BackgroundService` з long polling; `RestartPollingAsync`/`StopPollingAsync` під `_restartLock` захищають від подвійного запуску циклу
 - Обробляє команди, callback-запити (approve/deny, пагінація), broadcast алертів
 - Rate limiting і cooldown делеговані `TelegramAccessControlService`
-- Довгі списки (сесії, сервери, інциденти) розбиваються на сторінки через `TelegramTextChunker` з навігаційними кнопками
+- Довгі списки (сесії, сервери, інциденти, вікна обслуговування) розбиваються на сторінки через `TelegramTextChunker` з навігаційними кнопками
 - `IsSingleTerminalServer` — пропускає зайвий крок вибору сервера в UX, якщо Terminal Server лише один
 
 ---
@@ -579,7 +643,7 @@ try {
 | Повідомлення | Видавець | Підписники | Коли |
 |---|---|---|---|
 | `PingBatchResultMessage` | `PingMonitorService` | `PingDashboardViewModel`, `UptimeTrackerService`, `ResourceMonitorViewModel` | Один раз за цикл (batch всіх результатів) |
-| `UptimeUpdatedMessage` | `UptimeTrackerService` | `UptimeViewModel`, `TelegramBotService` (broadcast алертів) | При кожній зміні інцидентів |
+| `UptimeUpdatedMessage` | `UptimeTrackerService` | `UptimeViewModel`, `TelegramBotService` (broadcast алертів) | При кожній зміні інцидентів; несе глибокі копії `DowntimeRecord` (`CloneRecord`), а не оригінальні мутабельні об'єкти |
 | `MaintenanceChangedMessage` | `MaintenanceService` | `UptimeTrackerService`, `PingMonitorService`, `PingResultViewModel` | Старт/завершення вікна обслуговування (вручну або автоматично) |
 | `ResourceSnapshotUpdatedMessage` | `ResourceMonitorService` | `ResourceMonitorViewModel` | Кожні `LocalResourcePollIntervalSeconds` |
 | `EventLogUpdatedMessage` | `EventLogService` | `ResourceMonitorViewModel` | При появі нових записів |
@@ -608,7 +672,8 @@ try {
 | `PingMonitorService._previousStatus` | `ConcurrentDictionary` + `TryUpdate` (CAS) | Main і recovery loop пишуть паралельно |
 | `PingMonitorService.perServerLocks` | `Dictionary<string, object>` + `lock` на сервер | TOCTOU-захист між фоновим циклом і on-demand `/ping` для того самого сервера |
 | `UptimeTrackerService._records` / `_pendingOffline` | `lock(_lock)` | `Receive` (thread pool) + `DeleteRecord` (UI) |
-| `UptimeTrackerService` — I/O | `lock(_saveLock)`, debounce 500мс | `Receive` + `DeleteRecord` можуть одночасно викликати `SaveToDisk`; прапорець скидається до старту запису, щоб не загубити паралельні зміни |
+| `UptimeTrackerService` — I/O | `lock(_saveLock)`, debounce 500мс + гарантований flush у `StopAsync` | `Receive` + `DeleteRecord` можуть одночасно викликати `SaveToDisk`; прапорець скидається до старту запису, щоб не загубити паралельні зміни; `StopAsync` синхронно викликає `SaveToDisk()` незалежно від дебаунсу — інакше зміни за останні 500мс перед закриттям губились |
+| `UptimeTrackerService.GetSnapshot()`/`PublishSnapshot()` | Глибоке клонування (`CloneRecord`) під `_lock` | `SlaReportService.Generate()` читає знімок з окремого `Task.Run`-потоку паралельно з фоновим записом у ті самі мутабельні поля |
 | `MaintenanceService._windows` | `ConcurrentDictionary` | Pull-читання з фонових поллерів + запис з UI-потоку та фонового автозавершення |
 | `MaintenanceService` — I/O | `lock(_saveLock)` | UI-потік (Start/End вручну) і фоновий цикл автозавершення можуть одночасно писати `maintenance.json` |
 | `EventLogService._lastSnapshot` | `lock(_snapshotLock)` | Thread pool пише, UI-потік читає |
@@ -639,7 +704,9 @@ logs/
 └── maintenance.json
 ```
 
-Консольний вивід (`Console.OutputEncoding = Encoding.UTF8`, виставляється при старті `App()`) коректно відображає кирилицю у Debug Output/консолі IDE — раніше нестандартна кодова сторінка Windows-термінала ламала кириличні повідомлення на `�`.
+Вкладка **Logs** у самому застосунку більше не обмежена поточною сесією: при старті програма підвантажує до 1000 останніх рядків з найновішого `app-*.log` (лінивим `File.ReadLines().TakeLast()`, без вивантаження всього файлу в пам'ять), а над таблицею є пошук у реальному часі по `Source`/`Message` (`CollectionViewSource.Filter`).
+
+Консольний вивід коректно відображає кирилицю у Debug Output/консолі IDE — раніше нестандартна кодова сторінка Windows-термінала ламала кириличні повідомлення на `�`. Реалізовано через `Console.SetOut()` з явним UTF-8 `StreamWriter`, а не через `Console.OutputEncoding = Encoding.UTF8` — останній підхід мовчки не спрацьовував, коли stdout перенаправлений у pipe IDE, а не є справжньою консоллю.
 
 **Формат App Log:**
 ```
@@ -681,7 +748,7 @@ logs/
 ]
 ```
 
-> `Key` (обчислювана властивість `ServerIp`/`"group:{TargetGroup}"`) у цей файл не потрапляє — позначена `[JsonIgnore]`.
+> `Key` (обчислювана властивість `ServerIp`/`"group:{TargetGroup}"`) у цей файл не потрапляє — позначена `[JsonIgnore]`. `To: null` означає вікно без обмеження часу (до ручного завершення).
 
 > **App Logs** — журнал подій самого AdminConsole. Не плутати з **Event Log** вузлів у вкладці Resource Monitor (там — системні помилки Windows цільових машин).
 
@@ -774,14 +841,18 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 - RDP/Zabbix-поллери поки не інтегровані з Maintenance Windows.
 - Кнопка запуску **групового** Maintenance-вікна в UI ще не реалізована.
 - Аргументи зовнішніх процесів (`ping -t`, PuTTY) валідуються через `IsValidHostOrIp`, але джерело IP наразі завжди статичне (`appsettings.json`) — варто повторно перевірити цю точку, якщо джерело колись стане динамічним.
-- Тривалість Maintenance-вікна поки фіксована (2 години) — вибір довільного часу і причини планується окремим діалогом.
 
 ---
 
 ## Changelog (останні зміни)
 
 ### Нові функції
-- **Telegram Bot** — віддалений перегляд статусу серверів/RDP-сесій/Zabbix-проблем, `/ping`, broadcast алертів, approve/deny доступу через inline-кнопки, rate-limiting та TTL pending-запитів, `/users` зі збереженими username
+- **SLA-звіти** — генерація самодостатнього HTML-звіту (uptime%, downtime, кількість інцидентів, MTTR) за довільний період прямо з вкладки Uptime, з тими самими фільтрами Group/Server, що й основна таблиця; інциденти, закриті через Maintenance, виводяться окремим додатком і не псують показник
+- **Довільна тривалість Maintenance + коментар причини** — новий `MaintenanceDialog`: вибір 10/30/60 хвилин або "без обмеження часу" (замість фіксованих 2 годин), з опціональним вільним коментарем причини (дефолт при порожньому полі — `"Планове обслуговування"`), який потрапляє в лог, тултіп рядка сервера і Telegram-екран обслуговування
+- **Maintenance-вікна не переживають перезапуск** — `ClearAllOnShutdown()` знімає всі активні вікна (включно з "без обмеження часу") при реальному виході із застосунку
+- **Пошук у Logs** — фільтр у реальному часі над таблицею логів по Source/Message
+- **Історія логів при старті** — вкладка Logs більше не порожня одразу після рестарту: підвантажує до 1000 останніх рядків з найновішого `app-*.log`
+- **Telegram Bot** — віддалений перегляд статусу серверів/RDP-сесій/Zabbix-проблем/активних Maintenance-вікон, `/ping`, broadcast алертів, approve/deny доступу через inline-кнопки, rate-limiting та TTL pending-запитів, `/users` зі збереженими username
 - **Tray Icon** — згортання у системний трей (`CloseToTray`) з коректним звільненням іконки при будь-якому шляху завершення застосунку
 - **Toggle-и моніторингу** — окремі вимикачі `RdpMonitoringEnabled`/`ZabbixMonitoringEnabled` у Settings з Pull-перевіркою на кожному циклі поллера, миттєвим `IsMonitoringDisabled`-плейсхолдером (BellOff) в UI та анти-спам логуванням лише реальних змін стану
 - **RdpCredentialValidator** — перевірка нових RDP-credentials через Win32 `LogonUser` перед збереженням, замість очікування наступного фонового циклу
@@ -793,6 +864,10 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 - **Фільтрація коротких "миготінь"** — `MinIncidentDurationSeconds` з двоетапною Pending→Confirmed логікою, без зайвого I/O та UI-мерехтіння
 
 ### Архітектурні покращення
+- `SlaReportService`/`SlaReportHtmlRenderer` — уніфікована формула тривалості інциденту (`EffectiveEnd = RecoveredAt ?? Min(Now, To)`) без розгалужень по типу; `effectiveTo = Min(Now, To)` застосовується і до знаменника відсотка, не тільки до окремих інцидентів
+- `UptimeTrackerService.GetSnapshot()`/`PublishSnapshot()` — глибоке клонування записів (`CloneRecord`) під локом замість розшарювання мутабельних референсів — потрібно для безпечного паралельного читання з `SlaReportService.Generate()` (окремий `Task.Run`-потік)
+- `MaintenanceWindow.To` — nullable, замість хардкоду фіксованої тривалості 2 години
+- Console encoding — `Console.SetOut()` з явним UTF-8 `StreamWriter` замість `Console.OutputEncoding`, який мовчки не спрацьовував під pipe IDE
 - CAS-патерн (`TryUpdate`) замість `_transitionLock + Clear()` у `PingMonitorService`
 - `RunLoopGuardedAsync` — взаємне скасування циклів через `LinkedCancellationTokenSource`
 - `Interlocked.Exchange` для CTS у `ResourceMonitorViewModel` замість non-atomic replace
@@ -808,6 +883,14 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 - Ping Dashboard — прибрано стовпець "SINCE" (час з моменту зміни статусу) з UI (`PingDashboardView.xaml`) і з `PingResultViewModel` (властивість `StatusSince`, логіка розрахунку в `ApplyResult`) як визнаний зайвим; ширина колонок `GROUP`/`ACTIONS` перебалансована після видалення
 
 ### Виправлені баги
+- `UptimeTrackerService` — race condition при старті: `LoadFromDisk()` перенесено в конструктор, до підписки на месенджер — раніше перший реальний `PingBatchResultMessage` міг прийти раніше, ніж диск був прочитаний, "спалюючи" одноразову спробу реконсиляції й лишаючи інцидент висіти відкритим назавжди, навіть коли сервер уже давно онлайн
+- `UptimeTrackerService.StopAsync` — тепер синхронно викликає `SaveToDisk()` перед виходом; раніше дебаунс-збереження (500мс) виконувалось у власному `Task.Run`, не пов'язаному з lifecycle хоста, і могло не встигнути до закриття процесу
+- `UptimeTrackerService.SaveToDisk` — файли місяців, для яких у пам'яті не лишилось жодного запису (видалено вручну), тепер видаляються з диска; раніше вони лишались назавжди і "воскресали" при наступному завантаженні
+- `UptimeTrackerService.DeleteRecord` — виправлено мовчазний збій видалення: UI працює з клонованими записами (`GetSnapshot`), а `List<T>.Remove()` порівнював за посиланням і ніколи не знаходив збіг; тепер пошук за ключем `(ServerIp, FellAt)`
+- `SlaReportService` — виправлено завищення uptime% при `To` в майбутньому (типово — фільтр "До: сьогодні"); MTTR більше не враховує інциденти, закриті через Maintenance
+- `MaintenanceService.ClearAllOnShutdown()` — вікна обслуговування (включно з "без обмеження часу") знімаються при реальному виході з `App.OnExit`, не переживають перезапуск
+- `MaintenanceDialog`/`CredentialDialog`/`ZabbixTokenDialog` — виправлено контраст кнопок і розмитий текст (бракувало `TextOptions`/`UseLayoutRounding`, які вже були на `MainWindow`)
+- `TelegramBotService` — список Maintenance-вікон коректно показує "без обмеження часу" для `To = null`
 - `RdpMonitorService` — перехід `Active → Disconnected` (звичайне від'єднання користувача) тепер логується як **Info**, а не Warning — це очікувана подія, а не проблема
 - `MainWindow`/`App.OnExit` — іконка в системному треї тепер явно звільняється (`DisposeTrayIcon()`) при будь-якому шляху завершення застосунку, а не лише через пункт меню "Вийти" — усуває "осиротілі" іконки в треї
 - `TelegramBotService` — реалізовано пагінацію для прямого виводу RDP-сесій (`pagedScreens`) — раніше великий список сесій при єдиному Terminal Server обрізався без можливості перегорнути сторінку
@@ -825,7 +908,7 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 - `MaintenanceService.EndMaintenanceEarly` — тепер резолвиться по фактичному ключу вікна (`IP` або `group:X`), а не завжди по `IP`
 - `UptimeTrackerService.ScheduleSave` — прапорець debounce скидається **до** старту `SaveToDisk`, а не після — інакше зміни, що приходять під час запису на диск, губились
 - `PingResultViewModel.ToggleMaintenance` — заблоковано подвійний клік через `IsActionBusy` на час показу діалогу підтвердження
-- Кодування консольного виводу — `Console.OutputEncoding = Encoding.UTF8` виправляє нечитабельну кирилицю в консолі/Debug Output IDE
+- Кодування консольного виводу — виправляє нечитабельну кирилицю в консолі/Debug Output IDE
 - `ZabbixPollerService` — точна причина відхилення токена (код помилки Zabbix, текст) тепер прокидається в UI-логи, а не губиться в консольному логері; токен передається і в Bearer, і в JSON-RPC `auth` — обхід стрипання заголовків проксі
 - `SemaphoreSlim` (`_pingThrottle`, `_recoveryThrottle`, `_signal`) тепер явно `Dispose()`-ується
 - `FileLoggerService.Receive` — прибрано оманливий TOCTOU-патерн навколо перевірки `_signal.CurrentCount`; черга обмежена (max 5000) з відстеженням відкинутих записів
@@ -835,5 +918,3 @@ dotnet publish AdminConsole.csproj -c Release -r win-x64 --self-contained true -
 - `UserSettingsService.Save()` — атомарний запис (temp+rename) замість прямого `File.WriteAllText`; окремі методи `MutateTelegramState`/`ReadTelegramState` для потокобезпечного доступу до Telegram-стану
 - `RemoteManagementService`, `RemoteResourceService`, `RemoteEventLogService` — усі `ManagementObjectSearcher`/`ManagementObjectCollection`/`ManagementObject` підтверджено в `using`
 - Стартовий спам `[SUCCESS] is back ONLINE` прибраний — тихий перехід `Unknown/Checking → Online`
-- `UptimeTrackerService` реєстрація у конструкторі — не пропускає перший `PingBatchResultMessage`
-</file_text>

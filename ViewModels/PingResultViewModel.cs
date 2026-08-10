@@ -84,7 +84,9 @@ public sealed partial class PingResultViewModel : ObservableObject, IRecipient<M
         IsUnderMaintenance = window is not null;
         MaintenanceTooltip = window is not null
             ? $"{(string.IsNullOrWhiteSpace(window.Reason) ? "Maintenance" : window.Reason)} — " +
-              $"до {window.To.ToLocalTime():dd.MM HH:mm}"
+              (window.To is { } to
+                  ? $"до {to.ToLocalTime():dd.MM HH:mm}"
+                  : "без обмеження часу")
             : string.Empty;
     }
 
@@ -104,20 +106,26 @@ public sealed partial class PingResultViewModel : ObservableObject, IRecipient<M
         IsActionBusy = true;
         try
         {
-            bool confirmed = await _dialog.ShowConfirmationAsync(
-                title:        $"Maintenance — {Name}?",
-                body:         $"Позначити {Name} ({IP}) як на плановому обслуговуванні на 2 години?",
-                confirmLabel: "Почати Maintenance");
+            var choice = await _dialog.ShowMaintenanceDurationAsync(Name, IP);
+            if (choice is null) return; // користувач скасував діалог
 
-            if (!confirmed) return;
+            var now = DateTimeOffset.Now;
+
+            // Порожній/пробільний коментар — свідомо підставляємо дефолтну
+            // причину замість розмитого "без причини" — адмін, який просто клацнув кнопку
+            // тривалості не вводячи коментар, отримає однаковий, очікуваний текст у логах/тултіпах
+            // замість порожнього рядка.
+            var reason = string.IsNullOrWhiteSpace(choice.Comment)
+                ? "Планове обслуговування"
+                : choice.Comment.Trim();
 
             _maintenance.StartMaintenance(new MaintenanceWindow
             {
                 ServerIp    = IP,
                 DisplayName = Name,
-                From        = DateTimeOffset.Now,
-                To          = DateTimeOffset.Now.AddHours(2),
-                Reason      = "Планове обслуговування"
+                From        = now,
+                To          = choice.Duration is { } d ? now + d : null,
+                Reason      = reason
             });
         }
         finally
