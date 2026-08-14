@@ -39,7 +39,8 @@ public sealed class TelegramBotService
       IRecipient<PingBatchResultMessage>,
       IRecipient<UptimeUpdatedMessage>,
       IRecipient<RdpSessionsUpdatedMessage>,
-      IRecipient<CredentialsChangedMessage>
+      IRecipient<CredentialsChangedMessage>,
+      IRecipient<BackupTransitionMessage>
 {
     private readonly IMessenger                        _messenger;
     private readonly ILogger<TelegramBotService>       _logger;
@@ -49,6 +50,7 @@ public sealed class TelegramBotService
     private readonly RdpMonitorService                  _rdpMonitor;
     private readonly UptimeTrackerService                _uptimeTracker;
     private readonly MaintenanceService                  _maintenance;
+    private readonly BackupMonitorService                _backupMonitor;
     private readonly IReadOnlyList<ServerEntry>          _terminalServers;
     private readonly IReadOnlyList<ServerEntry>          _allServers;
     
@@ -96,6 +98,7 @@ public sealed class TelegramBotService
         RdpMonitorService             rdpMonitor,
         UptimeTrackerService          uptimeTracker,
         MaintenanceService            maintenance,
+        BackupMonitorService          backupMonitor,
         IOptions<List<ServerEntry>>   servers)
     {
         _messenger      = messenger;
@@ -106,6 +109,7 @@ public sealed class TelegramBotService
         _rdpMonitor     = rdpMonitor;
         _uptimeTracker  = uptimeTracker;
         _maintenance    = maintenance;
+        _backupMonitor  = backupMonitor;
         _allServers = servers.Value.ToList().AsReadOnly();
 
         _terminalServers = servers.Value
@@ -203,7 +207,46 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
     }
 }
 
-    // ── BackgroundService ─────────────────────────────────────────────────────
+/// <summary>
+/// Backup Verification — на відміну від UptimeUpdatedMessage (повний
+/// знімок кожен цикл, диффиться тут), BackupTransitionMessage приходить
+/// ЛИШЕ на вже відфільтрований (не-Maintenance, підтверджений) перехід —
+/// BackupMonitorService.OnConfirmedTransition вирішує "казати чи мовчати"
+/// сам, тут лишається тільки розіслати.
+/// </summary>
+public void Receive(BackupTransitionMessage message)
+{
+    _ = BroadcastBackupAlertAsync(message);
+}
+
+private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
+{
+    if (_client is null) return;
+
+    string icon = message.Current == BackupOutcome.Missing ? "🚫" : "⏰";
+    string text = $"{icon} БЕКАП {message.Current.ToString().ToUpperInvariant()}\n" +
+                  $"{message.ServerName} ({message.Kind})\n" +
+                  $"Було: {message.Previous}";
+
+    var recipients = new List<long>();
+    if (_access.PrimaryAdminChatId is long adminId) recipients.Add(adminId);
+    recipients.AddRange(_access.GetAllowedChatIds());
+
+    foreach (var chatId in recipients.Distinct())
+    {
+        try
+        {
+            await _client.SendMessage(chatId, text, cancellationToken: _hostToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "TelegramBotService: не вдалось надіслати backup alert у chat_id={ChatId}", chatId);
+        }
+    }
+}
+
+// ── BackgroundService ─────────────────────────────────────────────────────
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -393,6 +436,9 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
             case "🏓 Пінг":
                 await SendPingNowAsync(client, chatId, ct);
                 return;
+            case "💾 Бекапи":
+                await SendBackupsListAsync(client, chatId, ct);
+                return;
             case "👥 Користувачі":
                 if (_access.IsPrimaryAdmin(chatId))
                     await SendUsersListAsync(client, chatId, ct);
@@ -412,6 +458,9 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
                 break;
             case "/ping":
                 await SendPingNowAsync(client, chatId, ct);
+                break;
+            case "/backups":
+                await SendBackupsListAsync(client, chatId, ct);
                 break;
             case "/users":
                 if (_access.IsPrimaryAdmin(chatId))
@@ -616,7 +665,8 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         {
             new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
             new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
-            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" }
+            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" },
+            new KeyboardButton[] { "💾 Бекапи" }
         };
 
         // Пункт плану 2: "Для Primary Admin додатково: [ 👥 Користувачі ]" —
@@ -633,7 +683,8 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
         string help = "Доступні команди:\n" +
                       "/status — загальний огляд\n" +
                       "/rdp — RDP-сесії по серверах\n" +
-                      "/ping — пінгувати всі сервери прямо зараз (реальний час)\n";
+                      "/ping — пінгувати всі сервери прямо зараз (реальний час)\n" +
+                      "/backups — статус перевірок бекапів (Full/Diff)\n";
         if (_access.IsPrimaryAdmin(chatId))
             help += "/users — керування доступом (тільки Primary Admin)\n";
 
@@ -902,7 +953,58 @@ private async Task BroadcastIncidentAlertAsync(DowntimeRecord record)
 
         await SendPagedScreenAsync(client, chatId, screenKey: "maintenance", header: "🔧 Обслуговування:\n", lines, ct);
     }
+    
+    /// <summary>
+    /// Backup Verification: живий знімок напряму з BackupMonitorService.GetSnapshot()
+    /// (deep-clone, безпечно). Бейдж 🔧 біля рядка — сервер під активним
+    /// Maintenance-вікном прямо зараз; статус все одно показується чесно
+    /// (той самий принцип, що для Ping/UptimeIncidents), лише broadcast
+    /// на перехід був придушений — SendBackupsListAsync ніколи не приховує
+    /// стан, тільки підказує чому alert міг не прийти.
+    /// </summary>
+    private async Task SendBackupsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
+    {
+        var serverLookup = _allServers
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+        var states = _backupMonitor.GetSnapshot()
+            .OrderBy(s => s.ServerName)
+            .ThenBy(s => s.Kind)
+            .ToList();
+
+        var lines = states
+            .Select(s =>
+            {
+                bool underMaintenance =
+                    serverLookup.TryGetValue(s.ServerName, out var entry) &&
+                    _maintenance.IsUnderMaintenance(entry.IP, entry.Group);
+
+                string maintenanceBadge = underMaintenance ? " 🔧" : string.Empty;
+                string lastConfirmed = s.LastConfirmedAt is { } at
+                    ? $" — {at.ToLocalTime():dd.MM HH:mm}"
+                    : string.Empty;
+
+                return $"{BackupIcon(s.Outcome)} {s.ServerName} ({s.Kind}){maintenanceBadge}\n" +
+                       $"   {s.Outcome}{lastConfirmed}";
+            })
+            .ToList();
+
+        if (lines.Count == 0)
+            lines.Add("Перевірки бекапів не сконфігуровано (BackupChecks у appsettings.json).");
+
+        await SendPagedScreenAsync(client, chatId, screenKey: "backups", header: "💾 Backup Verification:\n", lines, ct);
+    }
+
+    private static string BackupIcon(BackupOutcome outcome) => outcome switch
+    {
+        BackupOutcome.Ok          => "✅",
+        BackupOutcome.SizeWarning => "⚠️",
+        BackupOutcome.Stale       => "⏰",
+        BackupOutcome.Missing     => "🚫",
+        _                         => "❓"
+    };
+    
     /// <summary>
     /// Спільна логіка для трьох екранів вище: будує сторінки через
     /// TelegramTextChunker (критика #2 — ліміт 4096 символів), кладе їх

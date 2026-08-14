@@ -1,0 +1,63 @@
+﻿using AdminConsole.Core.Messages;
+using AdminConsole.Core.Models;
+using AdminConsole.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
+using System.Collections.ObjectModel;
+using System.Windows;
+
+namespace AdminConsole.ViewModels;
+
+public sealed partial class BackupsViewModel
+    : ObservableObject, IRecipient<BackupStatusUpdatedMessage>
+{
+    public ObservableCollection<BackupRowViewModel> Rows { get; } = [];
+
+    [ObservableProperty] private BackupRowViewModel? _selectedRow;
+    [ObservableProperty] private int    _okCount;
+    [ObservableProperty] private int    _warningCount;
+    [ObservableProperty] private int    _badCount;      // Stale + Missing
+    [ObservableProperty] private int    _unknownCount;
+    [ObservableProperty] private string _lastUpdated = "—";
+
+    public BackupsViewModel(IMessenger messenger, BackupMonitorService backupMonitor)
+    {
+        messenger.RegisterAll(this);
+
+        // Холодний старт — не чекаємо перший цикл BackupMonitorService,
+        // одразу показуємо те, що пережило рестарт (logs/backups.json).
+        ApplySnapshot(backupMonitor.GetSnapshot());
+    }
+
+    public void Receive(BackupStatusUpdatedMessage message) =>
+        Application.Current?.Dispatcher?.InvokeAsync(() => ApplySnapshot(message.Value));
+
+    private void ApplySnapshot(IReadOnlyList<BackupCheckState> states)
+    {
+        var selectedKey = SelectedRow?.Key;
+
+        var incomingKeys = states.Select(s => $"{s.ServerName}|{s.Kind}").ToHashSet();
+        for (int i = Rows.Count - 1; i >= 0; i--)
+            if (!incomingKeys.Contains(Rows[i].Key))
+                Rows.RemoveAt(i);
+
+        var existing = Rows.ToDictionary(r => r.Key);
+        foreach (var state in states)
+        {
+            var key = $"{state.ServerName}|{state.Kind}";
+            if (existing.TryGetValue(key, out var row))
+                row.Update(state);
+            else
+                Rows.Add(new BackupRowViewModel(state));
+        }
+
+        if (selectedKey is not null)
+            SelectedRow = Rows.FirstOrDefault(r => r.Key == selectedKey);
+
+        OkCount      = Rows.Count(r => r.Outcome == BackupOutcome.Ok);
+        WarningCount = Rows.Count(r => r.Outcome == BackupOutcome.SizeWarning);
+        BadCount     = Rows.Count(r => r.Outcome is BackupOutcome.Stale or BackupOutcome.Missing);
+        UnknownCount = Rows.Count(r => r.Outcome == BackupOutcome.Unknown);
+        LastUpdated  = DateTime.Now.ToString("HH:mm:ss");
+    }
+}

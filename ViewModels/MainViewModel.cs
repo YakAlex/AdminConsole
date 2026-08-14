@@ -6,12 +6,13 @@ namespace AdminConsole.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    // ── Child ViewModels ──────────────────────────────────────────────────────
+// ── Child ViewModels ──────────────────────────────────────────────────────
     public PingDashboardViewModel   PingDashboard   { get; }
     public UptimeViewModel          Uptime          { get; }
     public ResourceMonitorViewModel ResourceMonitor { get; }
     public RdpSessionViewModel      RdpSessions     { get; }
     public ZabbixViewModel          Zabbix          { get; }
+    public BackupsViewModel         Backups         { get; }
     public LogsViewModel            Logs            { get; }
     public SettingsViewModel        Settings        { get; }
 
@@ -36,6 +37,7 @@ public sealed partial class MainViewModel : ObservableObject
         ResourceMonitorViewModel resourceMonitor,
         RdpSessionViewModel      rdpSessions,
         ZabbixViewModel          zabbix,
+        BackupsViewModel         backups,
         LogsViewModel            logs,
         SettingsViewModel        settings,
         UserSettingsService      userSettings)
@@ -45,6 +47,7 @@ public sealed partial class MainViewModel : ObservableObject
         ResourceMonitor = resourceMonitor;
         RdpSessions     = rdpSessions;
         Zabbix          = zabbix;
+        Backups         = backups;
         Logs            = logs;
         Settings        = settings;
         _userSettings   = userSettings;
@@ -64,7 +67,8 @@ public sealed partial class MainViewModel : ObservableObject
             2 => (ResourceMonitor,         "Resource Monitor"),
             3 => (RdpSessions,             "RDP Sessions"),
             4 => (Zabbix,                  "Zabbix Alerts"),
-            5 => (Logs,                    "Logs"),
+            5 => (Backups,                 "Backup Verification"),
+            6 => (Logs,                    "Logs"),
             _ => (PingDashboard,           "Admin Console")
         };
     }

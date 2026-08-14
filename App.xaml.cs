@@ -115,6 +115,8 @@ public partial class App : Application
             config.GetSection(MonitoringSettings.SectionName));
         services.Configure<List<ServerEntry>>(
             config.GetSection("Servers"));
+        services.Configure<List<BackupCheckDefinition>>(
+            config.GetSection("BackupChecks"));
     }
 
     private static void RegisterInfrastructure(IServiceCollection services)
@@ -148,6 +150,9 @@ public partial class App : Application
         services.AddHostedService(sp => sp.GetRequiredService<UptimeTrackerService>());
         services.AddSingleton<MaintenanceService>();
         services.AddHostedService(sp => sp.GetRequiredService<MaintenanceService>());
+        services.AddSingleton<BackupCheckEvaluator>();
+        services.AddSingleton<BackupMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<BackupMonitorService>());
         services.AddSingleton<RemoteEventLogService>();
         services.AddSingleton<RemoteResourceService>();
         services.AddSingleton<RemoteManagementService>();
@@ -169,6 +174,7 @@ public partial class App : Application
         services.AddSingleton<LogsViewModel>();
         services.AddSingleton<UptimeViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<BackupsViewModel>();
     }
 
     private static void RegisterViews(IServiceCollection services)

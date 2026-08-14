@@ -50,6 +50,9 @@
         <DataTemplate DataType="{x:Type viewModels:ZabbixViewModel}">
             <views:ZabbixView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:BackupsViewModel}">
+            <views:BackupsView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:LogsViewModel}">
             <views:LogsView />
         </DataTemplate>
@@ -184,6 +187,13 @@
                         </Button>
 
                         <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="5">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="DatabaseCheckOutline" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Backups" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="6">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />

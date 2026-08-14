@@ -24,6 +24,9 @@ public sealed class MonitoringSettings
     /// 0 — вимкнути фільтр (записувати все, як раніше).
     /// </summary>
     public int MinIncidentDurationSeconds { get; init; } = 10;
+    
+    /// <summary>Інтервал опитування BackupMonitorService. Бекапи не змінюються щохвилини — дефолт навмисно більший за решту.</summary>
+    public int BackupPollIntervalMinutes { get; init; } = 60;
 }
 
 /// <summary>
