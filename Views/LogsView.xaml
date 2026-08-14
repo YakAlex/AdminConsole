@@ -363,7 +363,7 @@
                 <TextBlock
                     Text="Select a row to see the full timestamp and message."
                     Foreground="#44FFFFFF"
-                    FontSize="11"
+                    FontSize="12"
                     VerticalAlignment="Center">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
@@ -390,7 +390,7 @@
                     </StackPanel.Style>
                     <TextBlock
                         Foreground="#FF80CBC4"
-                        FontSize="10"
+                        FontSize="11"
                         FontFamily="Consolas, Courier New">
                         <Run Text="{Binding SelectedEntry.TimeFull, Mode=OneWay}" />
                         <Run Text="  |  " Foreground="#33FFFFFF" />

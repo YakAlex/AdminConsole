@@ -90,13 +90,7 @@ public sealed partial class LogsViewModel
     {
         try
         {
-            var history = await Task.Run(() =>
-            {
-                var file = FindLatestLogFile();
-                return file is null
-                    ? []
-                    : ParseTailLines(file, MaxHistoryLines);
-            });
+            var history = await Task.Run(() => ParseTailLines(MaxHistoryLines));
 
             if (history.Count == 0) return;
 
@@ -125,25 +119,50 @@ public sealed partial class LogsViewModel
         }
     }
 
-    private static string? FindLatestLogFile()
+    private static List<string> GetLogFilesDescending()
     {
-        if (!System.IO.Directory.Exists(LogDirectory)) return null;
+        if (!System.IO.Directory.Exists(LogDirectory)) return [];
 
         return System.IO.Directory
             .EnumerateFiles(LogDirectory, "app-*.log")
-            .OrderByDescending(f => f, StringComparer.Ordinal)
-            .FirstOrDefault();
+            .OrderByDescending(f => f, StringComparer.Ordinal) // найновіший файл першим
+            .ToList();
     }
 
-    private static List<LogEntryViewModel> ParseTailLines(string path, int maxLines)
+    /// <summary>
+    /// Добирає до maxLines останніх рядків, починаючи з найновішого файлу і,
+    /// якщо в ньому рядків не вистачає, підхоплюючи попередні (старіші) файли.
+    /// Результат повертається у хронологічному порядку (старі → нові),
+    /// щоб не ламати логіку вставки в LoadHistoryAsync.
+    /// </summary>
+    private static List<LogEntryViewModel> ParseTailLines(int maxLines)
     {
-        var result = new List<LogEntryViewModel>(maxLines);
+        var files = GetLogFilesDescending(); // newest → oldest
+        var remaining = maxLines;
 
-        foreach (var line in System.IO.File.ReadLines(path).TakeLast(maxLines))
+        // buffers[0] — рядки з найновішого залученого файлу, buffers[^1] — з найстарішого
+        var buffers = new List<List<string>>();
+
+        foreach (var file in files)
         {
+            if (remaining <= 0) break;
+
+            var lines = System.IO.File.ReadLines(file).TakeLast(remaining).ToList();
+            if (lines.Count == 0) continue;
+
+            buffers.Add(lines);
+            remaining -= lines.Count;
+        }
+
+        // Розвертаємо порядок файлів (найстаріший залучений файл — перший),
+        // усередині кожного файлу рядки вже йдуть старі → нові.
+        buffers.Reverse();
+
+        var result = new List<LogEntryViewModel>(maxLines);
+        foreach (var buffer in buffers)
+        foreach (var line in buffer)
             if (TryParseLine(line, out var entry))
                 result.Add(new LogEntryViewModel(entry));
-        }
 
         return result;
     }
