@@ -60,7 +60,7 @@ public partial class App : Application
             _host = Host.CreateDefaultBuilder()
                 .ConfigureAppConfiguration((_, config) =>
                 {
-                    config.SetBasePath(AppContext.BaseDirectory);
+                    config.SetBasePath(AdminConsole.Utils.AppPaths.BaseDirectory);
                     config.AddJsonFile("appsettings.json",
                         optional: false, reloadOnChange: true);
                 })

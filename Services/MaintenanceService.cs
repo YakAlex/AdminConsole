@@ -32,7 +32,7 @@ public sealed class MaintenanceService : BackgroundService
     private readonly ConcurrentDictionary<string, MaintenanceWindow> _windows = new();
 
     private static readonly string FilePath = Path.Combine(
-        AppContext.BaseDirectory, "logs", "maintenance.json");
+        AdminConsole.Utils.AppPaths.BaseDirectory, "logs", "maintenance.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

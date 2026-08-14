@@ -40,7 +40,7 @@ public sealed class BackupMonitorService : BackgroundService
     private const int    MaxHistorySamples = 14;
 
     private static readonly string FilePath = Path.Combine(
-        AppContext.BaseDirectory, "logs", "backups.json");
+        AdminConsole.Utils.AppPaths.BaseDirectory, "logs", "backups.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

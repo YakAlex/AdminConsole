@@ -31,7 +31,7 @@ public sealed class FileLoggerService
     private readonly SemaphoreSlim                _signal = new(0);
 
     private static readonly string LogDirectory =
-        Path.Combine(AppContext.BaseDirectory, "logs");
+        Path.Combine(AdminConsole.Utils.AppPaths.BaseDirectory, "logs");
 
     /// <summary>
     /// Верхня межа черги в пам'яті. Захист від необмеженого росту, якщо

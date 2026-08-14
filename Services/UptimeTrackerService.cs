@@ -64,7 +64,7 @@ public sealed class UptimeTrackerService
     // ── Persistence ───────────────────────────────────────────────────────────
 
     private static readonly string LogDir =
-        Path.Combine(AppContext.BaseDirectory, "logs");
+        Path.Combine(AdminConsole.Utils.AppPaths.BaseDirectory, "logs");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
