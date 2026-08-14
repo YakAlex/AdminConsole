@@ -27,9 +27,17 @@ public sealed partial class LogsViewModel
     /// Дорівнює MaxEntries — більше однаково буде обрізано тримом нижче.
     /// </summary>
     private const int MaxHistoryLines = 1000;
-
+    
+    /// <summary>
+    /// Скільки останніх app-*.log файлів максимум переглядати при доборі
+    /// історії, якщо найновішого файлу не вистачає до MaxHistoryLines.
+    /// Запобіжник, щоб при щойно створеному найновішому файлі (0-1 рядок)
+    /// не читати весь архів логів за раз.
+    /// </summary>
+    private const int MaxHistoryFiles = 7;
+    
     private static readonly string LogDirectory =
-        System.IO.Path.Combine(AppContext.BaseDirectory, "logs");
+        System.IO.Path.Combine(AdminConsole.Utils.AppPaths.BaseDirectory, "logs");
 
     // Формат рядка фіксований — AppLogEntry.Formatted:
     // [yyyy-MM-dd HH:mm:ss] [Severity] [Source] Message
@@ -126,6 +134,7 @@ public sealed partial class LogsViewModel
         return System.IO.Directory
             .EnumerateFiles(LogDirectory, "app-*.log")
             .OrderByDescending(f => f, StringComparer.Ordinal) // найновіший файл першим
+            .Take(MaxHistoryFiles)
             .ToList();
     }
 
@@ -247,7 +256,7 @@ public sealed partial class LogsViewModel
     {
         try
         {
-            string fullPath = System.IO.Path.Combine(AppContext.BaseDirectory, "logs");
+            string fullPath = System.IO.Path.Combine(AdminConsole.Utils.AppPaths.BaseDirectory, "logs");
             System.IO.Directory.CreateDirectory(fullPath);
             System.Diagnostics.Process.Start("explorer.exe", fullPath);
         }

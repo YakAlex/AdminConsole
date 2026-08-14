@@ -38,6 +38,12 @@ public sealed class BackupMonitorService : BackgroundService
 
     private const string LogSource         = "BackupMonitor";
     private const int    MaxHistorySamples = 14;
+    
+    /// <summary>Захист від некоректного/від'ємного/нульового appsettings — той самий патерн, що MinOfflineIntervalSec у PingMonitorService.</summary>
+    private const int    MinBackupPollIntervalMinutes = 1;
+    
+    /// <summary>Скільки циклів поспіль Unknown, перш ніж один раз надіслати попередження (без спаму).</summary>
+    private const int    UnknownEscalationThreshold = 3;
 
     private static readonly string FilePath = Path.Combine(
         AdminConsole.Utils.AppPaths.BaseDirectory, "logs", "backups.json");
@@ -49,6 +55,15 @@ public sealed class BackupMonitorService : BackgroundService
     };
 
     private readonly object _saveLock = new();
+
+    /// <summary>
+    /// Захищає мутації полів BackupCheckState (Outcome/History/лічильники)
+    /// від паралельного читання в GetSnapshot() — викликається з UI-потоку
+    /// (BackupsViewModel) і з потоку long-polling бота (TelegramBotService)
+    /// одночасно з фоновим циклом CheckKindAsync. Той самий принцип, що
+    /// _lock у UptimeTrackerService для _records.
+    /// </summary>
+    private readonly object _stateLock = new();
 
     public BackupMonitorService(
         IMessenger                             messenger,
@@ -91,8 +106,13 @@ public sealed class BackupMonitorService : BackgroundService
             }
         }
 
+        var pollInterval = Math.Max(
+            _settings.BackupPollIntervalMinutes,
+            MinBackupPollIntervalMinutes);
+
         _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"Backup monitor запущено — {_definitions.Count} перевірок(и)."));
+            $"Backup monitor запущено — {_definitions.Count} перевірок(и), " +
+            $"інтервал: {pollInterval} хв."));
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -109,7 +129,7 @@ public sealed class BackupMonitorService : BackgroundService
             try
             {
                 await Task.Delay(
-                    TimeSpan.FromMinutes(_settings.BackupPollIntervalMinutes),
+                    TimeSpan.FromMinutes(pollInterval),
                     stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { break; }
@@ -157,51 +177,97 @@ public sealed class BackupMonitorService : BackgroundService
             Kind       = kind
         });
 
-        var raw = await _evaluator
+var raw = await _evaluator
             .EvaluateAsync(def, kind, state.History, ct)
             .ConfigureAwait(false);
 
-        // ── Unknown-streak (окремо від анти-флапінгу підтвердженого стану) ──
-        state.ConsecutiveUnknownCount = raw.Outcome == BackupOutcome.Unknown
-            ? state.ConsecutiveUnknownCount + 1
-            : 0;
+        (bool shouldNotify, BackupOutcome previous, BackupOutcome current) transition = default;
+        bool crossedUnknownThreshold;
 
-        // ── LastConfirmed* — будь-яка НЕ-Unknown відповідь, незалежно від анти-флапінгу ──
-        if (raw.Outcome != BackupOutcome.Unknown)
+        lock (_stateLock)
         {
-            state.LastConfirmedAt      = DateTimeOffset.Now;
-            state.LastConfirmedOutcome = raw.Outcome;
-            state.LastError            = null;
+            // ── Unknown-streak (окремо від анти-флапінгу підтвердженого стану) ──
+            state.ConsecutiveUnknownCount = raw.Outcome == BackupOutcome.Unknown
+                ? state.ConsecutiveUnknownCount + 1
+                : 0;
+            crossedUnknownThreshold = state.ConsecutiveUnknownCount == UnknownEscalationThreshold;
+
+            bool neverConfirmedYet = state.LastConfirmedAt is null;
+
+            // ── LastConfirmed* — будь-яка НЕ-Unknown відповідь, незалежно від анти-флапінгу ──
+            if (raw.Outcome != BackupOutcome.Unknown)
+            {
+                state.LastConfirmedAt      = DateTimeOffset.Now;
+                state.LastConfirmedOutcome = raw.Outcome;
+                state.LastError            = null;
+            }
+            else
+            {
+                state.LastError = raw.ErrorMessage;
+            }
+
+            // ── History — лише коли Stage B реально знайшов файл ──
+            if (raw.Sample is not null)
+            {
+                state.History.Add(raw.Sample);
+                while (state.History.Count > MaxHistorySamples)
+                    state.History.RemoveAt(0);
+            }
+
+            // ── Перше підтвердження після рестарту/першого запуску —
+            // підтверджуємо одразу, без очікування MinConsecutiveForAlert.
+            // До першого підтвердженого результату немає "попереднього
+            // стану", який анти-флапінг мав би захищати — очікування тут
+            // лише затримує коректний перший статус (до BackupPollIntervalMinutes
+            // × MinConsecutiveForAlert хвилин) без жодної компенсуючої користі.
+            if (neverConfirmedYet && raw.Outcome != BackupOutcome.Unknown)
+            {
+                var firstPrevious = state.Outcome;
+                state.Outcome             = raw.Outcome;
+                state.ConsecutiveBadCount = 0;
+                state.LastRawOutcome      = null;
+
+                transition = (true, firstPrevious, state.Outcome);
+            }
+            // ── Анти-флапінг: підтверджений Outcome (той, що бачить UI/алерти) ──
+            else if (raw.Outcome == state.Outcome)
+            {
+                state.ConsecutiveBadCount = 0;
+                state.LastRawOutcome      = raw.Outcome;
+            }
+            else
+            {
+                // Рахуємо серію ОДНАКОВИХ "сирих" результатів поспіль, що
+                // відрізняються від підтвердженого Outcome — а не будь-яку
+                // зміну raw.Outcome взагалі (це і був баг: Ok→Stale→Missing
+                // підтверджувало перехід, хоча жоден сирий результат не
+                // повторився двічі поспіль).
+                state.ConsecutiveBadCount = raw.Outcome == state.LastRawOutcome
+                    ? state.ConsecutiveBadCount + 1
+                    : 1;
+                state.LastRawOutcome = raw.Outcome;
+
+                if (state.ConsecutiveBadCount >= def.MinConsecutiveForAlert)
+                {
+                    var previous = state.Outcome;
+                    state.Outcome             = raw.Outcome;
+                    state.ConsecutiveBadCount = 0;
+                    state.LastRawOutcome      = null;
+
+                    transition = (true, previous, state.Outcome);
+                }
+            }
         }
-        else
+
+        if (crossedUnknownThreshold)
         {
-            state.LastError = raw.ErrorMessage;
+            _messenger.Send(AppLogEntryMessage.Warning(LogSource,
+                $"{def.ServerName} ({kind}): перевірка недоступна вже " +
+                $"{UnknownEscalationThreshold} циклів поспіль."));
         }
 
-        // ── History — лише коли Stage B реально знайшов файл ──
-        if (raw.Sample is not null)
-        {
-            state.History.Add(raw.Sample);
-            while (state.History.Count > MaxHistorySamples)
-                state.History.RemoveAt(0);
-        }
-
-        // ── Анти-флапінг: підтверджений Outcome (той, що бачить UI/алерти) ──
-        if (raw.Outcome == state.Outcome)
-        {
-            state.ConsecutiveBadCount = 0;
-            return;
-        }
-
-        state.ConsecutiveBadCount++;
-        if (state.ConsecutiveBadCount < def.MinConsecutiveForAlert)
-            return;
-
-        var previous = state.Outcome;
-        state.Outcome             = raw.Outcome;
-        state.ConsecutiveBadCount = 0;
-
-        OnConfirmedTransition(def, kind, previous, state.Outcome);
+        if (transition.shouldNotify)
+            OnConfirmedTransition(def, kind, transition.previous, transition.current);
     }
 
     /// <summary>Викликається лише на ПІДТВЕРДЖЕНОМУ переході стану (після анти-флапінгу).</summary>
@@ -305,8 +371,11 @@ public sealed class BackupMonitorService : BackgroundService
 
     // ── Public API (для UI-вкладки Backups, Фаза 3) ──────────────────────────
 
-    public IReadOnlyList<BackupCheckState> GetSnapshot() =>
-        _states.Values.Select(CloneState).ToList();
+    public IReadOnlyList<BackupCheckState> GetSnapshot()
+    {
+        lock (_stateLock)
+            return _states.Values.Select(CloneState).ToList();
+    }
 
     /// <summary>
     /// Глибока копія для безпечної передачі за межі сервісу (UI-потік,

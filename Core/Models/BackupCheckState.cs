@@ -33,6 +33,14 @@ public sealed class BackupCheckState
     /// однакових "сирих" результатів поспіль.
     /// </summary>
     public int ConsecutiveBadCount { get; set; }
+    
+    /// <summary>
+    /// Останній побачений "сирий" (до анти-флапінгу) результат — потрібен,
+    /// щоб рахувати саме ОДНАКОВІ результати поспіль, а не будь-яку зміну.
+    /// Null одразу після кожного підтвердженого переходу (нова серія
+    /// рахується з чистого аркуша).
+    /// </summary>
+    public BackupOutcome? LastRawOutcome { get; set; }
 
     /// <summary>Текст останньої помилки Stage A (для показу в UI/логах). Null, якщо перевірка не падала.</summary>
     public string? LastError { get; set; }

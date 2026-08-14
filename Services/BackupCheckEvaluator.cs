@@ -41,7 +41,23 @@ public sealed class BackupCheckEvaluator
                 nameof(kind));
         }
 
-        // ── Stage A — чи можу я взагалі подивитись? ─────────────────────────
+        // ── Stage A0 — швидка перевірка досяжності UNC-хоста ДО важкого I/O ──
+        // Directory.Exists/EnumerateFiles на недоступному мережевому шарі
+        // можуть блокуватись на нативному Windows-таймауті десятки секунд,
+        // і CancellationToken тут не рятує (Task.Run не скасовує вже
+        // запущений синхронний виклик). Коротким пінгом (той самий підхід,
+        // що WinEventLogReader.IsReachableAsync) відсікаємо це заздалегідь.
+        if (TryGetUncHost(definition.Path, out var host))
+        {
+            var reachable = await WinEventLogReader
+                .IsReachableAsync(host, timeoutMs: 1000, ct)
+                .ConfigureAwait(false);
+
+            if (!reachable)
+                return BackupCheckResult.Unknown($"Хост '{host}' недоступний (ping timeout).");
+        }
+
+        // ── Stage A
         // Будь-який збій доступу тут — завжди Unknown, без винятків
         // (жодна причина недоступності не прирівнюється до Missing).
         FileInfo? newest;
@@ -59,7 +75,7 @@ public sealed class BackupCheckEvaluator
             return BackupCheckResult.Unknown(ex.Message);
         }
 
-        // ── Stage B — я подивився, що я бачу? ───────────────────────────────
+        // ── Stage B
         if (newest is null)
             return BackupCheckResult.Missing();
 
@@ -96,5 +112,18 @@ public sealed class BackupCheckEvaluator
             .EnumerateFiles(pattern, SearchOption.TopDirectoryOnly)
             .OrderByDescending(f => f.LastWriteTime)
             .FirstOrDefault();
+    }
+
+    /// <summary>Витягує ім'я хоста з UNC-шляху (\\host\share\...). false для локальних шляхів (C:\...).</summary>
+    private static bool TryGetUncHost(string path, out string host)
+    {
+        host = string.Empty;
+        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith(@"\\", StringComparison.Ordinal))
+            return false;
+
+        var trimmed = path.TrimStart('\\');
+        var sepIndex = trimmed.IndexOfAny(['\\', '/']);
+        host = sepIndex > 0 ? trimmed[..sepIndex] : trimmed;
+        return !string.IsNullOrWhiteSpace(host);
     }
 }
