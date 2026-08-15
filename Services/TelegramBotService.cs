@@ -568,7 +568,27 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
 
     private async Task HandleCallbackQueryAsync(ITelegramBotClient client, CallbackQuery query, CancellationToken ct)
     {
-        long chatId = query.Message!.Chat.Id;
+        if (query.Message is null)
+        {
+            _logger.LogWarning(
+                "TelegramBotService: CallbackQuery без Message (id={QueryId}, data={Data}) — " +
+                "ймовірно, застаріле/видалене повідомлення.", query.Id, query.Data);
+
+            try
+            {
+                await client.AnswerCallbackQuery(query.Id,
+                    "⚠️ Це повідомлення застаріло, відкрийте екран знову через меню.",
+                    cancellationToken: ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "TelegramBotService: не вдалось відповісти на застарілий callback.");
+            }
+
+            return;
+        }
+
+        long chatId = query.Message.Chat.Id;
         int  messageId = query.Message.MessageId;
         string data   = query.Data ?? string.Empty;
 
@@ -1029,7 +1049,7 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
                     _maintenance.IsUnderMaintenance(entry.IP, entry.Group);
 
                 string maintenanceBadge = underMaintenance ? " 🔧" : string.Empty;
-                string maintenanceText = underMaintenance ? "\n            <i>[Maintenance]</i>" : string.Empty;
+                string maintenanceText = underMaintenance ? "\n            [Maintenance]" : string.Empty;
             
                 // Якщо статус ОК, показуємо дату. Якщо проблема — показуємо текст помилки (MISSING/STALE).
                 string statusDisplay = s.Outcome == BackupOutcome.Ok 
@@ -1072,7 +1092,6 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
         _pagedScreens[chatId] = new TelegramPagedScreen(screenKey, pages);
 
         await client.SendMessage(chatId, pages[0],
-            parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
             replyMarkup: BuildPaginationKeyboard(screenKey, 0, pages.Count),
             cancellationToken: ct);
     }
