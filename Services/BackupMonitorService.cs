@@ -98,11 +98,13 @@ public sealed class BackupMonitorService : BackgroundService
 
         foreach (var def in _definitions)
         {
-            if (!_serverLookup.ContainsKey(def.Name))
+            string searchKey = string.IsNullOrWhiteSpace(def.Host) ? def.Name : def.Host;
+            
+            if (!_serverLookup.ContainsKey(searchKey))
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"BackupChecks: '{def.Name}' не знайдено у appsettings.json — " +
-                    $"Maintenance-придушення для цього запису не працюватиме."));
+                    $"BackupChecks: Хост '{searchKey}' (для бекапу '{def.Name}') не знайдено у списку серверів | " +
+                            $"Maintenance-придушення не працюватиме."));
             }
         }
 
@@ -361,8 +363,36 @@ var raw = await _evaluator
             var states = JsonSerializer.Deserialize<List<BackupCheckState>>(json, JsonOptions);
             if (states is null) return;
 
+            // Валідні ключі — лише ті (Name, Kind), що досі є в BackupChecks
+            // конфігурації. Якщо запис прибрали/перейменували в appsettings.json,
+            // його стан у backups.json більше не підвантажується — інакше він
+            // "зависає" в UI/Telegram зі старим статусом (MISSING/STALE) назавжди,
+            // бо ExecuteAsync ніколи більше не викличе CheckKindAsync для нього.
+            var validKeys = _definitions
+                .SelectMany(def => string.IsNullOrWhiteSpace(def.DiffPattern)
+                    ? new[] { StateKey(def.Name, BackupKind.Full) }
+                    : new[] { StateKey(def.Name, BackupKind.Full), StateKey(def.Name, BackupKind.Diff) })
+                .ToHashSet();
+
+            int skipped = 0;
             foreach (var s in states)
-                _states[StateKey(s.Name, s.Kind)] = s;
+            {
+                var key = StateKey(s.Name, s.Kind);
+                if (!validKeys.Contains(key))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                _states[key] = s;
+            }
+
+            if (skipped > 0)
+            {
+                _logger.LogInformation(
+                    "BackupMonitorService: пропущено {Count} застарілих запис(ів) — " +
+                    "більше не знайдено у BackupChecks конфігурації.", skipped);
+            }
         }
         catch (Exception ex)
         {

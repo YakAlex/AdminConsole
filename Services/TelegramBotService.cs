@@ -54,6 +54,13 @@ public sealed class TelegramBotService
     private readonly IReadOnlyList<ServerEntry>          _terminalServers;
     private readonly IReadOnlyList<ServerEntry>          _allServers;
     
+    /// <summary>
+    /// Кеш Name → ServerEntry для SendBackupsListAsync (Maintenance-бейдж).
+    /// _allServers статичний (читається з конфігу один раз при старті),
+    /// тому словник будується один раз у конструкторі, а не на кожен /backups.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, ServerEntry> _serverLookup;
+    
     private const string LogSource = "TelegramBot";
     private bool IsSingleTerminalServer => _terminalServers.Count == 1;
 
@@ -116,6 +123,10 @@ public sealed class TelegramBotService
             .Where(s => s.Group.Equals("Terminal Servers", StringComparison.OrdinalIgnoreCase))
             .ToList()
             .AsReadOnly();
+
+        _serverLookup = _allServers
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         try { _credentials.LoadTelegramFromVault(); }
         catch (Exception ex) { _logger.LogError(ex, "TelegramBotService: не вдалось завантажити токен."); }
@@ -966,10 +977,6 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
     /// </summary>
     private async Task SendBackupsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
-        var serverLookup = _allServers
-            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
         var states = _backupMonitor.GetSnapshot()
             .OrderBy(s => s.Host)
             .ThenBy(s => s.Name)
@@ -980,7 +987,7 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
             .Select(s =>
             {
                 bool underMaintenance =
-                    serverLookup.TryGetValue(s.Host, out var entry) &&
+                    _serverLookup.TryGetValue(s.Host, out var entry) &&
                     _maintenance.IsUnderMaintenance(entry.IP, entry.Group);
 
                 string maintenanceBadge = underMaintenance ? " 🔧" : string.Empty;

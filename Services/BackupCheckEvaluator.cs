@@ -110,8 +110,7 @@ public sealed class BackupCheckEvaluator
 
         return new DirectoryInfo(path)
             .EnumerateFiles(pattern, SearchOption.TopDirectoryOnly)
-            .OrderByDescending(f => f.LastWriteTime)
-            .FirstOrDefault();
+            .MaxBy(f => f.LastWriteTime);
     }
 
     /// <summary>Витягує ім'я хоста з UNC-шляху (\\host\share\...). false для локальних шляхів (C:\...).</summary>
