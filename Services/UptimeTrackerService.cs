@@ -59,8 +59,6 @@ public sealed class UptimeTrackerService
     private readonly record struct PendingOffline(
         DateTimeOffset FellAt, string ServerName, string Group);
     
-    private readonly object               _saveLock = new();
-    
     /// <summary>
     /// Місяці (перший день місяця, за FellAt.Year/Month), чиї monthly-файли
     /// реально потребують перезапису при наступному SaveToDisk(). Заповнюється
@@ -476,55 +474,42 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     /// </summary>
     private void LoadFromDisk()
     {
-        if (!Directory.Exists(LogDir)) return;
-
-        string[] files;
-        try
-        {
-            files = Directory.GetFiles(LogDir, "uptime-*.json");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UptimeTrackerService: не вдалось прочитати директорію {Dir}", LogDir);
-            return;
-        }
+        // JsonFileStore.LoadAllMatching сам обходить директорію й кожен файл
+        // за патерном "uptime-*.json", зливаючи їх в один плаский список.
+        // Помилка одного файлу (чи навіть самого читання директорії) не
+        // зупиняє завантаження решти — та сама стійкість, що й раніше,
+        // лише винесена в onFileError callback замість ручного try/catch
+        // навколо кожної ітерації.
+        var loaded = AdminConsole.Utils.JsonFileStore.LoadAllMatching<DowntimeRecord>(
+            LogDir, "uptime-*.json", JsonOptions,
+            onFileError: (path, ex) =>
+                _logger.LogError(ex, "UptimeTrackerService: помилка читання {Path}", path));
 
         int totalLoaded = 0;
 
-        foreach (var path in files)
+        lock (_lock)
         {
-            try
+            // Дедуп за (ServerIp, FellAt) — той самий принцип, що й був:
+            // теоретично можливі дублікати між файлами (напр. старий інцидент
+            // випадково потрапив у два сусідні місячні файли через минулий баг).
+            foreach (var r in loaded)
             {
-                var json    = File.ReadAllText(path);
-                var records = JsonSerializer.Deserialize<List<DowntimeRecord>>(json, JsonOptions);
-                if (records is null) continue;
+                bool exists = _records.Any(x =>
+                    x.ServerIp == r.ServerIp &&
+                    x.FellAt   == r.FellAt);
 
-                lock (_lock)
+                if (!exists)
                 {
-                    foreach (var r in records)
-                    {
-                        bool exists = _records.Any(x =>
-                            x.ServerIp == r.ServerIp &&
-                            x.FellAt   == r.FellAt);
-
-                        if (!exists) _records.Add(r);
-                    }
+                    _records.Add(r);
+                    totalLoaded++;
                 }
+            }
 
-                totalLoaded += records.Count;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "UptimeTrackerService: помилка читання {Path}", path);
-            }
+            _records.Sort((a, b) => b.FellAt.CompareTo(a.FellAt));
         }
 
-        lock (_lock)
-            _records.Sort((a, b) => b.FellAt.CompareTo(a.FellAt));
-
         _logger.LogInformation(
-            "UptimeTrackerService: завантажено {Count} записів з {FileCount} файл(ів).",
-            totalLoaded, files.Length);
+            "UptimeTrackerService: завантажено {Count} записів.", totalLoaded);
     }
 
     /// <summary>
@@ -551,41 +536,31 @@ _lastStatus.TryGetValue(result.IP, out var prev);
         // Нічого не змінилось з моменту останнього збереження — жодного I/O.
         if (monthsToWrite.Count == 0) return;
 
-        lock (_saveLock)
+        try
         {
-            try
+            var byMonth = snapshot
+                .GroupBy(r => MonthKey(r.FellAt))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var monthStamp in monthsToWrite)
             {
-                Directory.CreateDirectory(LogDir);
+                var finalPath = FilePath(monthStamp);
 
-                var byMonth = snapshot
-                    .GroupBy(r => MonthKey(r.FellAt))
-                    .ToDictionary(g => g.Key, g => g.ToList());
-
-                foreach (var monthStamp in monthsToWrite)
+                // Записів для цього місяця більше немає (усе видалено через
+                // DeleteRecord/ClearAllResolved) — прибираємо файл замість
+                // переписувати його порожнім масивом.
+                if (!byMonth.TryGetValue(monthStamp, out var records) || records.Count == 0)
                 {
-                    var finalPath = FilePath(monthStamp);
-
-                    // Записів для цього місяця більше немає (усе видалено через
-                    // DeleteRecord/ClearAllResolved) — прибираємо файл замість
-                    // переписувати його порожнім масивом.
-                    if (!byMonth.TryGetValue(monthStamp, out var records) || records.Count == 0)
-                    {
-                        if (File.Exists(finalPath))
-                            File.Delete(finalPath);
-                        continue;
-                    }
-
-                    var tempPath = finalPath + ".tmp";
-                    var json     = JsonSerializer.Serialize(records, JsonOptions);
-
-                    File.WriteAllText(tempPath, json);
-                    File.Move(tempPath, finalPath, overwrite: true);
+                    AdminConsole.Utils.JsonFileStore.DeleteIfExists(finalPath);
+                    continue;
                 }
+
+                AdminConsole.Utils.JsonFileStore.SaveAtomic(finalPath, records, JsonOptions);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "UptimeTrackerService: помилка збереження на диск.");
-            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UptimeTrackerService: помилка збереження на диск.");
         }
     }
 

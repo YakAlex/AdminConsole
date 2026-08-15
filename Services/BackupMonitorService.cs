@@ -54,8 +54,6 @@ public sealed class BackupMonitorService : BackgroundService
         Converters    = { new JsonStringEnumConverter() }
     };
 
-    private readonly object _saveLock = new();
-
     /// <summary>
     /// Захищає мутації полів BackupCheckState (Outcome/History/лічильники)
     /// від паралельного читання в GetSnapshot() — викликається з UI-потоку
@@ -84,12 +82,12 @@ public sealed class BackupMonitorService : BackgroundService
         _serverLookup = servers.Value
             .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-        LoadFromDisk();
+        
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        LoadFromDisk();
         if (_definitions.Count == 0)
         {
             _logger.LogInformation("BackupMonitorService: BackupChecks не сконфігуровано — idle.");
@@ -337,15 +335,7 @@ var raw = await _evaluator
         try
         {
             var snapshot = _states.Values.ToList();
-            var json     = JsonSerializer.Serialize(snapshot, JsonOptions);
-
-            lock (_saveLock)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-                var tempPath = FilePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, FilePath, overwrite: true);
-            }
+            AdminConsole.Utils.JsonFileStore.SaveAtomic(FilePath, snapshot, JsonOptions);
         }
         catch (Exception ex)
         {
@@ -355,12 +345,9 @@ var raw = await _evaluator
 
     private void LoadFromDisk()
     {
-        if (!File.Exists(FilePath)) return;
-
         try
         {
-            var json   = File.ReadAllText(FilePath);
-            var states = JsonSerializer.Deserialize<List<BackupCheckState>>(json, JsonOptions);
+            var states = AdminConsole.Utils.JsonFileStore.TryLoad<List<BackupCheckState>>(FilePath, JsonOptions);
             if (states is null) return;
 
             // Валідні ключі — лише ті (Name, Kind), що досі є в BackupChecks
@@ -389,9 +376,11 @@ var raw = await _evaluator
 
             if (skipped > 0)
             {
-                _logger.LogInformation(
-                    "BackupMonitorService: пропущено {Count} застарілих запис(ів) — " +
-                    "більше не знайдено у BackupChecks конфігурації.", skipped);
+                string msg = $"Пропущено {skipped} застарілих запис(ів) — більше не знайдено у BackupChecks конфігурації.";
+                
+                _logger.LogInformation("BackupMonitorService: {Message}", msg);
+                
+                _messenger.Send(AppLogEntryMessage.Info(LogSource, msg));
             }
         }
         catch (Exception ex)

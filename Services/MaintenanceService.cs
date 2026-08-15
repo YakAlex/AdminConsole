@@ -5,7 +5,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Text.Json;
 
 namespace AdminConsole.Services;
 
@@ -33,13 +32,6 @@ public sealed class MaintenanceService : BackgroundService
 
     private static readonly string FilePath = Path.Combine(
         AdminConsole.Utils.AppPaths.BaseDirectory, "logs", "maintenance.json");
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
-    private readonly object _saveLock = new();
 
     private const string LogSource            = "Maintenance";
     private const int    CheckIntervalSeconds = 30;
@@ -211,15 +203,7 @@ public sealed class MaintenanceService : BackgroundService
     {
         try
         {
-            var json = JsonSerializer.Serialize(_windows.Values.ToList(), JsonOptions);
-
-            lock (_saveLock)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-                var tempPath = FilePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, FilePath, overwrite: true);
-            }
+            AdminConsole.Utils.JsonFileStore.SaveAtomic(FilePath, _windows.Values.ToList());
         }
         catch (Exception ex)
         {
@@ -229,20 +213,14 @@ public sealed class MaintenanceService : BackgroundService
 
     private void LoadFromDisk()
     {
-        if (!File.Exists(FilePath)) return;
-
         try
         {
-            var json    = File.ReadAllText(FilePath);
-            var windows = JsonSerializer.Deserialize<List<MaintenanceWindow>>(json, JsonOptions);
+            var windows = AdminConsole.Utils.JsonFileStore.TryLoad<List<MaintenanceWindow>>(FilePath);
             if (windows is null) return;
 
             var now = DateTimeOffset.Now;
             foreach (var w in windows)
             {
-                // Не відновлюємо прострочені вікна. Вікна "без обмеження часу" (To == null)
-                // сюди в нормі й не мають потрапляти — ClearAllOnShutdown() спорожняє файл
-                // при кожному коректному завершенні застосунку.
                 if (w.To is null || w.To >= now)
                     _windows[w.Key] = w;
             }
