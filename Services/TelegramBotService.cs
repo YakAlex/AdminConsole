@@ -46,6 +46,7 @@ public sealed class TelegramBotService
     private readonly ILogger<TelegramBotService>       _logger;
     private readonly CredentialStore                   _credentials;
     private readonly TelegramAccessControlService       _access;
+    private readonly UserSettingsService                 _userSettings;
     private readonly PingMonitorService                 _pingMonitor;
     private readonly RdpMonitorService                  _rdpMonitor;
     private readonly UptimeTrackerService                _uptimeTracker;
@@ -101,6 +102,7 @@ public sealed class TelegramBotService
         ILogger<TelegramBotService>  logger,
         CredentialStore               credentials,
         TelegramAccessControlService  access,
+        UserSettingsService           userSettings,
         PingMonitorService            pingMonitor,
         RdpMonitorService             rdpMonitor,
         UptimeTrackerService          uptimeTracker,
@@ -112,6 +114,7 @@ public sealed class TelegramBotService
         _logger         = logger;
         _credentials    = credentials;
         _access         = access;
+        _userSettings   = userSettings;
         _pingMonitor    = pingMonitor;
         _rdpMonitor     = rdpMonitor;
         _uptimeTracker  = uptimeTracker;
@@ -806,13 +809,19 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
                $"🔧 Активних вікон обслуговування: {activeMaintenance}";
     }
 
-    private static InlineKeyboardMarkup BuildStatusKeyboard() => new(new[]
-    {
-        new[] { InlineKeyboardButton.WithCallbackData("🖥 RDP по серверах", "back:rdp_picker") }
-    });
+    private static InlineKeyboardMarkup BuildStatusKeyboard() =>
+        new(Array.Empty<InlineKeyboardButton[]>());
 
     private async Task SendRdpPickerAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
+        if (!_userSettings.Current.RdpMonitoringEnabled)
+        {
+            await client.SendMessage(chatId,
+                "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.\n",
+                cancellationToken: ct);
+            return;
+        }
+        
         if (IsSingleTerminalServer)
         {
             // Один сервер — одразу показуємо сесії, без проміжного кроку вибору.
@@ -849,8 +858,17 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
     }
 
     private async Task EditWithRdpPickerAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct)
-        => await client.EditMessageText(chatId, messageId, "Оберіть сервер:",
+    {
+        if (!_userSettings.Current.RdpMonitoringEnabled)
+        {
+            await client.EditMessageText(chatId, messageId,
+                "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.", cancellationToken: ct);
+            return;
+        }
+
+        await client.EditMessageText(chatId, messageId, "Оберіть сервер:",
             replyMarkup: BuildRdpPickerKeyboard(), cancellationToken: ct);
+    }
 
     private InlineKeyboardMarkup BuildRdpPickerKeyboard()
     {
@@ -871,6 +889,13 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
     private async Task EditWithRdpSessionsAsync(
         ITelegramBotClient client, long chatId, int messageId, string serverIp, CancellationToken ct)
     {
+        if (!_userSettings.Current.RdpMonitoringEnabled)
+        {
+            await client.EditMessageText(chatId, messageId,
+                "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.", cancellationToken: ct);
+            return;
+        }
+
         // Критика #3: пряме звернення до GetSnapshot() замість покладання
         // тільки на _rdpCache — актуально одразу після старту.
         var snapshot = _rdpMonitor.GetSnapshot();
@@ -977,6 +1002,19 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
     /// </summary>
     private async Task SendBackupsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
+        // Pull-перевірка (той самий принцип, що EvaluateMonitoringToggle у
+        // BackupMonitorService) — НЕ показуємо кеш GetSnapshot(), якщо
+        // моніторинг вимкнено в Settings: BackupMonitorService перестав його
+        // оновлювати, тож дані там можуть бути застарілими (з часу вимкнення).
+        if (!_userSettings.Current.BackupMonitoringEnabled)
+        {
+            await client.SendMessage(chatId,
+                "💾 Backup-моніторинг зараз вимкнено в Settings.\n" +
+                "Дані про стан бекапів не оновлюються.",
+                cancellationToken: ct);
+            return;
+        }
+
         var states = _backupMonitor.GetSnapshot()
             .OrderBy(s => s.Host)
             .ThenBy(s => s.Name)
