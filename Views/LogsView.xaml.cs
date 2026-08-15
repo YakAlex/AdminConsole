@@ -18,6 +18,12 @@ public partial class LogsView : UserControl
         {
             if (DataContext is not LogsViewModel vm) return;
 
+            // Кожне реальне відкриття вкладки Logs (View перестворюється заново
+            // при навігації, на відміну від singleton LogsViewModel) — повертаємо
+            // сортування до "найновіші зверху", навіть якщо раніше юзер клікав
+            // на заголовок стовпця і змінив SortDescriptions того самого VM.
+            vm.ApplyDefaultSort();
+
             // Якщо вже підписані на цей самий VM — не підписуємось повторно
             if (ReferenceEquals(_subscribedVm, vm)) return;
 

@@ -306,6 +306,7 @@
                 <DataGridTextColumn
                     Header="TIME"
                     Binding="{Binding TimeShort}"
+                    SortMemberPath="TimeFull"
                     Width="80">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">

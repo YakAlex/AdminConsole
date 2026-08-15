@@ -78,15 +78,24 @@ public sealed partial class LogsViewModel
     {
         _messenger = messenger;
         LogEntriesView.Source = _logEntries;
-        LogEntriesView.SortDescriptions.Add(
-            new System.ComponentModel.SortDescription(
-                nameof(LogEntryViewModel.TimeFull),
-                System.ComponentModel.ListSortDirection.Descending));
+        ApplyDefaultSort();
         LogEntriesView.Filter += OnFilter;
 
         messenger.RegisterAll(this);
 
         _ = LoadHistoryAsync();
+    }
+
+    /// <summary>
+    /// Повертає сортування до дефолтного "найновіші зверху" (за TimeFull, Descending).
+    /// </summary>
+    public void ApplyDefaultSort()
+    {
+        LogEntriesView.SortDescriptions.Clear();
+        LogEntriesView.SortDescriptions.Add(
+            new System.ComponentModel.SortDescription(
+                nameof(LogEntryViewModel.TimeFull),
+                System.ComponentModel.ListSortDirection.Descending));
     }
 
     /// <summary>
