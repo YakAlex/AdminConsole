@@ -7,7 +7,9 @@
 /// </summary>
 public sealed class BackupCheckState
 {
-    public string     ServerName { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    
+    public string Host { get; set; } = string.Empty;
     public BackupKind Kind       { get; init; }
 
     /// <summary>

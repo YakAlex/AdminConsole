@@ -98,10 +98,10 @@ public sealed class BackupMonitorService : BackgroundService
 
         foreach (var def in _definitions)
         {
-            if (!_serverLookup.ContainsKey(def.ServerName))
+            if (!_serverLookup.ContainsKey(def.Name))
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"BackupChecks: '{def.ServerName}' не знайдено серед Servers у appsettings.json — " +
+                    $"BackupChecks: '{def.Name}' не знайдено у appsettings.json — " +
                     $"Maintenance-придушення для цього запису не працюватиме."));
             }
         }
@@ -164,17 +164,18 @@ public sealed class BackupMonitorService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "BackupMonitorService: неочікувана помилка для {Server}/{Kind}",
-                def.ServerName, kind);
+                def.Name, kind);
         }
     }
 
     private async Task CheckKindAsync(BackupCheckDefinition def, BackupKind kind, CancellationToken ct)
     {
-        var key   = StateKey(def.ServerName, kind);
+        var key   = StateKey(def.Name, kind);
         var state = _states.GetOrAdd(key, _ => new BackupCheckState
         {
-            ServerName = def.ServerName,
-            Kind       = kind
+            Name = def.Name,
+            Host = def.Host,
+            Kind = kind
         });
 
 var raw = await _evaluator
@@ -262,7 +263,7 @@ var raw = await _evaluator
         if (crossedUnknownThreshold)
         {
             _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                $"{def.ServerName} ({kind}): перевірка недоступна вже " +
+                $"{def.Name} ({kind}): перевірка недоступна вже " +
                 $"{UnknownEscalationThreshold} циклів поспіль."));
         }
 
@@ -275,10 +276,10 @@ var raw = await _evaluator
         BackupCheckDefinition def, BackupKind kind,
         BackupOutcome previous, BackupOutcome current)
     {
-        string label = $"{def.ServerName} ({kind})";
+        string label = $"{def.Name} ({kind})";
 
         bool underMaintenance =
-            _serverLookup.TryGetValue(def.ServerName, out var entry) &&
+            _serverLookup.TryGetValue(def.Host, out var entry) &&
             _maintenance.IsUnderMaintenance(entry.IP, entry.Group);
 
         if (current is BackupOutcome.Stale or BackupOutcome.Missing)
@@ -295,7 +296,7 @@ var raw = await _evaluator
 
             _messenger.Send(new BackupTransitionMessage
             {
-                ServerName = def.ServerName,
+                ServerName = def.Name,
                 Kind       = kind,
                 Previous   = previous,
                 Current    = current
@@ -361,7 +362,7 @@ var raw = await _evaluator
             if (states is null) return;
 
             foreach (var s in states)
-                _states[StateKey(s.ServerName, s.Kind)] = s;
+                _states[StateKey(s.Name, s.Kind)] = s;
         }
         catch (Exception ex)
         {
@@ -386,7 +387,8 @@ var raw = await _evaluator
     /// </summary>
     private static BackupCheckState CloneState(BackupCheckState s) => new()
     {
-        ServerName              = s.ServerName,
+        Name                    = s.Name,
+        Host                    = s.Host,
         Kind                    = s.Kind,
         Outcome                 = s.Outcome,
         LastConfirmedAt         = s.LastConfirmedAt,

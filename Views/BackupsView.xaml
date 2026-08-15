@@ -43,7 +43,7 @@
                 </StackPanel>
 
                 <TextBlock DockPanel.Dock="Right"
-                           Foreground="#44FFFFFF" FontSize="11"
+                           Foreground="#44FFFFFF" FontSize="12"
                            VerticalAlignment="Center"
                            FontFamily="Consolas, Courier New">
                     <Run Text="Last update: " />
@@ -143,7 +143,7 @@
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background"      Value="#2A37474F" />
                     <Setter Property="Foreground"      Value="#FF80CBC4" />
-                    <Setter Property="FontSize"        Value="11" />
+                    <Setter Property="FontSize"        Value="12" />
                     <Setter Property="FontWeight"      Value="SemiBold" />
                     <Setter Property="Padding"         Value="12,8" />
                     <Setter Property="BorderThickness" Value="0,0,0,1" />
@@ -200,8 +200,19 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <!-- Server -->
-                <DataGridTextColumn Header="SERVER" Binding="{Binding ServerName}" Width="170">
+                <!-- Name -->
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="170">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground"        Value="#FFECEFF1" />
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                            <Setter Property="FontWeight"        Value="Medium" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                
+                <!-- Host -->
+                <DataGridTextColumn Header="HOST" Binding="{Binding Host}" Width="150">
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"        Value="#FFECEFF1" />
@@ -241,7 +252,7 @@
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
                             <Setter Property="VerticalAlignment" Value="Center" />
                             <Setter Property="FontFamily"        Value="Consolas, Courier New" />
-                            <Setter Property="FontSize"          Value="11" />
+                            <Setter Property="FontSize"          Value="12" />
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
@@ -253,7 +264,7 @@
                             <Setter Property="Foreground"        Value="#FF90A4AE" />
                             <Setter Property="VerticalAlignment" Value="Center" />
                             <Setter Property="FontFamily"        Value="Consolas, Courier New" />
-                            <Setter Property="FontSize"          Value="11" />
+                            <Setter Property="FontSize"          Value="12" />
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
@@ -263,7 +274,7 @@
                     <DataGridTextColumn.ElementStyle>
                         <Style TargetType="TextBlock">
                             <Setter Property="Foreground"   Value="#FFEF5350" />
-                            <Setter Property="FontSize"     Value="11" />
+                            <Setter Property="FontSize"     Value="12" />
                             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                             <Setter Property="VerticalAlignment" Value="Center" />
                         </Style>
@@ -313,7 +324,7 @@
             <Grid>
 
                 <TextBlock Text="Оберіть рядок, щоб побачити деталі перевірки."
-                           Foreground="#44FFFFFF" FontSize="11"
+                           Foreground="#44FFFFFF" FontSize="12"
                            VerticalAlignment="Center">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
@@ -341,7 +352,7 @@
 
                     <TextBlock Foreground="#FF80CBC4" FontSize="12"
                                FontFamily="Consolas, Courier New">
-                        <Run Text="{Binding SelectedRow.ServerName, Mode=OneWay}" FontWeight="SemiBold" />
+                        <Run Text="{Binding SelectedRow.Name, Mode=OneWay}" FontWeight="SemiBold" />
                         <Run Text=" (" Foreground="#44FFFFFF" /><Run Text="{Binding SelectedRow.KindLabel, Mode=OneWay}" /><Run Text=")" Foreground="#44FFFFFF" />
                         <Run Text="  |  Останнє підтвердження: " Foreground="#44FFFFFF" />
                         <Run Text="{Binding SelectedRow.LastConfirmedDisplay, Mode=OneWay}" />

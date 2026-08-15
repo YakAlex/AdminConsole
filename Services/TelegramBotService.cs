@@ -665,15 +665,17 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
         {
             new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
             new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
-            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" },
-            new KeyboardButton[] { "💾 Бекапи" }
+            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" }
         };
 
-        // Пункт плану 2: "Для Primary Admin додатково: [ 👥 Користувачі ]" —
-        // ряд додається лише для Primary Admin, звичайні AllowedChatIds
-        // його не бачать (і, відповідно, не побачать /users чи callback revoke).
         if (_access.IsPrimaryAdmin(chatId))
-            rows.Add(new KeyboardButton[] { "👥 Користувачі" });
+        {
+            rows.Add(new KeyboardButton[] { "💾 Бекапи", "👥 Користувачі" });
+        }
+        else
+        {
+            rows.Add(new KeyboardButton[] { "💾 Бекапи" });
+        }
 
         return new ReplyKeyboardMarkup(rows) { ResizeKeyboard = true };
     }
@@ -943,9 +945,9 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
             .ToList();
 
         var lines = windows
-            .Select(w => $"🔧 {w.DisplayName}\n" +
-                         $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "без причини" : w.Reason)}\n" +
-                         $"   {(w.To is { } to ? $"до {to.ToLocalTime():dd.MM HH:mm}" : "без обмеження часу")}")
+            .Select(w => $"- {w.DisplayName}\n" +
+                         $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "Без причини" :  w.Reason)}\n" +
+                         $"   {(w.To is { } to ? $"До {to.ToLocalTime():dd.MM HH:mm}." : "без обмеження часу.")}")
             .ToList();
 
         if (lines.Count == 0)
@@ -969,7 +971,8 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var states = _backupMonitor.GetSnapshot()
-            .OrderBy(s => s.ServerName)
+            .OrderBy(s => s.Host)
+            .ThenBy(s => s.Name)
             .ThenBy(s => s.Kind)
             .ToList();
 
@@ -977,23 +980,29 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
             .Select(s =>
             {
                 bool underMaintenance =
-                    serverLookup.TryGetValue(s.ServerName, out var entry) &&
+                    serverLookup.TryGetValue(s.Host, out var entry) &&
                     _maintenance.IsUnderMaintenance(entry.IP, entry.Group);
 
                 string maintenanceBadge = underMaintenance ? " 🔧" : string.Empty;
-                string lastConfirmed = s.LastConfirmedAt is { } at
-                    ? $" — {at.ToLocalTime():dd.MM HH:mm}"
-                    : string.Empty;
+                string maintenanceText = underMaintenance ? "\n            <i>[Maintenance]</i>" : string.Empty;
+            
+                // Якщо статус ОК, показуємо дату. Якщо проблема — показуємо текст помилки (MISSING/STALE).
+                string statusDisplay = s.Outcome == BackupOutcome.Ok 
+                    ? (s.LastConfirmedAt is { } at ? at.ToLocalTime().ToString("dd.MM HH:mm") : "Невідомо")
+                    : s.Outcome.ToString().ToUpper();
+                
+                // Додаємо мітку [Diff] тільки якщо це диференційний бекап, Full приховуємо щоб не засмічувати екран
+                string kindTag = s.Kind == BackupKind.Diff ? " [Diff]" : string.Empty;
 
-                return $"{BackupIcon(s.Outcome)} {s.ServerName} ({s.Kind}){maintenanceBadge}\n" +
-                       $"   {s.Outcome}{lastConfirmed}";
+                
+                return $"{BackupIcon(s.Outcome)}{maintenanceBadge} {s.Name}{kindTag} — {statusDisplay}{maintenanceText}";
             })
             .ToList();
 
         if (lines.Count == 0)
             lines.Add("Перевірки бекапів не сконфігуровано (BackupChecks у appsettings.json).");
 
-        await SendPagedScreenAsync(client, chatId, screenKey: "backups", header: "💾 Backup Verification:\n", lines, ct);
+        await SendPagedScreenAsync(client, chatId,  screenKey: "backups", header: "💾 Статус бекапів:\n", lines, ct);
     }
 
     private static string BackupIcon(BackupOutcome outcome) => outcome switch
@@ -1018,6 +1027,7 @@ private async Task BroadcastBackupAlertAsync(BackupTransitionMessage message)
         _pagedScreens[chatId] = new TelegramPagedScreen(screenKey, pages);
 
         await client.SendMessage(chatId, pages[0],
+            parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
             replyMarkup: BuildPaginationKeyboard(screenKey, 0, pages.Count),
             cancellationToken: ct);
     }

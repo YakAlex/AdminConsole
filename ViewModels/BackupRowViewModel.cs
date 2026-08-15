@@ -12,9 +12,10 @@ namespace AdminConsole.ViewModels;
 /// </summary>
 public sealed partial class BackupRowViewModel : ObservableObject
 {
-    public string     ServerName { get; }
+    public string     Name { get; }
+    public string     Host       { get; }
     public BackupKind Kind       { get; }
-    public string     Key        => $"{ServerName}|{Kind}";
+    public string     Key        => $"{Name}|{Kind}";
     public string     KindLabel  => Kind == BackupKind.Full ? "Full" : "Diff";
 
     [ObservableProperty] private BackupOutcome _outcome = BackupOutcome.Unknown;
@@ -31,8 +32,9 @@ public sealed partial class BackupRowViewModel : ObservableObject
 
     public BackupRowViewModel(BackupCheckState state)
     {
-        ServerName = state.ServerName;
-        Kind       = state.Kind;
+        Name = state.Name;
+        Host = state.Host;
+        Kind = state.Kind;
         Update(state);
     }
 

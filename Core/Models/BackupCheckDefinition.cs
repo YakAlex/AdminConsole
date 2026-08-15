@@ -3,7 +3,9 @@
 /// <summary>Один запис з масиву "BackupChecks" у appsettings.json.</summary>
 public sealed class BackupCheckDefinition
 {
-    public string ServerName { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+
+    public string Host { get; init; } = string.Empty;
 
     /// <summary>Локальний або UNC-шлях до теки з файлами бекапів.</summary>
     public string Path { get; init; } = string.Empty;

@@ -36,7 +36,7 @@ public sealed partial class BackupsViewModel
     {
         var selectedKey = SelectedRow?.Key;
 
-        var incomingKeys = states.Select(s => $"{s.ServerName}|{s.Kind}").ToHashSet();
+        var incomingKeys = states.Select(s => $"{s.Name}|{s.Kind}").ToHashSet();
         for (int i = Rows.Count - 1; i >= 0; i--)
             if (!incomingKeys.Contains(Rows[i].Key))
                 Rows.RemoveAt(i);
@@ -44,7 +44,7 @@ public sealed partial class BackupsViewModel
         var existing = Rows.ToDictionary(r => r.Key);
         foreach (var state in states)
         {
-            var key = $"{state.ServerName}|{state.Kind}";
+            var key = $"{state.Name}|{state.Kind}";
             if (existing.TryGetValue(key, out var row))
                 row.Update(state);
             else
