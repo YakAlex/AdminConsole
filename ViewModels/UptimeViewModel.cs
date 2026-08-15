@@ -86,10 +86,7 @@ public sealed partial class UptimeViewModel
         _slaReport = slaReport;
         RecordsView.Source = _allRecords;
         RecordsView.Filter += OnFilter;
-        RecordsView.SortDescriptions.Add(
-            new System.ComponentModel.SortDescription(
-                nameof(DowntimeRecord.FellAt),
-                System.ComponentModel.ListSortDirection.Descending));
+        ApplyDefaultSort();
 
         // Підписуємось ПІСЛЯ налаштування CollectionViewSource
         messenger.RegisterAll(this);
@@ -152,6 +149,19 @@ public sealed partial class UptimeViewModel
         => Application.Current?.Dispatcher?.InvokeAsync(
             () => ApplySnapshot(message.Value));
 
+    
+    /// <summary>
+    /// Повертає сортування до дефолтного "найновіші зверху" (за FellAt, Descending).
+    /// </summary>
+    public void ApplyDefaultSort()
+    {
+        RecordsView.SortDescriptions.Clear();
+        RecordsView.SortDescriptions.Add(
+            new System.ComponentModel.SortDescription(
+                nameof(DowntimeRecord.FellAt),
+                System.ComponentModel.ListSortDirection.Descending));
+    }
+    
     // ── Логіка оновлення ─────────────────────────────────────────────────────
 
     private void ApplySnapshot(IReadOnlyList<DowntimeRecord> records)
