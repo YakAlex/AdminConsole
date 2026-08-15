@@ -60,6 +60,19 @@ public sealed class UptimeTrackerService
         DateTimeOffset FellAt, string ServerName, string Group);
     
     private readonly object               _saveLock = new();
+    
+    /// <summary>
+    /// Місяці (перший день місяця, за FellAt.Year/Month), чиї monthly-файли
+    /// реально потребують перезапису при наступному SaveToDisk(). Заповнюється
+    /// в кожному місці, де _records мутується — під тим самим _lock, що й самі
+    /// записи. Без цього SaveToDisk() переписував ВСІ місячні файли, що є
+    /// в пам'яті, навіть якщо змінився лише один запис у одному місяці —
+    /// за роки експлуатації таких файлів можуть бути десятки.
+    /// </summary>
+    private readonly HashSet<DateTimeOffset> _dirtyMonths = new();
+
+    private static DateTimeOffset MonthKey(DateTimeOffset fellAt) =>
+        new(fellAt.Year, fellAt.Month, 1, 0, 0, 0, TimeSpan.Zero);
 
     // ── Persistence ───────────────────────────────────────────────────────────
 
@@ -122,6 +135,7 @@ private void HandleMaintenanceStarted(MaintenanceWindow window)
             record.ClosedByMaintenance = true;
             changed = true;
 
+            _dirtyMonths.Add(MonthKey(record.FellAt));
             _lastStatus[record.ServerIp] = PingStatus.Unknown;
         }
 
@@ -268,6 +282,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
                                 FellAt      = pending.FellAt
                             });
                             _pendingOffline.Remove(result.IP);
+                            _dirtyMonths.Add(MonthKey(pending.FellAt));
                             changed = true;
                         }
                     }
@@ -287,6 +302,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
                             if (open is not null)
                             {
                                 open.RecoveredAt = DateTimeOffset.Now;
+                                _dirtyMonths.Add(MonthKey(open.FellAt));
                                 changed = true;
                             }
                         }
@@ -305,6 +321,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
                         if (open is not null)
                         {
                             open.RecoveredAt = DateTimeOffset.Now;
+                            _dirtyMonths.Add(MonthKey(open.FellAt));
                             changed = true;
 
                             _messenger.Send(AppLogEntryMessage.Info(LogSource,
@@ -410,6 +427,7 @@ _lastStatus.TryGetValue(result.IP, out var prev);
             if (!target.IsResolved && _lastStatus.ContainsKey(target.ServerIp))
                 _lastStatus[target.ServerIp] = PingStatus.Online;
 
+            _dirtyMonths.Add(MonthKey(target.FellAt));
             _records.Remove(target);
         }
 
@@ -426,6 +444,11 @@ _lastStatus.TryGetValue(result.IP, out var prev);
         int removed;
         lock (_lock)
         {
+            // Фіксуємо місяці ДО видалення — після RemoveAll() ці записи вже
+            // недоступні, щоб визначити, який файл треба перезаписати/прибрати.
+            foreach (var r in _records.Where(r => r.IsResolved))
+                _dirtyMonths.Add(MonthKey(r.FellAt));
+
             removed = _records.RemoveAll(r => r.IsResolved);
         }
 
@@ -515,8 +538,18 @@ _lastStatus.TryGetValue(result.IP, out var prev);
     /// </summary>
     private void SaveToDisk()
     {
-        List<DowntimeRecord> snapshot;
-        lock (_lock) snapshot = _records.ToList();
+        List<DowntimeRecord>    snapshot;
+        HashSet<DateTimeOffset> monthsToWrite;
+
+        lock (_lock)
+        {
+            snapshot      = _records.ToList();
+            monthsToWrite = new HashSet<DateTimeOffset>(_dirtyMonths);
+            _dirtyMonths.Clear();
+        }
+
+        // Нічого не змінилось з моменту останнього збереження — жодного I/O.
+        if (monthsToWrite.Count == 0) return;
 
         lock (_saveLock)
         {
@@ -525,35 +558,28 @@ _lastStatus.TryGetValue(result.IP, out var prev);
                 Directory.CreateDirectory(LogDir);
 
                 var byMonth = snapshot
-                    .GroupBy(r => new DateTimeOffset(
-                        r.FellAt.Year, r.FellAt.Month, 1, 0, 0, 0, TimeSpan.Zero))
+                    .GroupBy(r => MonthKey(r.FellAt))
                     .ToDictionary(g => g.Key, g => g.ToList());
 
-                foreach (var (monthStamp, records) in byMonth)
+                foreach (var monthStamp in monthsToWrite)
                 {
                     var finalPath = FilePath(monthStamp);
-                    var tempPath  = finalPath + ".tmp";
-                    var json      = JsonSerializer.Serialize(records, JsonOptions);
+
+                    // Записів для цього місяця більше немає (усе видалено через
+                    // DeleteRecord/ClearAllResolved) — прибираємо файл замість
+                    // переписувати його порожнім масивом.
+                    if (!byMonth.TryGetValue(monthStamp, out var records) || records.Count == 0)
+                    {
+                        if (File.Exists(finalPath))
+                            File.Delete(finalPath);
+                        continue;
+                    }
+
+                    var tempPath = finalPath + ".tmp";
+                    var json     = JsonSerializer.Serialize(records, JsonOptions);
 
                     File.WriteAllText(tempPath, json);
                     File.Move(tempPath, finalPath, overwrite: true);
-                }
-
-                // ФІКС: якщо для місяця в пам'яті НЕ лишилось жодного запису
-                // (усе видалено через DeleteRecord/ClearAllResolved), цикл вище
-                // його просто не торкається — файл лишався на диску зі старими
-                // "видаленими" записами назавжди, і LoadFromDisk() при наступному
-                // старті повертав їх назад. Тут прибираємо файли місяців, яких
-                // більше немає серед byMonth.
-                var monthsWithData = byMonth.Keys
-                    .Select(m => $"{m:yyyy-MM}")
-                    .ToHashSet();
-
-                foreach (var path in Directory.GetFiles(LogDir, "uptime-*.json"))
-                {
-                    var fileMonth = Path.GetFileNameWithoutExtension(path)["uptime-".Length..];
-                    if (!monthsWithData.Contains(fileMonth))
-                        File.Delete(path);
                 }
             }
             catch (Exception ex)

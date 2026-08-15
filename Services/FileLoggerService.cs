@@ -46,6 +46,18 @@ public sealed class FileLoggerService
 
     private long _droppedSinceLastFlush;
 
+// ── Persistent writer (замість open/close на кожен флаш) ────────────────
+
+    /// <summary>
+    /// Тримається відкритим між викликами FlushQueueToFile — уникаємо
+    /// повторного File.Open/Close на кожен флаш (до кількох разів на секунду
+    /// під навантаженням). Закривається й перевідкривається лише при зміні
+    /// календарної доби (ротація app-YYYY-MM-dd.log) або при Dispose().
+    /// </summary>
+    private StreamWriter? _writer;
+    private string?       _writerDate;
+    private readonly object _writerLock = new();
+
     public FileLoggerService(
         IMessenger messenger,
         ILogger<FileLoggerService> logger)
@@ -128,35 +140,50 @@ public sealed class FileLoggerService
 
         try
         {
-            string path = CurrentLogFilePath();
-
-            using var writer = new StreamWriter(
-                path,
-                append: true,
-                encoding: Encoding.UTF8)
+            lock (_writerLock)
             {
-                AutoFlush = false
-            };
-            
-            while (_queue.TryDequeue(out var entry))
-                writer.WriteLine(entry.Formatted);
+                EnsureWriterForToday();
 
-            writer.Flush();
-            
-            long dropped = Interlocked.Exchange(ref _droppedSinceLastFlush, 0);
-            if (dropped > 0)
-            {
-                writer.WriteLine(new AppLogEntry(
-                    LogSeverity.Warning, LogSource,
-                    $"Черга логів переповнена — відкинуто {dropped} запис(ів) з моменту останнього flush.",
-                    DateTimeOffset.Now).Formatted);
-                writer.Flush();
+                while (_queue.TryDequeue(out var entry))
+                    _writer!.WriteLine(entry.Formatted);
+
+                _writer!.Flush();
+
+                long dropped = Interlocked.Exchange(ref _droppedSinceLastFlush, 0);
+                if (dropped > 0)
+                {
+                    _writer.WriteLine(new AppLogEntry(
+                        LogSeverity.Warning, LogSource,
+                        $"Черга логів переповнена — відкинуто {dropped} запис(ів) з моменту останнього flush.",
+                        DateTimeOffset.Now).Formatted);
+                    _writer.Flush();
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "FileLoggerService: failed to write to log file.");
         }
+    }
+    
+    /// <summary>
+    /// Відкриває StreamWriter для сьогоднішнього файлу, якщо він ще не відкритий,
+    /// або перевідкриває його, якщо з моменту останнього виклику настала нова доба
+    /// (ротація app-YYYY-MM-dd.log). Викликається ЛИШЕ під _writerLock.
+    /// </summary>
+    private void EnsureWriterForToday()
+    {
+        string today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (_writer is not null && _writerDate == today) return;
+
+        _writer?.Dispose();
+
+        _writer = new StreamWriter(
+            CurrentLogFilePath(today), append: true, encoding: Encoding.UTF8)
+        {
+            AutoFlush = false
+        };
+        _writerDate = today;
     }
 
     private void WriteDirectly(AppLogEntry entry)
@@ -174,19 +201,23 @@ public sealed class FileLoggerService
         }
     }
 
-    private static string CurrentLogFilePath()
+    private static string CurrentLogFilePath(string? date = null)
     {
-        string fileName = $"app-{DateTime.Now:yyyy-MM-dd}.log";
+        string fileName = $"app-{date ?? DateTime.Now.ToString("yyyy-MM-dd")}.log";
         return Path.Combine(LogDirectory, fileName);
     }
     
     // ── IDisposable ──────────────────────────────────────────────────────────
     public override void Dispose()
     {
-        // SemaphoreSlim містить внутрішній WaitHandle (некерований ресурс)
-        // який необхідно явно звільнити. BackgroundService.Dispose() викликається
-        // хостом при завершенні — тому перевизначаємо тут, а не в StopAsync.
         _signal.Dispose();
+
+        lock (_writerLock)
+        {
+            _writer?.Dispose();
+            _writer = null;
+        }
+
         base.Dispose();
     }
 }
