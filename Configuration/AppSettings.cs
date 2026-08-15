@@ -55,6 +55,14 @@ public sealed class UserSettings
     ///         навіть якщо він відсутній (перевіряється ДО credential-логіки).
     /// </summary>
     public bool ZabbixMonitoringEnabled { get; set; } = true;
+
+    /// <summary>
+    /// true  — BackupMonitorService виконує перевірки BackupChecks.
+    /// false — сервіс не робить жодного файлового/мережевого I/O по шляхах
+    ///         з BackupChecks, навіть якщо вони сконфігуровані (перевіряється
+    ///         ДО будь-якого звернення до файлової системи).
+    /// </summary>
+    public bool BackupMonitoringEnabled { get; set; } = true;
     
     /// <summary>
     /// Chat ID Primary Admin в Telegram. Встановлюється один раз через

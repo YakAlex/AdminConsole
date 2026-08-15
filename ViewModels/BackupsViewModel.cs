@@ -9,7 +9,9 @@ using System.Windows;
 namespace AdminConsole.ViewModels;
 
 public sealed partial class BackupsViewModel
-    : ObservableObject, IRecipient<BackupStatusUpdatedMessage>
+    : ObservableObject,
+      IRecipient<BackupStatusUpdatedMessage>,
+      IRecipient<MonitoringToggledMessage>
 {
     public ObservableCollection<BackupRowViewModel> Rows { get; } = [];
 
@@ -20,6 +22,12 @@ public sealed partial class BackupsViewModel
     [ObservableProperty] private int    _unknownCount;
     [ObservableProperty] private string _lastUpdated = "—";
 
+    /// <summary>
+    /// true — Backup-моніторинг вимкнено в Settings. XAML ховає таблицю
+    /// рядків і показує заглушку "Backup-моніторинг вимкнено".
+    /// </summary>
+    [ObservableProperty] private bool _isMonitoringDisabled;
+
     public BackupsViewModel(IMessenger messenger, BackupMonitorService backupMonitor)
     {
         messenger.RegisterAll(this);
@@ -29,11 +37,41 @@ public sealed partial class BackupsViewModel
         ApplySnapshot(backupMonitor.GetSnapshot());
     }
 
+    /// <summary>
+    /// Синхронізує IsMonitoringDisabled. Спрацьовує на реальне перемикання
+    /// користувачем та один раз на холодному старті (SettingsViewModel конструктор).
+    /// </summary>
+    public void Receive(MonitoringToggledMessage message)
+    {
+        if (message.Service != MonitoredService.Backups) return;
+
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            IsMonitoringDisabled = !message.Value;
+
+            if (!message.Value)
+            {
+                Rows.Clear();
+                SelectedRow  = null;
+                OkCount      = 0;
+                WarningCount = 0;
+                BadCount     = 0;
+                UnknownCount = 0;
+                LastUpdated  = "—";
+            }
+        });
+    }
+
     public void Receive(BackupStatusUpdatedMessage message) =>
         Application.Current?.Dispatcher?.InvokeAsync(() => ApplySnapshot(message.Value));
 
     private void ApplySnapshot(IReadOnlyList<BackupCheckState> states)
     {
+        // Захист від запізнілого знімку, що надійшов у чергу диспетчера
+        // одразу після вимкнення моніторингу (той самий принцип, що ZabbixViewModel).
+        if (IsMonitoringDisabled)
+            return;
+
         var selectedKey = SelectedRow?.Key;
 
         var incomingKeys = states.Select(s => $"{s.Name}|{s.Kind}").ToHashSet();

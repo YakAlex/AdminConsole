@@ -44,6 +44,11 @@ public sealed partial class SettingsViewModel :
     /// Перемикач Zabbix-моніторингу. Поведінка аналогічна RdpMonitoringEnabled.
     /// </summary>
     [ObservableProperty] private bool _zabbixMonitoringEnabled;
+    
+    /// <summary>
+    /// Перемикач Backup-моніторингу. Поведінка аналогічна RdpMonitoringEnabled/ZabbixMonitoringEnabled.
+    /// </summary>
+    [ObservableProperty] private bool _backupMonitoringEnabled;
 
     // ── RDP ──────────────────────────────────────────────────────────────────
 
@@ -122,7 +127,8 @@ public sealed partial class SettingsViewModel :
         // під час ініціалізації відповідно даними з минулої сесії.
         _rdpMonitoringEnabled    = _userSettings.Current.RdpMonitoringEnabled;
         _zabbixMonitoringEnabled = _userSettings.Current.ZabbixMonitoringEnabled;
-
+        _backupMonitoringEnabled = _userSettings.Current.BackupMonitoringEnabled;
+        
         // EDGE-CASE #3 (холодний старт): публікуємо початковий стан безумовно (і для
         // true, і для false) для RdpSessionViewModel/ZabbixViewModel. Це важливо
         // саме для випадку "моніторинг був вимкнений у минулій сесії":
@@ -135,6 +141,7 @@ public sealed partial class SettingsViewModel :
         // UserSettingsService.Current напряму на своєму першому циклі (Pull).
         _messenger.Send(new MonitoringToggledMessage(MonitoredService.Rdp,    _rdpMonitoringEnabled));
         _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, _zabbixMonitoringEnabled));
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Backups, _backupMonitoringEnabled));
     }
 
     // ── Перемикачі моніторингу (RDP / Zabbix) ───────────────────
@@ -163,6 +170,16 @@ public sealed partial class SettingsViewModel :
         _userSettings.Current.ZabbixMonitoringEnabled = value;
         _userSettings.Save();
         _messenger.Send(new MonitoringToggledMessage(MonitoredService.Zabbix, value));
+    }
+
+    /// <summary>
+    /// Аналогічно OnRdpMonitoringEnabledChanged.
+    /// </summary>
+    partial void OnBackupMonitoringEnabledChanged(bool value)
+    {
+        _userSettings.Current.BackupMonitoringEnabled = value;
+        _userSettings.Save();
+        _messenger.Send(new MonitoringToggledMessage(MonitoredService.Backups, value));
     }
 
     // ── Ініціалізація стану ───────────────────────────────────────────────────

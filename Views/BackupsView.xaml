@@ -284,7 +284,9 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- ══ ROW 2 (оверлай) — заглушка, коли BackupChecks не сконфігуровано ══ -->
+        <!-- ══ ROW 2 (оверлай) — заглушка, коли BackupChecks не сконфігуровано
+             (і при цьому моніторинг НЕ вимкнено вручну — інакше пріоритет
+             має нижній оверлай "вимкнено") ══ -->
         <Border Grid.Row="2"
                 Background="#0AFFFFFF"
                 CornerRadius="6">
@@ -292,9 +294,13 @@
                 <Style TargetType="Border">
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
-                        <DataTrigger Binding="{Binding Rows.Count}" Value="0">
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Rows.Count}" Value="0" />
+                                <Condition Binding="{Binding IsMonitoringDisabled}" Value="False" />
+                            </MultiDataTrigger.Conditions>
                             <Setter Property="Visibility" Value="Visible" />
-                        </DataTrigger>
+                        </MultiDataTrigger>
                     </Style.Triggers>
                 </Style>
             </Border.Style>
@@ -307,6 +313,34 @@
                            Foreground="#66FFFFFF" FontSize="15" FontWeight="Medium"
                            HorizontalAlignment="Center" Margin="0,16,0,4" />
                 <TextBlock Text="Додайте секцію «BackupChecks» в appsettings.json."
+                           Foreground="#44FFFFFF" FontSize="12"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- ══ ROW 2 (оверлай) — заглушка ══ -->
+        <Border Grid.Row="2"
+                Background="#0AFFFFFF"
+                CornerRadius="6">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsMonitoringDisabled}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <materialDesign:PackIcon Kind="DatabaseOffOutline"
+                                         Width="48" Height="48"
+                                         Foreground="#44FFFFFF"
+                                         HorizontalAlignment="Center" />
+                <TextBlock Text="Backup-моніторинг вимкнено"
+                           Foreground="#66FFFFFF" FontSize="15" FontWeight="Medium"
+                           HorizontalAlignment="Center" Margin="0,16,0,4" />
+                <TextBlock Text="Увімкніть його в Settings → Моніторинг сервісів."
                            Foreground="#44FFFFFF" FontSize="12"
                            HorizontalAlignment="Center" />
             </StackPanel>

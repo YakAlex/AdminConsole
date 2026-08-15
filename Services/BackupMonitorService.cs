@@ -33,11 +33,17 @@ public sealed class BackupMonitorService : BackgroundService
     private readonly IReadOnlyDictionary<string, ServerEntry> _serverLookup;
     private readonly MaintenanceService                 _maintenance;
     private readonly BackupCheckEvaluator                _evaluator;
+    private readonly UserSettingsService                 _userSettings;
 
     private readonly ConcurrentDictionary<string, BackupCheckState> _states = new();
 
     private const string LogSource         = "BackupMonitor";
     private const int    MaxHistorySamples = 14;
+
+    // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу) —
+    // той самий підхід, що RdpMonitorService/ZabbixPollerService (Pull, edge-case #2).
+    private bool? _monitoringWasEnabled;
+    private CancellationTokenSource? _wakeUpCts;
     
     /// <summary>Захист від некоректного/від'ємного/нульового appsettings — той самий патерн, що MinOfflineIntervalSec у PingMonitorService.</summary>
     private const int    MinBackupPollIntervalMinutes = 1;
@@ -63,14 +69,15 @@ public sealed class BackupMonitorService : BackgroundService
     /// </summary>
     private readonly object _stateLock = new();
 
-    public BackupMonitorService(
+public BackupMonitorService(
         IMessenger                             messenger,
         ILogger<BackupMonitorService>          logger,
         IOptions<MonitoringSettings>           settings,
         IOptions<List<BackupCheckDefinition>>  backupChecks,
         IOptions<List<ServerEntry>>            servers,
         MaintenanceService                     maintenance,
-        BackupCheckEvaluator                   evaluator)
+        BackupCheckEvaluator                   evaluator,
+        UserSettingsService                    userSettings)
     {
         _messenger    = messenger;
         _logger       = logger;
@@ -78,11 +85,63 @@ public sealed class BackupMonitorService : BackgroundService
         _definitions  = backupChecks.Value.AsReadOnly();
         _maintenance  = maintenance;
         _evaluator    = evaluator;
+        _userSettings = userSettings;
 
         _serverLookup = servers.Value
             .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         
+
+        WeakReferenceMessenger.Default.Register<MonitoringToggledMessage>(
+            this, (_, msg) => OnMonitoringToggled(msg));
+    }
+
+    /// <summary>
+    /// Реагує на перемикання Backup-моніторингу в Settings. НЕ довіряє полю
+    /// Enabled з повідомлення — лише сигнал "прокинься і перевір
+    /// UserSettingsService.Current самостійно" (Pull, той самий підхід, що
+    /// RdpMonitorService/ZabbixPollerService). Дозволяє увімкненню діяти
+    /// миттєво, не чекаючи BackupPollIntervalMinutes.
+    /// </summary>
+    private void OnMonitoringToggled(MonitoringToggledMessage msg)
+    {
+        if (msg.Service != MonitoredService.Backups) return;
+
+        var cts = Interlocked.Exchange(ref _wakeUpCts, null);
+        if (cts is null) return;
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>
+    /// Перевіряє поточний стан BackupMonitoringEnabled і, лише при РЕАЛЬНІЙ
+    /// зміні відносно попередньої перевірки, логує подію та шле
+    /// MonitoringToggledMessage для синхронізації UI-вкладки Backups.
+    /// </summary>
+    private bool EvaluateMonitoringToggle()
+    {
+        bool enabled = _userSettings.Current.BackupMonitoringEnabled;
+
+        if (_monitoringWasEnabled == enabled)
+            return enabled; // стан не змінився — тиша, без спаму логів
+
+        bool isColdStart = _monitoringWasEnabled is null;
+        _monitoringWasEnabled = enabled;
+
+        if (!enabled)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                "Backup моніторинг вимкнено в Settings."));
+            _messenger.Send(new MonitoringToggledMessage(MonitoredService.Backups, false));
+        }
+        else if (!isColdStart)
+        {
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                "Backup моніторинг увімкнено — відновлюємо перевірки."));
+            _messenger.Send(new MonitoringToggledMessage(MonitoredService.Backups, true));
+        }
+
+        return enabled;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -97,42 +156,74 @@ public sealed class BackupMonitorService : BackgroundService
         foreach (var def in _definitions)
         {
             string searchKey = string.IsNullOrWhiteSpace(def.Host) ? def.Name : def.Host;
-            
             if (!_serverLookup.ContainsKey(searchKey))
             {
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
-                    $"BackupChecks: Хост '{searchKey}' (для бекапу '{def.Name}') не знайдено у списку серверів | " +
-                            $"Maintenance-придушення не працюватиме."));
+                    $"BackupChecks: '{def.Name}' не знайдено серед Servers у appsettings.json — " +
+                    $"Maintenance-придушення для цього запису не працюватиме."));
             }
         }
 
-        var pollInterval = Math.Max(
-            _settings.BackupPollIntervalMinutes,
-            MinBackupPollIntervalMinutes);
+        // Перевіряємо toggle ОДИН раз тут, щоб не логувати "запущено", якщо
+        // Backup-моніторинг насправді вимкнено з минулої сесії (edge-case,
+        // той самий підхід, що RdpMonitorService/ZabbixPollerService).
+        bool backupMonitoringEnabled = EvaluateMonitoringToggle();
 
-        _messenger.Send(AppLogEntryMessage.Info(LogSource,
-            $"Backup monitor запущено — {_definitions.Count} перевірок(и), " +
-            $"інтервал: {pollInterval} хв."));
-
-        while (!stoppingToken.IsCancellationRequested)
+        if (backupMonitoringEnabled)
         {
-            try
-            {
-                await RunCycleAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "BackupMonitorService: неочікувана помилка циклу.");
-            }
+            _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                $"Backup monitor запущено — {_definitions.Count} перевірок(и)."));
+        }
 
-            try
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(
-                    TimeSpan.FromMinutes(pollInterval),
-                    stoppingToken).ConfigureAwait(false);
+                // Перевірка toggle — НАЙПЕРША дія на кожній ітерації, ЩЕ ДО
+                // RunCycleAsync. Якщо вимкнено — жодного файлового/мережевого
+                // I/O в цьому циклі не буде.
+                if (EvaluateMonitoringToggle())
+                {
+                    try
+                    {
+                        await RunCycleAsync(stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "BackupMonitorService: неочікувана помилка циклу.");
+                    }
+                }
+
+                using var delayCts = CancellationTokenSource
+                    .CreateLinkedTokenSource(stoppingToken);
+
+                Interlocked.Exchange(ref _wakeUpCts, delayCts);
+
+                try
+                {
+                    await Task.Delay(
+                        TimeSpan.FromMinutes(_settings.BackupPollIntervalMinutes),
+                        delayCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // Пробудження прийшло від MonitoringToggledMessage (перемкнули
+                    // "Backup моніторинг" у Settings) — запускаємо позачерговий
+                    // цикл негайно, не чекаючи BackupPollIntervalMinutes.
+                    _messenger.Send(AppLogEntryMessage.Info(LogSource,
+                        "Backup monitor: отримано сигнал пробудження — запускаємо позачерговий цикл."));
+                }
+                catch (OperationCanceledException) { break; }
+
+                Interlocked.Exchange(ref _wakeUpCts, null);
             }
-            catch (OperationCanceledException) { break; }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            _wakeUpCts = null;
+            WeakReferenceMessenger.Default.Unregister<MonitoringToggledMessage>(this);
         }
     }
 

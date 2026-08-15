@@ -8,7 +8,8 @@ namespace AdminConsole.Core.Messages;
 public enum MonitoredService
 {
     Rdp,
-    Zabbix
+    Zabbix,
+    Backups
 }
 
 /// <summary>

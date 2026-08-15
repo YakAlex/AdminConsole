@@ -1337,7 +1337,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="14,10">
+                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <ToggleButton IsChecked="{Binding Settings.ZabbixMonitoringEnabled}"
                                                   Margin="0,0,10,0"
@@ -1346,6 +1346,20 @@
                                         <TextBlock Text="Zabbix моніторинг"
                                                    Foreground="#FFECEFF1" FontSize="13"/>
                                         <TextBlock Text="Вимкнено — API не опитується, токен не запитується"
+                                                   Foreground="#66FFFFFF" FontSize="11"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="14,10">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ToggleButton IsChecked="{Binding Settings.BackupMonitoringEnabled}"
+                                                  Margin="0,0,10,0"
+                                                  Style="{DynamicResource MaterialDesignSwitchToggleButton}"/>
+                                    <StackPanel>
+                                        <TextBlock Text="Backup моніторинг"
+                                                   Foreground="#FFECEFF1" FontSize="13"/>
+                                        <TextBlock Text="Вимкнено — перевірки файлів бекапів не виконуються"
                                                    Foreground="#66FFFFFF" FontSize="11"/>
                                     </StackPanel>
                                 </StackPanel>
