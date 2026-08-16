@@ -25,6 +25,19 @@ public sealed partial class BackupRowViewModel : ObservableObject
     [ObservableProperty] private string        _samplesDisplay       = "0";
     [ObservableProperty] private string?       _lastError;
     [ObservableProperty] private bool          _hasError;
+    
+    /// <summary>
+    /// Сирий (не форматований) час останнього підтвердження — потрібен
+    /// Overview 2.0 для сортування "найдавніший підтверджений бекап" за
+    /// фактичним часом, а не за рядком LastConfirmedDisplay.
+    /// </summary>
+    [ObservableProperty] private DateTimeOffset? _lastConfirmedAt;
+
+    /// <summary>
+    /// Знімок rolling-історії розмірів (копія, НЕ жива посилання на
+    /// внутрішній список BackupCheckState) — для міні-спарклайну на Overview.
+    /// </summary>
+    [ObservableProperty] private IReadOnlyList<BackupSample> _history = [];
 
     [ObservableProperty] private SolidColorBrush _badgeBackground = Freeze("#CC607D8B");
     [ObservableProperty] private SolidColorBrush _badgeForeground = Freeze("#FFFFFFFF");
@@ -45,6 +58,8 @@ public sealed partial class BackupRowViewModel : ObservableObject
         LastError = state.LastError;
         HasError  = state.LastError is not null;
 
+        LastConfirmedAt = state.LastConfirmedAt;
+        History = state.History.ToList();
         LastConfirmedDisplay = state.LastConfirmedAt is { } at
             ? at.ToLocalTime().ToString("MM-dd HH:mm")
             : "—";

@@ -28,6 +28,11 @@ public sealed partial class UptimeViewModel
 
     // CollectionViewSource — фільтрація і сортування без дублювання даних
     public CollectionViewSource RecordsView { get; } = new();
+    
+    /// <summary>
+    /// Overview: топ-5 записів для міні-фіду на стартовій вкладці
+    /// </summary>
+    public ObservableCollection<DowntimeRecord> RecentFeed { get; } = [];
 
     // ── Зведена статистика (верхній рядок) ──────────────────────────────────
 
@@ -97,6 +102,7 @@ public sealed partial class UptimeViewModel
             _allRecords.Add(r);
         UpdateSummary(initial);
         UpdateFilterLists(initial);
+        UpdateRecentFeed(initial);
 
         // Запускаємо таймер оновлення тривалості активних інцидентів.
         // Спрацьовує кожні 10 секунд — тільки якщо є активні інциденти,
@@ -117,6 +123,7 @@ public sealed partial class UptimeViewModel
                         else
                             SelectedRecord = null;
                         OnPropertyChanged(nameof(SelectedRecord));
+                        UpdateRecentFeed(_allRecords);
                     }
                 });
             },
@@ -196,8 +203,22 @@ public sealed partial class UptimeViewModel
 
         UpdateSummary(records);
         UpdateFilterLists(records);
+        UpdateRecentFeed(records);
         RecordsView.View?.Refresh();
         OnPropertyChanged(nameof(HasResolvedRecords));
+    }
+    
+    /// <summary>Перераховує RecentFeed — топ-5, активні інциденти пріоритетні.</summary>
+    private void UpdateRecentFeed(IReadOnlyList<DowntimeRecord> records)
+    {
+        var top = records
+            .OrderByDescending(r => !r.IsResolved)
+            .ThenByDescending(r => r.FellAt)
+            .Take(5)
+            .ToList();
+
+        RecentFeed.Clear();
+        foreach (var r in top) RecentFeed.Add(r);
     }
 
     private void UpdateSummary(IReadOnlyList<DowntimeRecord> records)

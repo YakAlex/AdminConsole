@@ -16,6 +16,7 @@ public sealed class ZabbixProblemViewModel
     public ZabbixSeverity Severity      { get; }
     public string         SeverityLabel { get; }
     public string         StartTime     { get; }
+    public DateTimeOffset StartTimeRaw  { get; }
     public string         AgeDisplay    { get; }
 
     public SolidColorBrush SeverityBackground { get; }
@@ -29,6 +30,7 @@ public sealed class ZabbixProblemViewModel
         Description = problem.Description;
         Severity    = problem.Severity;
         AgeDisplay  = problem.AgeDisplay;
+        StartTimeRaw = problem.StartTime;
         StartTime   = problem.StartTime.ToLocalTime().ToString("MM-dd HH:mm");
 
         SeverityLabel = problem.Severity switch

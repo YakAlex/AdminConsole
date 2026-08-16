@@ -7,6 +7,7 @@ namespace AdminConsole.ViewModels;
 public sealed partial class MainViewModel : ObservableObject
 {
 // ── Child ViewModels ──────────────────────────────────────────────────────
+    public OverviewViewModel        Overview        { get; }
     public PingDashboardViewModel   PingDashboard   { get; }
     public UptimeViewModel          Uptime          { get; }
     public ResourceMonitorViewModel ResourceMonitor { get; }
@@ -32,6 +33,7 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isSettingsOpen = false;
 
     public MainViewModel(
+        OverviewViewModel        overview,
         PingDashboardViewModel   pingDashboard,
         UptimeViewModel          uptime,
         ResourceMonitorViewModel resourceMonitor,
@@ -42,6 +44,7 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsViewModel        settings,
         UserSettingsService      userSettings)
     {
+        Overview        = overview;
         PingDashboard   = pingDashboard;
         Uptime          = uptime;
         ResourceMonitor = resourceMonitor;
@@ -62,14 +65,15 @@ public sealed partial class MainViewModel : ObservableObject
 
         (CurrentView, CurrentPageTitle) = index switch
         {
-            0 => ((object)PingDashboard,  "Ping Dashboard"),
-            1 => (Uptime,                  "Uptime & Incidents"),
-            2 => (ResourceMonitor,         "Resource Monitor"),
-            3 => (RdpSessions,             "RDP Sessions"),
-            4 => (Zabbix,                  "Zabbix Alerts"),
-            5 => (Backups,                 "Backup Verification"),
-            6 => (Logs,                    "Logs"),
-            _ => (PingDashboard,           "Admin Console")
+            0 => ((object)Overview,        "Overview"),
+            1 => (PingDashboard,           "Ping Dashboard"),
+            2 => (Uptime,                  "Uptime & Incidents"),
+            3 => (ResourceMonitor,         "Resource Monitor"),
+            4 => (RdpSessions,             "RDP Sessions"),
+            5 => (Zabbix,                  "Zabbix Alerts"),
+            6 => (Backups,                 "Backup Verification"),
+            7 => (Logs,                    "Logs"),
+            _ => (Overview,                "Admin Console")
         };
     }
 

@@ -1,0 +1,863 @@
+﻿<UserControl
+    x:Class="AdminConsole.Views.OverviewView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    xmlns:converters="clr-namespace:AdminConsole.Converters"
+    xmlns:models="clr-namespace:AdminConsole.Core.Models"
+    xmlns:vm="clr-namespace:AdminConsole.ViewModels"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance vm:OverviewViewModel, IsDesignTimeCreatable=False}"
+    d:DesignHeight="900" d:DesignWidth="1400">
+
+    <UserControl.Resources>
+
+        <!-- Кнопка без chrome — для клікабельних stat-зон і footer-лінків -->
+        <Style x:Key="CardLinkButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Спільна "оболонка" картки — фон, радіус, тінь, однакова MinHeight для всіх 6 -->
+        <Style x:Key="CardShell" TargetType="Border">
+            <Setter Property="Background" Value="#1EFFFFFF" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="MinHeight" Value="340" />
+            <Setter Property="BorderBrush" Value="#14FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="CardTitleText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FF80CBC4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="CardFooterLink" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FF80CBC4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <Style x:Key="EmptyStateText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#44FFFFFF" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Overflow-підпис ("+N ще") — прихований, коли лишку немає -->
+        <Style x:Key="OverflowText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#44FFFFFF" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="Visibility" Value="Visible" />
+        </Style>
+
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,0,16">
+
+            <!-- ═══════════════════════════════════════
+                 Toolbar
+            ═══════════════════════════════════════ -->
+            <Border Background="#1AFFFFFF" CornerRadius="6" Margin="0,0,0,16" Padding="16,0" Height="56">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="ViewDashboardOutline"
+                                             Width="22" Height="22"
+                                             Foreground="#FF80CBC4"
+                                             VerticalAlignment="Center" />
+                    <TextBlock Text="Overview"
+                               Foreground="White" FontSize="16" FontWeight="Medium"
+                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════════════════════════════════════
+                 Композитний банер + розшифровка
+            ═══════════════════════════════════════ -->
+            <Border CornerRadius="10" Padding="20,16" Margin="0,0,0,20">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#2200C853" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding OverallHealth}" Value="Warning">
+                                <Setter Property="Background" Value="#22FF9800" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding OverallHealth}" Value="Critical">
+                                <Setter Property="Background" Value="#22F44336" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Width="28" Height="28" VerticalAlignment="Center">
+                        <materialDesign:PackIcon.Style>
+                            <Style TargetType="materialDesign:PackIcon">
+                                <Setter Property="Kind" Value="CheckCircleOutline" />
+                                <Setter Property="Foreground" Value="#FF4CAF50" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding OverallHealth}" Value="Warning">
+                                        <Setter Property="Kind" Value="AlertOutline" />
+                                        <Setter Property="Foreground" Value="#FFFFA726" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding OverallHealth}" Value="Critical">
+                                        <Setter Property="Kind" Value="AlertCircleOutline" />
+                                        <Setter Property="Foreground" Value="#FFEF5350" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </materialDesign:PackIcon.Style>
+                    </materialDesign:PackIcon>
+
+                    <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+                        <TextBlock FontSize="17" FontWeight="SemiBold">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="Всі системи в нормі" />
+                                    <Setter Property="Foreground" Value="#FF4CAF50" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding OverallHealth}" Value="Warning">
+                                            <Setter Property="Text" Value="Є попередження — перевірте деталі нижче" />
+                                            <Setter Property="Foreground" Value="#FFFFA726" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OverallHealth}" Value="Critical">
+                                            <Setter Property="Text" Value="Є критичні проблеми — перевірте деталі нижче" />
+                                            <Setter Property="Foreground" Value="#FFEF5350" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding OverallHealthDetail, Mode=OneWay}"
+                                   Foreground="#AAFFFFFF" FontSize="12" Margin="0,4,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══════════════════════════════════════
+                 Сітка 3×2 — Row1: тривога, Row2: контекст
+            ═══════════════════════════════════════ -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- ══════════════ PING ══════════════ -->
+                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardShell}" Margin="0,0,16,16">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="1">
+                            <StackPanel Margin="20,20,20,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="AccessPoint" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="PING" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock FontSize="30" FontWeight="Bold">
+                                    <Run Text="{Binding Ping.OnlineCount, Mode=OneWay}" Foreground="#FF4CAF50" />
+                                    <Run Text=" / " Foreground="#66FFFFFF" />
+                                    <Run Text="{Binding Ping.TotalCount, Mode=OneWay}" Foreground="White" />
+                                </TextBlock>
+                                <TextBlock FontSize="13" Margin="0,6,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding Ping.OfflineCount, StringFormat='{}{0} офлайн'}" />
+                                            <Setter Property="Foreground" Value="#FFEF9A9A" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Ping.OfflineCount}" Value="0">
+                                                    <Setter Property="Text" Value="Усі сервери онлайн ✅" />
+                                                    <Setter Property="Foreground" Value="#FF80CBC4" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="1" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding OfflineServers}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:PingResultViewModel}">
+                                                <Grid Margin="0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Ellipse Grid.Column="0" Width="7" Height="7" Fill="#FFEF5350"
+                                                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBlock Grid.Column="1" FontSize="12" Foreground="#FFECEFF1"
+                                                               FontWeight="Medium" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Name, Mode=OneWay}" />
+                                                        <Run Text=" (" Foreground="#66FFFFFF" />
+                                                        <Run Text="{Binding Group, Mode=OneWay}" Foreground="#66FFFFFF" />
+                                                        <Run Text=")" Foreground="#66FFFFFF" />
+                                                    </TextBlock>
+                                                    <materialDesign:PackIcon Grid.Column="2" Kind="PauseCircleOutline"
+                                                                             Width="14" Height="14" Foreground="#FF90A4AE"
+                                                                             VerticalAlignment="Center" ToolTip="Під обслуговуванням">
+                                                        <materialDesign:PackIcon.Style>
+                                                            <Style TargetType="materialDesign:PackIcon">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsUnderMaintenance}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </materialDesign:PackIcon.Style>
+                                                    </materialDesign:PackIcon>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Text="{Binding OfflineOverflowCount, StringFormat='+{0} ще офлайн'}">
+                                        <TextBlock.Style>
+                                            <Style BasedOn="{StaticResource OverflowText}" TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding OfflineOverflowCount}" Value="0">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OfflineServers.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Немає проблем" Style="{StaticResource EmptyStateText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="2" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="1">
+                            <TextBlock Text="Ping Dashboard →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════════ UPTIME ══════════════ -->
+                <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardShell}" Margin="0,0,16,16">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="2">
+                            <StackPanel Margin="20,20,20,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="ClockAlertOutline" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="UPTIME" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock FontSize="30" FontWeight="Bold">
+                                    <Run Text="{Binding Uptime.ActiveIncidents, Mode=OneWay}">
+                                        <Run.Style>
+                                            <Style TargetType="Run">
+                                                <Setter Property="Foreground" Value="#FF4CAF50" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding UptimeHealth}" Value="Critical">
+                                                        <Setter Property="Foreground" Value="#FFEF5350" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Run.Style>
+                                    </Run>
+                                    <Run Text=" активних" Foreground="White" FontSize="16" FontWeight="Normal" />
+                                </TextBlock>
+                                <TextBlock FontSize="13" Foreground="#FF90A4AE" Margin="0,6,0,0">
+                                    <Run Text="{Binding Uptime.TodayIncidents, Mode=OneWay}" />
+                                    <Run Text=" сьогодні   ·   Max: " />
+                                    <Run Text="{Binding Uptime.LongestDowntime, Mode=OneWay}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="1" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding Uptime.RecentFeed}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:DowntimeRecord}">
+                                            <Grid Margin="0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Setter Property="Fill" Value="#FF607D8B" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsResolved}" Value="False">
+                                                                    <Setter Property="Fill" Value="#FFEF5350" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                                <TextBlock Grid.Column="1" FontSize="12" Foreground="#FFECEFF1" FontWeight="Medium"
+                                                           TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding ServerName, Mode=OneWay}" />
+                                                    <Run Text=" (" Foreground="#66FFFFFF" />
+                                                    <Run Text="{Binding ServerGroup, Mode=OneWay}" Foreground="#66FFFFFF" />
+                                                    <Run Text=")" Foreground="#66FFFFFF" />
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="2" FontSize="11" Foreground="#FF90A4AE"
+                                                           FontFamily="Consolas, Courier New"
+                                                           Text="{Binding DurationDisplay, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Uptime.RecentFeed.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Історія інцидентів порожня" Style="{StaticResource EmptyStateText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="2" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="2">
+                            <TextBlock Text="Uptime &amp; Incidents →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════════ ZABBIX ══════════════ -->
+                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource CardShell}" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="5">
+                            <StackPanel Margin="20,20,20,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="Bell" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="ZABBIX" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Zabbix.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock FontSize="26" FontWeight="Bold">
+                                        <Run Text="{Binding Zabbix.DisasterCount, Mode=OneWay}" Foreground="#FFEF5350" />
+                                        <Run Text=" Disaster" Foreground="White" FontSize="15" FontWeight="Normal" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="16" Margin="0,4,0,0">
+                                        <Run Text="{Binding Zabbix.HighCount, Mode=OneWay}" Foreground="#FFFFA726" FontWeight="Bold" />
+                                        <Run Text=" High" Foreground="White" FontSize="14" />
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Zabbix.ConnectionStatus, Mode=OneWay}"
+                                               Foreground="{Binding Zabbix.StatusColor}" FontSize="11" Margin="0,6,0,0" />
+                                </StackPanel>
+
+                                <TextBlock Text="Вимкнено в Settings" Foreground="#FF607D8B" FontSize="14" FontStyle="Italic">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Zabbix.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="1" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding TopProblems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:ZabbixProblemViewModel}">
+                                            <Grid Margin="0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Background="{Binding SeverityBackground}" CornerRadius="4"
+                                                        Padding="5,1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding SeverityLabel}" Foreground="{Binding SeverityForeground}"
+                                                               FontSize="9" FontWeight="Bold" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1" FontSize="12" Foreground="#FFECEFF1"
+                                                           TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding HostName, Mode=OneWay}" FontWeight="Medium" />
+                                                    <Run Text=" — " Foreground="#66FFFFFF" />
+                                                    <Run Text="{Binding Description, Mode=OneWay}" Foreground="#FFB0BEC5" />
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="2" FontSize="11" Foreground="#FF90A4AE"
+                                                           FontFamily="Consolas, Courier New"
+                                                           Text="{Binding AgeDisplay, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TopProblems.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Проблем не знайдено" Style="{StaticResource EmptyStateText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="2" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="5">
+                            <TextBlock Text="Zabbix Alerts →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════════ BACKUPS ══════════════ -->
+                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardShell}" Margin="0,0,16,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="6">
+                            <StackPanel Margin="20,20,20,10">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="DatabaseCheckOutline" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="BACKUPS" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Backups.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <Border Background="#224CAF50" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
+                                        <TextBlock FontSize="14" FontWeight="Bold">
+                                            <Run Text="{Binding Backups.OkCount, Mode=OneWay}" Foreground="#FF4CAF50" />
+                                            <Run Text=" OK" Foreground="#FF4CAF50" FontSize="11" FontWeight="Normal" />
+                                        </TextBlock>
+                                    </Border>
+                                    <Border Background="#22FFD600" CornerRadius="6" Padding="10,5" Margin="0,0,8,0">
+                                        <TextBlock FontSize="14" FontWeight="Bold">
+                                            <Run Text="{Binding Backups.WarningCount, Mode=OneWay}" Foreground="#FFFFD600" />
+                                            <Run Text=" WARN" Foreground="#FFFFD600" FontSize="11" FontWeight="Normal" />
+                                        </TextBlock>
+                                    </Border>
+                                    <Border Background="#22E53935" CornerRadius="6" Padding="10,5">
+                                        <TextBlock FontSize="14" FontWeight="Bold">
+                                            <Run Text="{Binding Backups.BadCount, Mode=OneWay}" Foreground="#FFEF5350" />
+                                            <Run Text=" CRIT" Foreground="#FFEF5350" FontSize="11" FontWeight="Normal" />
+                                        </TextBlock>
+                                    </Border>
+                                </StackPanel>
+
+                                <TextBlock Text="Вимкнено в Settings" Foreground="#FF607D8B" FontSize="14" FontStyle="Italic">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Backups.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Найдавніший підтверджений + спарклайн найпроблемнішого -->
+                        <StackPanel Grid.Row="1" Margin="20,0,20,10">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Backups.IsMonitoringDisabled}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding OldestConfirmedBackup}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+
+                            <TextBlock FontSize="11" Foreground="#66FFFFFF">
+                                <Run Text="Найдавніший підтверджений: " />
+                                <Run Text="{Binding OldestConfirmedBackup.Name, Mode=OneWay}" Foreground="#FFB0BEC5" FontWeight="Medium" />
+                                <Run Text=" — " />
+                                <Run Text="{Binding OldestConfirmedBackupAge, Mode=OneWay}" Foreground="#FFB0BEC5" />
+                            </TextBlock>
+
+                            <StackPanel Margin="0,10,0,0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding WorstBackup}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+
+                                <TextBlock FontSize="11" Foreground="#66FFFFFF" Margin="0,0,0,4">
+                                    <Run Text="Розмір · " />
+                                    <Run Text="{Binding WorstBackup.Name, Mode=OneWay}" Foreground="#FFB0BEC5" />
+                                </TextBlock>
+                                <Polyline Points="{Binding WorstBackup.History, Converter={x:Static converters:BackupHistoryToPointsConverter.Instance}}"
+                                          Width="160" Height="36"
+                                          Stroke="#FFFFA726" StrokeThickness="2"
+                                          StrokeLineJoin="Round" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Grid Grid.Row="2" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding ProblemBackups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:BackupRowViewModel}">
+                                            <Grid Margin="0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Background="{Binding BadgeBackground}" CornerRadius="4"
+                                                        Padding="5,1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding OutcomeLabel}" Foreground="{Binding BadgeForeground}"
+                                                               FontSize="9" FontWeight="Bold" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1" FontSize="12" Foreground="#FFECEFF1"
+                                                           TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium" />
+                                                    <Run Text=" · " Foreground="#66FFFFFF" />
+                                                    <Run Text="{Binding KindLabel, Mode=OneWay}" Foreground="#66FFFFFF" />
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="2" FontSize="11" Foreground="#FF90A4AE"
+                                                           FontFamily="Consolas, Courier New"
+                                                           Text="{Binding LastConfirmedDisplay, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ProblemBackups.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Усі перевірки в нормі" Style="{StaticResource EmptyStateText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="3" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="6">
+                            <TextBlock Text="Backup Verification →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════════ RDP ══════════════ -->
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardShell}" Margin="0,0,16,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="4">
+                            <StackPanel Margin="20,20,20,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="RemoteDesktop" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="RDP" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Rdp.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock FontSize="26" FontWeight="Bold" Foreground="#FF4CAF50">
+                                        <Run Text="{Binding Rdp.ActiveCount, Mode=OneWay}" />
+                                        <Run Text=" активних" Foreground="White" FontSize="15" FontWeight="Normal" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="13" Foreground="#FF90A4AE" Margin="0,6,0,0">
+                                        <Run Text="{Binding Rdp.DisconnectedCount, Mode=OneWay}" />
+                                        <Run Text=" відключено" />
+                                    </TextBlock>
+                                </StackPanel>
+
+                                <TextBlock Text="Вимкнено в Settings" Foreground="#FF607D8B" FontSize="14" FontStyle="Italic">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Rdp.IsMonitoringDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="1" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding TopSessions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:RdpSessionRowViewModel}">
+                                            <Grid Margin="0,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <Ellipse.Fill>
+                                                        <SolidColorBrush Color="{Binding StateDotColor, Converter={x:Static converters:StringToColorConverter.Instance}}" />
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                                <TextBlock Grid.Column="1" FontSize="12" Foreground="#FFECEFF1"
+                                                           TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding Username, Mode=OneWay}" FontWeight="Medium" />
+                                                    <Run Text=" @ " Foreground="#66FFFFFF" />
+                                                    <Run Text="{Binding ServerName, Mode=OneWay}" Foreground="#66FFFFFF" />
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="2" FontSize="11" Foreground="#FF90A4AE"
+                                                           FontFamily="Consolas, Courier New"
+                                                           Text="{Binding LogonTime, Mode=OneWay}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TopSessions.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="AccountOffOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Немає активних сесій" Style="{StaticResource EmptyStateText}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="2" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="4">
+                            <TextBlock Text="RDP Sessions →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- ══════════════ MAINTENANCE ══════════════ -->
+                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource CardShell}" Margin="0,0,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Button Grid.Row="0" Style="{StaticResource CardLinkButton}"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="1"
+                                ToolTip="Керування вікнами обслуговування — на вкладці Ping Dashboard">
+                            <StackPanel Margin="20,20,20,16">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <materialDesign:PackIcon Kind="WrenchOutline" Width="20" Height="20" Foreground="#FF80CBC4" />
+                                    <TextBlock Text="MAINTENANCE" Style="{StaticResource CardTitleText}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock FontSize="26" FontWeight="Bold" Foreground="White">
+                                    <Run Text="{Binding ActiveMaintenanceCount, Mode=OneWay}" />
+                                    <Run Text=" активних вікон" FontSize="15" FontWeight="Normal" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
+
+                        <Grid Grid.Row="1" Margin="20,0,20,8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="FeedScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding ActiveMaintenanceWindows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:MaintenanceWindow}">
+                                            <StackPanel Margin="0,5">
+                                                <TextBlock FontSize="12" Foreground="#FFECEFF1" FontWeight="Medium"
+                                                           Text="{Binding DisplayName, Mode=OneWay}" />
+                                                <TextBlock FontSize="11" Foreground="#FF90A4AE" Margin="0,2,0,0"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Text="{Binding Reason, Mode=OneWay}" />
+                                                <TextBlock FontSize="11" Foreground="#FF90A4AE" Margin="0,2,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="{Binding To, StringFormat='до dd.MM HH:mm'}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding To}" Value="{x:Null}">
+                                                                    <Setter Property="Text" Value="Без обмеження часу" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActiveMaintenanceWindows.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <materialDesign:PackIcon Kind="CheckCircleOutline" Width="28" Height="28" Foreground="#33FFFFFF" HorizontalAlignment="Center" />
+                                <TextBlock Text="Немає активних вікон обслуговування" Style="{StaticResource EmptyStateText}"
+                                           Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="180" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Grid.Row="2" Style="{StaticResource CardLinkButton}" HorizontalAlignment="Right" Margin="0,0,20,16"
+                                Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="1">
+                            <TextBlock Text="Ping Dashboard →" Style="{StaticResource CardFooterLink}" />
+                        </Button>
+                    </Grid>
+                </Border>
+
+            </Grid>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

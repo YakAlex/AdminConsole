@@ -167,6 +167,7 @@ public partial class App : Application
     private static void RegisterViewModels(IServiceCollection services)
     {
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton<OverviewViewModel>();
         services.AddSingleton<PingDashboardViewModel>();
         services.AddSingleton<ResourceMonitorViewModel>();
         services.AddSingleton<RdpSessionViewModel>();

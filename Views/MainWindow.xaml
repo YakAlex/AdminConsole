@@ -35,6 +35,9 @@
         тому кожен UserControl отримує свій ViewModel автоматично.
     -->
     <Window.Resources>
+        <DataTemplate DataType="{x:Type viewModels:OverviewViewModel}">
+            <views:OverviewView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type viewModels:PingDashboardViewModel}">
             <views:PingDashboardView />
         </DataTemplate>
@@ -149,12 +152,19 @@
                     <StackPanel Grid.Row="0" Margin="0,12,0,0">
                         <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="0">
                             <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
+                                <TextBlock Text="Overview" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="1">
+                            <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="AccessPoint" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Ping Dashboard" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="1">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="2">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ClockAlertOutline"
                                                          Width="18" Height="18"
@@ -165,35 +175,35 @@
                             </StackPanel>
                         </Button>
                         
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="2">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="3">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Cpu64Bit" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Resources" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="3">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="4">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="RemoteDesktop" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="RDP Sessions" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="4">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="5">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Bell" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Zabbix Alerts" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="5">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="6">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="DatabaseCheckOutline" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Backups" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="6">
+                        <Button Style="{StaticResource SideNavButton}" Command="{Binding NavigateToCommand}" CommandParameter="7">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="TextBox" Width="18" Height="18" Foreground="#FF80CBC4" VerticalAlignment="Center" />
                                 <TextBlock Text="Logs" Margin="10,0,0,0" VerticalAlignment="Center" />
@@ -254,7 +264,7 @@
                                Foreground="#FFECEFF1" FontSize="11"
                                Margin="6,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" Text="Admin Console v2.2"
+                <TextBlock DockPanel.Dock="Right" Text="Admin Console v2.3"
                            Foreground="#44FFFFFF" FontSize="11"
                            VerticalAlignment="Center" HorizontalAlignment="Right" />
             </DockPanel>
