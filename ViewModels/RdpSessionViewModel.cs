@@ -22,6 +22,14 @@ public sealed partial class RdpSessionViewModel
     [ObservableProperty] private int    _activeCount;
     [ObservableProperty] private int    _disconnectedCount;
 
+    /// <summary>Максимум одночасних активних сесій, зафіксований СЬОГОДНІ. Скидається при зміні календарної доби.</summary>
+    [ObservableProperty] private int _dailyPeakSessions;
+
+    /// <summary>Хто/звідки/коли востаннє відключився — для Overview-картки "Останній вихід" коли зараз 0 активних.</summary>
+    [ObservableProperty] private string?         _lastLogoutUsername;
+    [ObservableProperty] private string?         _lastLogoutServer;
+    [ObservableProperty] private DateTimeOffset? _lastLogoutAt;
+
     /// <summary>
     /// true — RDP-моніторинг вимкнено в Settings. XAML повинен сховати
     /// таблицю сесій і показати заглушку "Моніторинг вимкнено" (edge-case #3).
@@ -93,7 +101,11 @@ public sealed partial class RdpSessionViewModel
                 s.Update(new RdpSessionsPayload(
                     s.ServerName, s.ServerIp,
                     Sessions: [],
-                    ErrorMessage: "Credentials видалено"));
+                    ErrorMessage: "Credentials видалено",
+                    GlobalDailyPeak: DailyPeakSessions,
+                    LastLogoutUsername: LastLogoutUsername,
+                    LastLogoutServer: LastLogoutServer,
+                    LastLogoutAt: LastLogoutAt));
 
             ActiveCount       = 0;
             DisconnectedCount = 0;
@@ -132,6 +144,17 @@ public sealed partial class RdpSessionViewModel
 
             foreach (var session in payload.Sessions)
                 Sessions.Add(new RdpSessionRowViewModel(session));
+            
+            var previousIds = toRemove.Select(s => s.SessionId).ToHashSet();
+            var currentIds  = payload.Sessions.Select(s => s.SessionId).ToHashSet();
+
+            foreach (var loggedOutId in previousIds.Except(currentIds))
+            {
+                var loggedOutRow = toRemove.First(s => s.SessionId == loggedOutId);
+                LastLogoutUsername = loggedOutRow.Username;
+                LastLogoutServer   = loggedOutRow.ServerName;
+                LastLogoutAt       = DateTimeOffset.Now;
+            }
 
             if (selectedKey is { } key)
             {

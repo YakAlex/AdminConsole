@@ -24,6 +24,15 @@ public sealed partial class PingDashboardViewModel
     [ObservableProperty] private int                 _totalCount;
     [ObservableProperty] private PingResultViewModel? _selectedServer;
 
+    /// <summary>
+    /// Сирий час завершення останнього ping-циклу (з PingBatchPayload.
+    /// CycleCompletedAt) — для Overview-картки "наступна перевірка через...".
+    /// Прилітає і з main loop, і з recovery loop (recovery опитує лише
+    /// офлайн-сервери) — тобто це "коли востаннє щось реально оновилось",
+    /// не гарантовано повний цикл по всьому флоту.
+    /// </summary>
+    [ObservableProperty] private DateTimeOffset? _lastCycleAt;
+
     // ── Services injected here so they can be forwarded to each row VM ────────
     private readonly RemoteManagementService _remoteMgmt;
     private readonly IDialogService          _dialog;
@@ -71,6 +80,7 @@ public sealed partial class PingDashboardViewModel
                     row.ApplyResult(result);
             }
             UpdateSummary();
+            LastCycleAt = message.Value.CycleCompletedAt;
         });
     }
 

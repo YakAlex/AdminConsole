@@ -22,6 +22,9 @@ public sealed partial class BackupsViewModel
     [ObservableProperty] private int    _unknownCount;
     [ObservableProperty] private string _lastUpdated = "—";
 
+    /// <summary>Сирий (не форматований) час LastUpdated — для Overview-картки "наступна перевірка через...".</summary>
+    [ObservableProperty] private DateTimeOffset? _lastUpdatedAt;
+
     /// <summary>
     /// true — Backup-моніторинг вимкнено в Settings. XAML ховає таблицю
     /// рядків і показує заглушку "Backup-моніторинг вимкнено".
@@ -96,6 +99,7 @@ public sealed partial class BackupsViewModel
         WarningCount = Rows.Count(r => r.Outcome == BackupOutcome.SizeWarning);
         BadCount     = Rows.Count(r => r.Outcome is BackupOutcome.Stale or BackupOutcome.Missing);
         UnknownCount = Rows.Count(r => r.Outcome == BackupOutcome.Unknown);
-        LastUpdated  = DateTime.Now.ToString("HH:mm:ss");
+        LastUpdatedAt = DateTimeOffset.Now;
+        LastUpdated  = LastUpdatedAt.Value.ToString("HH:mm:ss");
     }
 }

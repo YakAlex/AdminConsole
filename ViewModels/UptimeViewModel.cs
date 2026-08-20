@@ -208,13 +208,16 @@ public sealed partial class UptimeViewModel
         OnPropertyChanged(nameof(HasResolvedRecords));
     }
     
-    /// <summary>Перераховує RecentFeed — топ-5, активні інциденти пріоритетні.</summary>
+    /// <summary>
+    /// Перераховує RecentFeed — топ-3, активні інциденти пріоритетні
+    /// (тобто спершу до 2-3 активних, а решту місця добирають найновіші завершені.
+    /// </summary>
     private void UpdateRecentFeed(IReadOnlyList<DowntimeRecord> records)
     {
         var top = records
             .OrderByDescending(r => !r.IsResolved)
             .ThenByDescending(r => r.FellAt)
-            .Take(5)
+            .Take(3)
             .ToList();
 
         RecentFeed.Clear();

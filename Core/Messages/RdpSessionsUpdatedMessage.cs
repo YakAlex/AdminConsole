@@ -17,5 +17,9 @@ public sealed record RdpSessionsPayload(
     string                      ServerName,
     string                      ServerIp,
     IReadOnlyList<RdpSessionInfo> Sessions,
-    string?                     ErrorMessage
+    string?                     ErrorMessage,
+    int                           GlobalDailyPeak,
+    string?                       LastLogoutUsername,
+    string?                       LastLogoutServer,
+    DateTimeOffset?               LastLogoutAt
 );

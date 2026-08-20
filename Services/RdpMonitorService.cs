@@ -45,6 +45,14 @@ public sealed class RdpMonitorService : BackgroundService
         _previousSessions = new();
     private readonly ConcurrentDictionary<string, bool> _firstPollDone = new();
     
+    // ── Глобальний стан для Overview
+    private int             _globalDailyPeak;
+    private DateTime        _peakResetDate;
+    private string?         _lastLogoutUsername;
+    private string?         _lastLogoutServer;
+    private DateTimeOffset? _lastLogoutAt;
+    private readonly object _stateLock = new();
+    
     // ── Regex ────────────────────────────────────────────────────────────────
     // Формат WS2008R2 / WS2012+:
     //  USERNAME         SESSIONNAME    ID  STATE   IDLE TIME  LOGON TIME
@@ -307,9 +315,8 @@ public sealed class RdpMonitorService : BackgroundService
         {
             if (!_credentials.HasRdpCredentials)
             {
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Credentials недоступні — оновіть в Settings")));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], "Credentials недоступні — оновіть в Settings")));
                 return;
             }
 
@@ -319,76 +326,62 @@ public sealed class RdpMonitorService : BackgroundService
             {
                 _messenger.Send(AppLogEntryMessage.Error(LogSource,
                     $"{hostname}: не вдалося зареєструвати credentials у Credential Manager."));
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Помилка реєстрації credentials")));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], "Помилка реєстрації credentials")));
                 return;
             }
 
-            var (output, error, exitCode) = await RunQuserAsync(hostname, ct)
-                .ConfigureAwait(false);
+            var (output, error, exitCode) = await RunQuserAsync(hostname, ct).ConfigureAwait(false);
 
             string allText = (output + error).ToLowerInvariant();
 
-            if (allText.Contains("logon failure") ||
-                allText.Contains("1326")          ||
-                allText.Contains("неверн")        ||
-                allText.Contains("невірн"))
+            if (allText.Contains("logon failure") || allText.Contains("1326") ||
+                allText.Contains("неверн") || allText.Contains("невірн"))
             {
                 LogSessionChanges(server, []);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"{hostname}: невірний логін або пароль — оновіть credentials в Settings."));
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Невірний логін або пароль — оновіть credentials в Settings")));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], "Невірний логін або пароль — оновіть credentials в Settings")));
                 return;
             }
 
-            if (allText.Contains("access is denied") ||
-                allText.Contains("access denied"))
+            if (allText.Contains("access is denied") || allText.Contains("access denied"))
             {
                 LogSessionChanges(server, []);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 _messenger.Send(AppLogEntryMessage.Warning(LogSource,
                     $"{hostname}: Access Denied — можливо пароль змінено. Оновіть credentials в Settings."));
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "Access Denied — оновіть credentials в Settings")));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], "Access Denied — оновіть credentials в Settings")));
                 return;
             }
 
-            if (allText.Contains("rpc server is unavailable") ||
-                allText.Contains("1722")                      ||
-                allText.Contains("0x000006ba"))
+            if (allText.Contains("rpc server is unavailable") || allText.Contains("1722") || allText.Contains("0x000006ba"))
             {
                 _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                    $"{hostname}: RPC недоступний. " +
-                    $"Переконайся що в appsettings.json вказано доменне ім'я (не IP)."));
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP, Sessions: [],
-                    ErrorMessage: "RPC недоступний — перевір ім'я сервера")));
+                    $"{hostname}: RPC недоступний. Переконайся що в appsettings.json вказано доменне ім'я (не IP)."));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], "RPC недоступний — перевір ім'я сервера")));
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(output) || exitCode == 1)
             {
-                bool noUsers = allText.Contains("no user")           ||
-                               allText.Contains("нет пользователей") ||
-                               string.IsNullOrWhiteSpace(output);
+                bool noUsers = allText.Contains("no user") || allText.Contains("нет пользователей") || string.IsNullOrWhiteSpace(output);
 
                 LogSessionChanges(server, []);
                 _previousSessions[server.IP] = [];
 
-                _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                    server.Name, server.IP,
-                    Sessions: [],
-                    ErrorMessage: noUsers ? null : $"Порожня відповідь (exit {exitCode})")));
+                _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                    server.Name, server.IP, [], noUsers ? null : $"Порожня відповідь (exit {exitCode})")));
                 return;
             }
 
             var sessions = ParseQuserOutput(output, server.Name, server.IP);
             LogSessionChanges(server, sessions);
+            
             var newSnapshot = new Dictionary<int, RdpSessionInfo>();
             foreach (var s in sessions)
             {
@@ -396,21 +389,17 @@ public sealed class RdpMonitorService : BackgroundService
                     newSnapshot[id] = s;
             }
             _previousSessions[server.IP] = newSnapshot;
-            _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                server.Name, server.IP,
-                Sessions: sessions,
-                ErrorMessage: null)));
-            return;
+            
+            _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                server.Name, server.IP, sessions, null)));
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "RdpMonitorService: помилка при опитуванні {Server}", hostname);
-            _messenger.Send(AppLogEntryMessage.Error(LogSource,
-                $"{hostname}: {ex.GetType().Name}: {ex.Message}"));
-            _messenger.Send(new RdpSessionsUpdatedMessage(new RdpSessionsPayload(
-                server.Name, server.IP, Sessions: [], ErrorMessage: ex.Message)));
+            _logger.LogWarning(ex, "RdpMonitorService: помилка при опитуванні {Server}", hostname);
+            _messenger.Send(AppLogEntryMessage.Error(LogSource, $"{hostname}: {ex.GetType().Name}: {ex.Message}"));
+            _messenger.Send(new RdpSessionsUpdatedMessage(CreatePayload(
+                server.Name, server.IP, [], ex.Message)));
         }
         finally
         {
@@ -477,6 +466,13 @@ public sealed class RdpMonitorService : BackgroundService
                 _messenger.Send(AppLogEntryMessage.Info(LogSource,
                     $"{previous.Username} → disconnected from {server.Name} " +
                     $"(session #{id}, was connected since {previous.LogonTime}{durationPart})"));
+                
+                lock (_stateLock)
+                {
+                    _lastLogoutUsername = previous.Username;
+                    _lastLogoutServer   = server.Name;
+                    _lastLogoutAt       = DateTimeOffset.Now;
+                }
             }
         }
     }
@@ -644,4 +640,33 @@ public sealed class RdpMonitorService : BackgroundService
         => _previousSessions.ToDictionary(
             kv => kv.Key,
             kv => (IReadOnlyList<RdpSessionInfo>)kv.Value.Values.ToList());
+    
+    /// <summary>
+    /// Розраховує глобальний пік і формує Payload. 
+    /// Це гарантує, що UI отримає консистентні історичні дані.
+    /// </summary>
+    private RdpSessionsPayload CreatePayload(
+        string serverName, string serverIp, IReadOnlyList<RdpSessionInfo> sessions, string? errorMessage)
+    {
+        lock (_stateLock)
+        {
+            var today = DateTime.Now.Date;
+            if (_peakResetDate != today)
+            {
+                _peakResetDate = today;
+                _globalDailyPeak = 0;
+            }
+
+            int currentTotalActive = _previousSessions.Values
+                .SelectMany(dict => dict.Values)
+                .Count(s => s.State == RdpSessionState.Active);
+
+            if (currentTotalActive > _globalDailyPeak)
+                _globalDailyPeak = currentTotalActive;
+
+            return new RdpSessionsPayload(
+                serverName, serverIp, sessions, errorMessage,
+                _globalDailyPeak, _lastLogoutUsername, _lastLogoutServer, _lastLogoutAt);
+        }
+    }
 }

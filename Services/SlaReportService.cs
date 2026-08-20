@@ -27,6 +27,54 @@ public sealed class SlaReportService
         _uptime  = uptime;
     }
 
+    /// <summary>
+    /// "Флотова доступність" за період — яку частку [from, to] хоч ОДИН
+    /// сервер був офлайн, через об'єднання (union) інтервалів простою.
+    /// </summary>
+    public double GetFleetAvailabilityPercent(DateTimeOffset from, DateTimeOffset to)
+    {
+        var now            = DateTimeOffset.Now;
+        var effectiveTo    = Min(now, to);
+        var periodDuration = effectiveTo - from;
+
+        if (periodDuration <= TimeSpan.Zero) return 100.0;
+
+        var intervals = _uptime.GetSnapshot()
+            .Select(r => (
+                Start: Max(r.FellAt, from),
+                End:   Min(r.RecoveredAt ?? now, effectiveTo)))
+            .Where(iv => iv.End > iv.Start)
+            .OrderBy(iv => iv.Start)
+            .ToList();
+
+        var totalDown = TimeSpan.Zero;
+        DateTimeOffset? curStart = null;
+        DateTimeOffset? curEnd   = null;
+
+        foreach (var iv in intervals)
+        {
+            if (curEnd is null || iv.Start > curEnd.Value)
+            {
+                if (curStart is not null)
+                    totalDown += curEnd!.Value - curStart.Value;
+
+                curStart = iv.Start;
+                curEnd   = iv.End;
+            }
+            else if (iv.End > curEnd.Value)
+            {
+                curEnd = iv.End;
+            }
+        }
+
+        if (curStart is not null)
+            totalDown += curEnd!.Value - curStart.Value;
+
+        return Math.Clamp(
+            100.0 - totalDown.TotalSeconds / periodDuration.TotalSeconds * 100.0,
+            0.0, 100.0);
+    }
+
     public SlaReport Generate(SlaReportRequest request)
     {
         var now  = DateTimeOffset.Now;
